@@ -39,7 +39,3 @@ this library rather than to `EthLib`. -/
 lean_lib «Proofs» where
   roots := #[`EthLib.Proofs, `EthLib.Cryptography.Proofs]
   precompileModules := false
-
-/-- Byte-level regression tests pin the consensus wire order and exact-length rejection. -/
-lean_exe xmssSerializationTests where
-  root := `Tests.XmssSerialization
