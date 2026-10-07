@@ -20,6 +20,10 @@ package «EthLib» where
 
 require "leanprover-community" / "mathlib" @ git "v4.29.1"
 
+-- Pin the shared SSZ codec so the wire format has one implementation.
+require ssz from git "https://github.com/ethereum/ssz-specs" @
+  "a23a2392ffffdd72caefb12f57b7ebd0c9a49de5" / "lean"
+
 @[default_target]
 lean_lib «EthLib» where
   precompileModules := true
@@ -35,3 +39,7 @@ this library rather than to `EthLib`. -/
 lean_lib «Proofs» where
   roots := #[`EthLib.Proofs, `EthLib.Cryptography.Proofs]
   precompileModules := false
+
+/-- Byte-level regression tests pin the consensus wire order and exact-length rejection. -/
+lean_exe xmssSerializationTests where
+  root := `Tests.XmssSerialization
