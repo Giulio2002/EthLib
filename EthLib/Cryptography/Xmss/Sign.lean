@@ -63,11 +63,12 @@ The two signatures reveal chains at two heights, which lets anyone forge.
 - No attempt encodes the message, which happens with low probability. -/
 def sign (sk : SecretKey) (msg : Message) (epoch : Epoch) :
     Except XmssError Signature :=
-  let tree := sk.tree
-  let pp := tree.publicParam
+  -- The range check comes first, so a bad epoch costs no hashing.
   if epoch < sk.epochStart || sk.epochEnd < epoch then
     .error (.epochOutOfRange epoch sk.epochStart sk.epochEnd)
   else
+    let tree := sk.tree
+    let pp := tree.publicParam
     -- Step 1: grind the randomizer until the message encodes.
     let found :=
       Internal.findRandomness pp sk.seed msg epoch 0 MAX_RANDOMIZER_TRIALS

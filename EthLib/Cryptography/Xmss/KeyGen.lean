@@ -71,15 +71,23 @@ def SecretKey.publicKey (sk : SecretKey) : PublicKey where
 
 /-! ## Key generation -/
 
+/-- The secret key grown from a seed, signing at the epochs of a range.
+
+Rejects an empty range.
+
+Builds no tree: a signer needs only this, not the public key. -/
+def SecretKey.ofSeed (seed : Seed) (epochStart epochEnd : Epoch) :
+    Except XmssError SecretKey :=
+  if h : epochStart ≤ epochEnd then
+    .ok ⟨seed, epochStart, epochEnd, h⟩
+  else
+    .error (.invalidEpochRange epochStart epochEnd)
+
 /-- The key pair grown from a seed, signing at the epochs of a range.
 
 Rejects an empty range. -/
 def keyGen (seed : Seed) (epochStart epochEnd : Epoch) :
     Except XmssError (SecretKey × PublicKey) :=
-  if h : epochStart ≤ epochEnd then
-    let sk : SecretKey := ⟨seed, epochStart, epochEnd, h⟩
-    .ok (sk, sk.publicKey)
-  else
-    .error (.invalidEpochRange epochStart epochEnd)
+  (SecretKey.ofSeed seed epochStart epochEnd).map fun sk => (sk, sk.publicKey)
 
 end EthLib.Cryptography.Xmss

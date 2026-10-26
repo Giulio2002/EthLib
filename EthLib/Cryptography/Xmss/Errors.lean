@@ -34,12 +34,6 @@ inductive XmssError where
   | badSeedSize (actual : Nat)
   /-- Message bytes were not the message length. -/
   | badMessageSize (actual : Nat)
-  /-- Public parameter bytes were not the public parameter length. -/
-  | badPublicParamSize (actual : Nat)
-  /-- Randomizer bytes were not the randomizer length. -/
-  | badRandomnessSize (actual : Nat)
-  /-- A byte named no tweak type. -/
-  | unknownTweakType (byte : UInt8)
 
 /-- Human-readable description, used at the C-ABI boundary. -/
 def XmssError.message : XmssError → String
@@ -60,12 +54,6 @@ def XmssError.message : XmssError → String
       s!"bad seed size: {actual}, expected {SEED_LEN}"
   | .badMessageSize actual =>
       s!"bad message size: {actual}, expected {MESSAGE_LEN}"
-  | .badPublicParamSize actual =>
-      s!"bad public parameter size: {actual}, expected {PUBLIC_PARAM_LEN}"
-  | .badRandomnessSize actual =>
-      s!"bad randomizer size: {actual}, expected {RANDOMNESS_LEN}"
-  | .unknownTweakType byte =>
-      s!"unknown tweak type: {byte}"
 
 /-- Run a fallible XMSS computation down to `IO`.
 

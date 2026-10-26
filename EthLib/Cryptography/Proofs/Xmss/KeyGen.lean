@@ -12,11 +12,11 @@ open EthLib.Cryptography.Xmss.Constants
 variable {seed : Seed} {epochStart epochEnd : Epoch} {sk : SecretKey}
   {pk : PublicKey}
 
-/-- Key generation fails exactly on an empty range. -/
-theorem keyGen_eq_error_iff :
-    (∃ err, keyGen seed epochStart epochEnd = .error err)
+/-- Building a secret key fails exactly on an empty range. -/
+theorem SecretKey.ofSeed_eq_error_iff :
+    (∃ err, SecretKey.ofSeed seed epochStart epochEnd = .error err)
       ↔ epochEnd < epochStart := by
-  unfold keyGen
+  unfold SecretKey.ofSeed
   split
   · rename_i h
     simp only [reduceCtorEq, exists_false, false_iff, UInt32.not_lt]
@@ -25,15 +25,35 @@ theorem keyGen_eq_error_iff :
     simp only [Except.error.injEq, exists_eq', true_iff]
     exact UInt32.not_le.mp h
 
+/-- An accepted secret key is the seed over the requested range. -/
+theorem SecretKey.ofSeed_eq_ok (h : SecretKey.ofSeed seed epochStart epochEnd = .ok sk) :
+    sk.seed = seed ∧ sk.epochStart = epochStart ∧ sk.epochEnd = epochEnd := by
+  unfold SecretKey.ofSeed at h
+  split at h
+  · cases Except.ok.inj h
+    exact ⟨rfl, rfl, rfl⟩
+  · exact absurd h (by simp)
+
+/-- Key generation fails exactly on an empty range. -/
+theorem keyGen_eq_error_iff :
+    (∃ err, keyGen seed epochStart epochEnd = .error err)
+      ↔ epochEnd < epochStart := by
+  -- Key generation fails exactly when building the secret key does.
+  rw [← SecretKey.ofSeed_eq_error_iff]
+  unfold keyGen
+  cases SecretKey.ofSeed seed epochStart epochEnd <;> simp [Except.map]
+
 /-- An accepted key pair is the seed's key over the requested range. -/
 theorem keyGen_eq_ok (h : keyGen seed epochStart epochEnd = .ok (sk, pk)) :
     pk = sk.publicKey ∧ sk.seed = seed ∧
       sk.epochStart = epochStart ∧ sk.epochEnd = epochEnd := by
   unfold keyGen at h
-  split at h
-  · obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj h)
-    exact ⟨rfl, rfl, rfl, rfl⟩
-  · exact absurd h (by simp)
+  cases built : SecretKey.ofSeed seed epochStart epochEnd with
+  | error err => simp [built, Except.map] at h
+  | ok sk' =>
+    simp only [built, Except.map, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+    exact ⟨rfl, SecretKey.ofSeed_eq_ok built⟩
 
 /-- The leaf at an epoch hashes that epoch's one-time public key. -/
 theorem leaves_toNat (sk : SecretKey) (epoch : Epoch) :

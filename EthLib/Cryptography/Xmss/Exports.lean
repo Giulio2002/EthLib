@@ -7,7 +7,8 @@ import EthLib.Cryptography.Xmss.Serialization
 
 C-ABI exports for the Python bindings.
 
-The hash and encoding layers are exported too, to locate a diverging layer.
+Only key generation, signing and verification cross the boundary.
+The scheme is a black box to callers: no hash or encoding layer is exported.
 -/
 
 namespace EthLib.Cryptography.Xmss.Exports
@@ -38,8 +39,9 @@ def signExport (seed : ByteArray) (epochStart epochEnd epoch : Epoch)
   runXmss do
     let seed ← readExact SEED_LEN seed .badSeedSize
     let msg ← readExact MESSAGE_LEN msg .badMessageSize
-    -- An empty range fails here, an epoch outside the range fails at signing.
-    let (sk, _) ← keyGen seed epochStart epochEnd
+    -- Only the secret key: signing never needs the root, so no tree is built here.
+    let sk ← SecretKey.ofSeed seed epochStart epochEnd
+    -- An epoch outside the range fails before any hashing.
     let sig ← sign sk msg epoch
     return encodeSignature sig
 
@@ -53,37 +55,5 @@ def verifyExport (pk : ByteArray) (epoch : Epoch) (msg : ByteArray)
     let msg ← readExact MESSAGE_LEN msg .badMessageSize
     let sig ← decodeSignature sig
     return if verify pk msg sig epoch then 1 else 0
-
-/-- The message's 42 chain digits, one byte each, or nothing when inadmissible. -/
-@[export eth_xmss_wots_encode]
-def wotsEncodeExport (pp : ByteArray) (msg : ByteArray)
-    (rnd : ByteArray) (epoch : Epoch) : IO ByteArray :=
-  runXmss do
-    let pp ← readExact PUBLIC_PARAM_LEN pp .badPublicParamSize
-    let msg ← readExact MESSAGE_LEN msg .badMessageSize
-    let rnd ← readExact RANDOMNESS_LEN rnd .badRandomnessSize
-    -- Inadmissible is an ordinary outcome when grinding, not an error.
-    match wotsEncode pp msg rnd epoch with
-    -- Each digit is below 8, so it fits one byte.
-    | some x => return ⟨x.toArray.map fun d => UInt8.ofNat d.val⟩
-    | none => return .empty
-
-/-- The tweakable hash of a payload at one call site, as 16 bytes. -/
-@[export eth_xmss_tweak_hash]
-def tweakHashExport (pp : ByteArray) (tweakType : UInt8)
-    (subPosition index : UInt32) (payload : ByteArray) : IO ByteArray :=
-  runXmss do
-    let pp ← readExact PUBLIC_PARAM_LEN pp .badPublicParamSize
-    -- Bytes 0 to 7 name the eight call sites.
-    let some t := TweakType.ofByte? tweakType
-      | throw (.unknownTweakType tweakType)
-    -- The payload has no fixed length, so it is hashed as given.
-    return packBytes (tweakHash pp t subPosition index payload)
-
-/-- The BLAKE2s-256 digest of a byte string, as 32 bytes. -/
-@[export eth_xmss_blake2s]
-def blake2sExport (input : ByteArray) : IO ByteArray :=
-  -- Hashing cannot fail, so there is no error to run.
-  return packBytes (Blake2s.hash input)
 
 end EthLib.Cryptography.Xmss.Exports
