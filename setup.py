@@ -123,6 +123,7 @@ def _make_extension() -> Extension:
             "bindings/python/module.c",
             "bindings/python/kzg.c",
             "bindings/python/bls.c",
+            "bindings/python/xmss.c",
         ],
         include_dirs=["bindings/python"],
         extra_objects=[],
@@ -133,7 +134,8 @@ def _make_extension() -> Extension:
 
 setup(
     package_dir={"": "bindings/python"},
-    packages=["ethlib", "ethlib.cryptography", "ethlib.cryptography.kzg", "ethlib.cryptography.bls"],
+    packages=["ethlib", "ethlib.cryptography", "ethlib.cryptography.kzg", "ethlib.cryptography.bls",
+              "ethlib.cryptography.xmss"],
     ext_modules=[_make_extension()],
     cmdclass={"build_ext": LakeThenBuild},
 )

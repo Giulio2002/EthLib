@@ -19,6 +19,11 @@ size_t FIELD_ELEMENTS_PER_CELL;
 size_t BYTES_PER_CELL;
 size_t CELLS_PER_EXT_BLOB;
 
+size_t XMSS_MESSAGE_LEN;
+size_t XMSS_SEED_LEN;
+size_t XMSS_PUB_KEY_SIZE;
+size_t XMSS_SIG_SIZE;
+
 /* ---- Lean externs: size accessors ------------------------------------ */
 
 extern uint64_t
@@ -71,12 +76,32 @@ eth_kzg_const_cells_per_ext_blob(
   uint8_t unit
 );
 
+extern uint64_t
+eth_xmss_const_message_len(
+  uint8_t unit
+);
+
+extern uint64_t
+eth_xmss_const_seed_len(
+  uint8_t unit
+);
+
+extern uint64_t
+eth_xmss_const_pub_key_size(
+  uint8_t unit
+);
+
+extern uint64_t
+eth_xmss_const_sig_size(
+  uint8_t unit
+);
+
 /* ---- Lean externs: runtime + module init ----------------------------- */
 
 extern void
 lean_initialize_runtime_module(void);
 
-/* We boot the two sub-umbrellas directly rather than the top-level
+/* We boot the sub-umbrellas directly rather than the top-level
  * `EthLib.Cryptography` module: Lake produces a `.c` file for the
  * library root but does *not* compile it to a `.c.o.export`, so its
  * init symbol would never get linked in. Each sub-umbrella's init
@@ -89,6 +114,11 @@ initialize_EthLib_EthLib_Cryptography_Bls(
 
 extern lean_object*
 initialize_EthLib_EthLib_Cryptography_Kzg(
+  uint8_t builtin
+);
+
+extern lean_object*
+initialize_EthLib_EthLib_Cryptography_Xmss(
   uint8_t builtin
 );
 
@@ -239,6 +269,9 @@ static PyMethodDef methods[] = {
   {"compute_verify_cell_kzg_proof_batch_challenge", py_compute_verify_cell_kzg_proof_batch_challenge, METH_VARARGS, NULL},
   {"verify_cell_kzg_proof_batch", py_verify_cell_kzg_proof_batch, METH_VARARGS, NULL},
   {"recover_cells_and_kzg_proofs", py_recover_cells_and_kzg_proofs, METH_VARARGS, NULL},
+  {"xmss_key_gen", py_xmss_key_gen, METH_VARARGS, NULL},
+  {"xmss_sign", py_xmss_sign, METH_VARARGS, NULL},
+  {"xmss_verify", py_xmss_verify, METH_VARARGS, NULL},
   {NULL, NULL, 0, NULL},
 };
 
@@ -257,12 +290,16 @@ PyInit__native(void) {
   static int initialized = 0;
   if (!initialized) {
     lean_initialize_runtime_module();
-    /* Initialize each sub-umbrella; report the first failure if either
+    /* Initialize each sub-umbrella; report the first failure if any
      * step errors out. */
     lean_object* res = initialize_EthLib_EthLib_Cryptography_Bls(1);
     if (lean_io_result_is_ok(res)) {
       lean_dec_ref(res);
       res = initialize_EthLib_EthLib_Cryptography_Kzg(1);
+    }
+    if (lean_io_result_is_ok(res)) {
+      lean_dec_ref(res);
+      res = initialize_EthLib_EthLib_Cryptography_Xmss(1);
     }
     if (lean_io_result_is_ok(res)) {
       lean_dec_ref(res);
@@ -286,6 +323,10 @@ PyInit__native(void) {
     FIELD_ELEMENTS_PER_CELL = (size_t) eth_kzg_const_field_elements_per_cell(0);
     BYTES_PER_CELL          = (size_t) eth_kzg_const_bytes_per_cell(0);
     CELLS_PER_EXT_BLOB      = (size_t) eth_kzg_const_cells_per_ext_blob(0);
+    XMSS_MESSAGE_LEN  = (size_t) eth_xmss_const_message_len(0);
+    XMSS_SEED_LEN     = (size_t) eth_xmss_const_seed_len(0);
+    XMSS_PUB_KEY_SIZE = (size_t) eth_xmss_const_pub_key_size(0);
+    XMSS_SIG_SIZE     = (size_t) eth_xmss_const_sig_size(0);
 
     initialized = 1;
   }
@@ -304,5 +345,9 @@ PyInit__native(void) {
   PyModule_AddIntConstant(m, "FIELD_ELEMENTS_PER_CELL", FIELD_ELEMENTS_PER_CELL);
   PyModule_AddIntConstant(m, "BYTES_PER_CELL", BYTES_PER_CELL);
   PyModule_AddIntConstant(m, "CELLS_PER_EXT_BLOB", CELLS_PER_EXT_BLOB);
+  PyModule_AddIntConstant(m, "XMSS_MESSAGE_LEN", XMSS_MESSAGE_LEN);
+  PyModule_AddIntConstant(m, "XMSS_SEED_LEN", XMSS_SEED_LEN);
+  PyModule_AddIntConstant(m, "XMSS_PUB_KEY_SIZE", XMSS_PUB_KEY_SIZE);
+  PyModule_AddIntConstant(m, "XMSS_SIG_SIZE", XMSS_SIG_SIZE);
   return m;
 }

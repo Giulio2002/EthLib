@@ -30,6 +30,10 @@ inductive XmssError where
   | badPublicKeySize (actual : Nat)
   /-- Signature bytes were not the signature length. -/
   | badSignatureSize (actual : Nat)
+  /-- Seed bytes were not the seed length. -/
+  | badSeedSize (actual : Nat)
+  /-- Message bytes were not the message length. -/
+  | badMessageSize (actual : Nat)
 
 /-- Human-readable description, used at the C-ABI boundary. -/
 def XmssError.message : XmssError → String
@@ -46,6 +50,10 @@ def XmssError.message : XmssError → String
       s!"bad public key size: {actual}, expected {PUB_KEY_SIZE}"
   | .badSignatureSize actual =>
       s!"bad signature size: {actual}, expected {SIG_SIZE}"
+  | .badSeedSize actual =>
+      s!"bad seed size: {actual}, expected {SEED_LEN}"
+  | .badMessageSize actual =>
+      s!"bad message size: {actual}, expected {MESSAGE_LEN}"
 
 /-- Run a fallible XMSS computation down to `IO`.
 
