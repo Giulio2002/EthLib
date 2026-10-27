@@ -60,9 +60,14 @@ The Python C extension queries every size at module-init time via these
 `@[export]`-d functions and caches the results, so the wrapper has no
 hardcoded constants of its own.
 
-Each accessor takes a `Unit` to make the C-ABI signature predictable
-(`UInt64 (*)(uint8_t)` after Lean's calling convention squashes the
-unit). -/
+Each accessor takes a unit argument, so its C signature is fixed:
+
+```text
+    uint64_t f(lean_object* unit)
+```
+
+The accessor ignores its argument.
+-/
 
 @[export eth_kzg_const_bytes_per_field_element]
 def constBytesPerFieldElement (_ : Unit) : UInt64 :=

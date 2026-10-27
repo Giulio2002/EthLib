@@ -16,6 +16,43 @@ namespace EthLib.Cryptography.Kzg
 open EthLib.Cryptography.Bls (Fr)
 open EthLib.Cryptography.Kzg.Constants
 
+/-- `validateKzgG1` agrees with `validateKzgG1Point` on whether the input
+bytes are valid. -/
+theorem validateKzgG1_eq_validateKzgG1Point (b : Bytes48) :
+    validateKzgG1 b = (validateKzgG1Point b).isOk := by
+  rw [validateKzgG1, validateKzgG1Point]
+  split
+  · rfl
+  · rw [Bls.G1.keyValidate]
+    cases Bls.G1.keyValidatePoint b <;> rfl
+
+/-- A successful `validateKzgG1Point` implies that `validateKzgG1` holds on
+the input bytes and the returned `G1` point is in the prime-order subgroup. -/
+theorem validateKzgG1Point_ok_valid {b : Bytes48} {p : Bls.G1}
+    (h : validateKzgG1Point b = .ok p) :
+    validateKzgG1 b = true ∧ Bls.G1.inSubgroup p = true := by
+  refine ⟨?_, ?_⟩
+  · rw [validateKzgG1_eq_validateKzgG1Point, h]
+    rfl
+  · rw [validateKzgG1Point] at h
+    split at h
+    · cases h
+      rfl
+    · split at h
+      · rename_i q hq
+        cases h
+        simp only [Bls.G1.keyValidatePoint, Bind.bind, Except.bind, pure, Except.pure] at hq
+        split at hq
+        · cases hq
+        · split at hq
+          · cases hq
+          · split at hq
+            · cases hq
+            · rename_i hsub
+              cases hq
+              simpa using hsub
+      · cases h
+
 /-- `bytesToKzgCommitment` succeeds exactly on valid bytes, and returns
 them unchanged. -/
 theorem bytesToKzgCommitment_ok_iff {b : Bytes48} {c : KZGCommitment} :
@@ -61,6 +98,45 @@ theorem val_computeChallenge_lt (blob : Blob) (commitment : KZGCommitment) :
     (computeChallenge blob commitment).val < Fr.modulus :=
   Fr.val_hashToBlsField_lt _
 
+/-- Serializing the Fiat-Shamir challenge produces a 32-byte field element. -/
+theorem computeChallenge_size (blob : Blob) (commitment : KZGCommitment) :
+    (blsFieldToBytes (computeChallenge blob commitment)).size =
+      BYTES_PER_FIELD_ELEMENT := by
+  simp only [blsFieldToBytes, Fr.toBytesBE, ByteArray.size, Array.size_ofFn,
+    BYTES_PER_FIELD_ELEMENT]
+
+/-- `g1LincombPoints` rejects mismatched input lengths. -/
+theorem g1LincombPoints_length_mismatch {points : Array Bls.G1}
+    {scalars : Array Fr} (h : points.size ≠ scalars.size) :
+    g1LincombPoints points scalars
+      = throw (.lincombLengthMismatch points.size scalars.size) := by
+  simp [g1LincombPoints, h]
+  rfl
+
+/-- `g1LincombPoints` of nothing is the identity (the point at infinity). -/
+theorem g1LincombPoints_empty :
+    g1LincombPoints #[] #[] = pure Bls.G1.zero := by
+  simp [g1LincombPoints]
+  rfl
+
+/-- On equal-length inputs, `g1LincombPoints` computes `Bls.G1.msm`. -/
+theorem g1LincombPoints_eq_msm {points : Array Bls.G1} {scalars : Array Fr}
+    (h : points.size = scalars.size) :
+    g1LincombPoints points scalars = pure (Bls.G1.msm points scalars) := by
+  have hne : ¬ (points.size ≠ scalars.size) := fun hcontra => hcontra h
+  unfold g1LincombPoints
+  rw [if_neg hne]
+  by_cases h0 : points.size = 0
+  · rw [if_pos h0]
+    have hm : Bls.G1.msm points scalars = Bls.G1.zero := by
+      unfold Bls.G1.msm
+      simp [Id.run, h0]
+      rfl
+    rw [hm]
+    rfl
+  · rw [if_neg h0]
+    rfl
+
 /-- `g1Lincomb` rejects mismatched input lengths. -/
 theorem g1Lincomb_length_mismatch {points : Array KZGCommitment}
     {scalars : Array Fr} (h : points.size ≠ scalars.size) :
@@ -74,6 +150,25 @@ theorem g1Lincomb_empty :
     g1Lincomb #[] #[] = pure (Bls.G1.compress Bls.G1.zero) := by
   simp [g1Lincomb]
   rfl
+
+/-- When every commitment in `pointsBytes` decompresses via `uncompressG1` to
+`pointsG1` (`pointsG1.size = pointsBytes.size`), `g1Lincomb pointsBytes scalars`
+agrees with compressing the output of `g1LincombPoints pointsG1 scalars`. -/
+theorem g1LincombPoints_of_uncompress {pointsBytes : Array KZGCommitment}
+    {pointsG1 : Array Bls.G1} (scalars : Array Fr)
+    (hsz : pointsG1.size = pointsBytes.size)
+    (h : pointsBytes.mapM uncompressG1 = pure pointsG1) :
+    g1Lincomb pointsBytes scalars =
+      (g1LincombPoints pointsG1 scalars >>= fun p => pure (Bls.G1.compress p)) := by
+  unfold g1Lincomb g1LincombPoints
+  rw [hsz]
+  by_cases hne : pointsBytes.size ≠ scalars.size
+  · simp [hne]; rfl
+  · rw [if_neg hne, if_neg hne]
+    by_cases h0 : pointsBytes.size = 0
+    · simp [h0]; rfl
+    · rw [if_neg h0, if_neg h0, h]
+      rfl
 
 /-- `computeKzgProof` rejects a wrongly-sized blob. -/
 theorem computeKzgProof_badBlobSize {blob : Blob} (zBytes : Bytes32)

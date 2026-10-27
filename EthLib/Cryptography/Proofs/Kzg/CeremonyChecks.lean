@@ -1,12 +1,15 @@
 import EthLib.Cryptography.Bls.Pairing
+import EthLib.Cryptography.Bls.Compress
 import EthLib.Cryptography.Proofs.Bls.FrZMod
 import EthLib.Cryptography.Proofs.Bls.G1Group
+import EthLib.Cryptography.Proofs.Bls.G1Order
 
 /-!
 # Sufficiency of the ceremony pairing checks
 
 This file formalizes the algebraic soundness argument behind the
-[`kzg-ceremony-specs` sequencer pairing checks](https://github.com/ethereum/kzg-ceremony-specs/blob/master/docs/sequencer/sequencer.md#pairing-checks).
+`kzg-ceremony-specs` sequencer pairing checks:
+https://github.com/ethereum/kzg-ceremony-specs/blob/master/docs/sequencer/sequencer.md#pairing-checks
 
 Unlike an exponent-only model, the statement below is phrased over this repository's
 actual `Bls.Fr`, `Bls.G1`, `Bls.G2`, `Bls.G1.mul`, `Bls.G2.mul`, and
@@ -26,6 +29,145 @@ namespace EthLib.Cryptography.Kzg.CeremonyChecks
 
 open EthLib.Cryptography.Bls (Fr G1 G2)
 open scoped EthLib.Cryptography.Bls.Fr
+
+/-- Point-level ceremony validation for `G1`: non-infinity and in the prime-order subgroup. -/
+def g1Validate (p : G1) : Bool :=
+  !p.isInfinity && p.inSubgroup
+
+/-- Point-level ceremony validation for `G2`: non-infinity and in the prime-order subgroup. -/
+def g2Validate (p : G2) : Bool :=
+  !p.isInfinity && p.inSubgroup
+
+/-- `g1Validate` rejects the `G1` identity (`G1.zero`). -/
+@[simp] theorem g1Validate_zero_eq_false : g1Validate G1.zero = false := by
+  decide
+
+/-- `g2Validate` rejects the `G2` identity (`G2.zero`). -/
+@[simp] theorem g2Validate_zero_eq_false : g2Validate G2.zero = false := by
+  decide
+
+/-- Any point accepted by `g1Validate` is non-infinity. -/
+theorem g1Validate_isInfinity_eq_false {p : G1} (h : g1Validate p = true) :
+    p.isInfinity = false := by
+  unfold g1Validate at h
+  cases hp : p.isInfinity <;> simp_all
+
+/-- Any point accepted by `g2Validate` is non-infinity. -/
+theorem g2Validate_isInfinity_eq_false {p : G2} (h : g2Validate p = true) :
+    p.isInfinity = false := by
+  unfold g2Validate at h
+  cases hp : p.isInfinity <;> simp_all
+
+/-- Adding from `G1.zero` on the left returns the right operand. -/
+@[simp] theorem G1.zero_add (q : G1) : G1.add G1.zero q = q := by
+  unfold Bls.G1.add
+  have hz : G1.zero.z.isZero = true := by decide
+  simp [hz]
+
+/-- Adding `G1.zero` on the right of a non-infinity point returns the point unchanged. -/
+@[simp] theorem G1.add_zero {p : G1} (hp : p.isInfinity = false) :
+    G1.add p G1.zero = p := by
+  unfold Bls.G1.add
+  have hpz : p.z.isZero = false := hp
+  have hz : G1.zero.z.isZero = true := by decide
+  simp [hpz, hz]
+
+/-- Scalar multiplication of any `G1` point by `0` gives `G1.zero`. -/
+@[simp] theorem G1.mul_zero (p : G1) : G1.mul p (0 : Fr) = G1.zero := by
+  change G1.mulNat p 0 = G1.zero
+  rw [G1.mulNat_def]
+  rfl
+
+/-- Scalar multiplication of a non-infinity `G1` point by `1` returns the point unchanged. -/
+@[simp] theorem G1.mul_one {p : G1} (hp : p.isInfinity = false) :
+    G1.mul p (1 : Fr) = p := by
+  change G1.mulNat p 1 = p
+  rw [G1.mulNat_def]
+  norm_num
+  rw [G1.mulNat_def]
+  norm_num
+  exact G1.add_zero hp
+
+/-- Adding from `G2.zero` on the left returns the right operand. -/
+@[simp] theorem G2.zero_add (q : G2) : G2.add G2.zero q = q := by
+  unfold Bls.G2.add
+  have hz : G2.zero.z.isZero = true := by decide
+  simp [hz]
+
+/-- Adding `G2.zero` on the right of a non-infinity point returns the point unchanged. -/
+@[simp] theorem G2.add_zero {p : G2} (hp : p.isInfinity = false) :
+    G2.add p G2.zero = p := by
+  unfold Bls.G2.add
+  have hpz : p.z.isZero = false := hp
+  have hz : G2.zero.z.isZero = true := by decide
+  simp [hpz, hz]
+
+/-- Unfolding equation for the executable G2 double-and-add multiplication. -/
+private theorem g2MulNat_def (p : G2) (k : Nat) :
+    G2.mulNat p k = if k = 0 then G2.zero
+      else if k % 2 = 1 then G2.add p (G2.mulNat (G2.double p) (k / 2))
+      else G2.mulNat (G2.double p) (k / 2) := by
+  rw [G2.mulNat]
+
+/-- Scalar multiplication of any `G2` point by `0` gives `G2.zero`. -/
+@[simp] theorem G2.mul_zero (p : G2) : G2.mul p (0 : Fr) = G2.zero := by
+  change G2.mulNat p 0 = G2.zero
+  rw [g2MulNat_def]
+  rfl
+
+/-- Scalar multiplication of a non-infinity `G2` point by `1` returns the point unchanged. -/
+@[simp] theorem G2.mul_one {p : G2} (hp : p.isInfinity = false) :
+    G2.mul p (1 : Fr) = p := by
+  change G2.mulNat p 1 = p
+  rw [g2MulNat_def]
+  norm_num
+  rw [g2MulNat_def]
+  norm_num
+  exact G2.add_zero hp
+
+/-- For any valid `G1` point `p`, `p.isInfinity = true` iff `G1.toPoint p = 0`. -/
+theorem isInfinity_eq_true_iff_toPoint_eq_zero {p : G1} (hp : G1.Valid p) :
+    p.isInfinity = true ↔ G1.toPoint p = 0 := by
+  constructor
+  · intro h
+    exact WeierstrassCurve.Jacobian.Point.toAffine_of_Z_eq_zero (G1.isZero_iff.mp h)
+  · intro h
+    by_contra hne
+    have hz : (p.z : ZMod Bls.Fp.modulus) ≠ 0 :=
+      fun hz0 => hne (G1.isZero_iff.mpr hz0)
+    rw [G1.toPoint, WeierstrassCurve.Jacobian.Point.toAffine_of_Z_ne_zero hp hz] at h
+    cases h
+
+/-- A `G1` generator multiple is non-infinity exactly when its scalar is nonzero.
+Discharges the `G1` non-infinity law unconditionally using the kernel-verified
+generator order (`G1.addOrderOf_toPoint_generator`). -/
+theorem g1Mul_nonzero_iff (s : Fr) :
+    G1.isInfinity (G1.mul G1.generator s) = false ↔ s ≠ 0 := by
+  rw [Bool.eq_false_iff, Ne, isInfinity_eq_true_iff_toPoint_eq_zero
+      (G1.valid_mul G1.valid_generator s), G1.toPoint_mul_generator, G1.ofFr]
+  refine not_congr ?_
+  rw [← addOrderOf_dvd_iff_nsmul_eq_zero, G1.addOrderOf_toPoint_generator]
+  constructor
+  · intro hdvd
+    exact Fin.ext (Nat.eq_zero_of_dvd_of_lt hdvd s.isLt)
+  · rintro rfl
+    exact Nat.dvd_zero _
+
+/-- Non-infinity of a `G1` scalar multiple implies the scalar is nonzero. -/
+theorem g1Mul_ne_zero_of_isInfinity_eq_false {p : G1} {s : Fr}
+    (h : G1.isInfinity (G1.mul p s) = false) : s ≠ 0 := by
+  rintro rfl
+  rw [G1.mul_zero] at h
+  revert h
+  decide
+
+/-- Non-infinity of a `G2` scalar multiple implies the scalar is nonzero. -/
+theorem g2Mul_ne_zero_of_isInfinity_eq_false {p : G2} {x : Fr}
+    (h : G2.isInfinity (G2.mul p x) = false) : x ≠ 0 := by
+  rintro rfl
+  rw [G2.mul_zero] at h
+  revert h
+  decide
 
 /-- Equality of two pairings, expressed using the repository's product-pairing checker.
 
@@ -97,47 +239,20 @@ structure SubgroupExponents
 
 /-- Scalar multiplication by one gives the concrete G1 generator.
 
-This follows from the existing `G1.mulNat_def` unfolding theorem rather than
-being assumed by `ConcreteBlsLaws`. -/
-private theorem g1Mul_one : G1.mul G1.generator (1 : Fr) = G1.generator := by
-  change G1.mulNat G1.generator 1 = G1.generator
-  rw [G1.mulNat_def]
-  norm_num
-  rw [G1.mulNat_def]
-  norm_num
-  rfl
-
-/-- Unfolding equation for the executable G2 double-and-add multiplication. -/
-private theorem g2MulNat_def (p : G2) (k : Nat) :
-    G2.mulNat p k = if k = 0 then G2.zero
-      else if k % 2 = 1 then G2.add p (G2.mulNat (G2.double p) (k / 2))
-      else G2.mulNat (G2.double p) (k / 2) := by
-  rw [G2.mulNat]
+This follows from `G1.mul_one` rather than being assumed by `ConcreteBlsLaws`. -/
+private theorem g1Mul_one : G1.mul G1.generator (1 : Fr) = G1.generator :=
+  G1.mul_one (by decide)
 
 /-- Scalar multiplication by one gives the concrete G2 generator. -/
-private theorem g2Mul_one : G2.mul G2.generator (1 : Fr) = G2.generator := by
-  change G2.mulNat G2.generator 1 = G2.generator
-  rw [g2MulNat_def]
-  norm_num
-  rw [g2MulNat_def]
-  norm_num
-  rfl
+private theorem g2Mul_one : G2.mul G2.generator (1 : Fr) = G2.generator :=
+  G2.mul_one (by decide)
 
-/-- The concrete BLS implementation laws required by the proof.
+/-- The concrete BLS pairing bilinearity/non-degeneracy law required by the ceremony proof.
 
-Every field refers directly to this repository's `G1.mul`, `G2.mul`, `isInfinity`, and
-`pairingCheck` (through `pairingEq`). Proving this structure for the executable pairing
-implementation is the remaining cryptographic verification obligation; it is no longer
-hidden behind an unrelated abstract pairing type. -/
+The G1 and G2 non-infinity laws (`g1Mul_nonzero_iff`, `g1Mul_ne_zero_of_isInfinity_eq_false`,
+and `g2Mul_ne_zero_of_isInfinity_eq_false`) and unit scalar laws (`g1Mul_one`, `g2Mul_one`)
+are proved unconditionally above, leaving only `pairingEq_mul_iff` on `Bls.pairingCheck`. -/
 structure ConcreteBlsLaws : Prop where
-  /-- A generator multiple is non-infinity exactly when its scalar is nonzero. -/
-  g1Mul_nonzero_iff : ∀ s : Fr,
-    G1.isInfinity (G1.mul G1.generator s) = false ↔ s ≠ 0
-
-  /-- A generator multiple is non-infinity exactly when its scalar is nonzero. -/
-  g2Mul_nonzero_iff : ∀ x : Fr,
-    G2.isInfinity (G2.mul G2.generator x) = false ↔ x ≠ 0
-
   /-- The single bilinearity/non-degeneracy bridge used for all three checks.
 
   This states the semantics of the repository's concrete `pairingCheck` when all
@@ -164,12 +279,12 @@ theorem exponentChecksSufficient
     (∀ i, i < contribution.g2Powers.size →
       exponents.b i = Fr.powNat (exponents.s * exponents.x) i) := by
   have s_ne_zero : exponents.s ≠ 0 := by
-    apply (laws.g1Mul_nonzero_iff exponents.s).mp
+    apply g1Mul_ne_zero_of_isInfinity_eq_false (p := G1.generator)
     rw [← exponents.previousTau_eq]
     exact previousTauNonzero
 
   have x_ne_zero : exponents.x ≠ 0 := by
-    apply (laws.g2Mul_nonzero_iff exponents.x).mp
+    apply g2Mul_ne_zero_of_isInfinity_eq_false (p := G2.generator)
     rw [← exponents.potPubkey_eq]
     exact pubkeyNonzero
 

@@ -95,9 +95,9 @@ private def computeKzgProofMultiImpl
   let denominator ← vanishingPolynomialcoeff zs
   -- Compute the quotient polynomial directly in monomial form.
   let quotient ← dividePolynomialcoeff polynomialCoeff denominator
-  let monomial := setup.g1MonomialBytes
-  let proof ← g1Lincomb (monomial.extract 0 quotient.size) quotient
-  return (proof, ys)
+  let monomial := setup.g1Monomial
+  let proofG1 ← g1LincombPoints (monomial.extract 0 quotient.size) quotient
+  return (Bls.G1.compress proofG1, ys)
 
 /-- Reed-Solomon-extend `blob` and return its cells. -/
 def computeCells (blob : Blob) : KzgM (Array Cell) := do
@@ -207,7 +207,7 @@ def verifyCellKzgProofBatchImpl
   let rPowers := computePowers r numCells
 
   -- Step 2: LL = Σ_k r^k proofs[k].
-  let ll : G1 := (Bls.G1.uncompress (← g1Lincomb proofs rPowers)).toOption.get!
+  let ll : G1 ← uncompressG1 (← g1Lincomb proofs rPowers)
 
   -- Step 3: LR = [s^n].
   let lr : G2 := setup.g2Monomial[n]!
@@ -222,7 +222,7 @@ def verifyCellKzgProofBatchImpl
       weights.set! i (weights[i]! + rPowers[k]!)
 
   -- Step 4.1b: RLC = Σ_i weights[i] commitments[i].
-  let rlc : G1 := (Bls.G1.uncompress (← g1Lincomb commitments weights)).toOption.get!
+  let rlc : G1 ← uncompressG1 (← g1Lincomb commitments weights)
 
   -- Step 4.2: RLI = [Σ_k r^k I_k(s)].
   -- Note: an efficient implementation would use the IDFT based method
@@ -234,14 +234,13 @@ def verifyCellKzgProofBatchImpl
         (← cosetForCell cellIndices[k]!) cosetsEvals[k]!
       let scaled ← multiplyPolynomialcoeff #[rPowers[k]!] interp
       pure (addPolynomialcoeff sumInterp scaled)
-  let rli : G1 := (Bls.G1.uncompress
-                  (← g1Lincomb (setup.g1MonomialBytes.extract 0 n) sumInterp)).toOption.get!
+  let rli : G1 ← g1LincombPoints (setup.g1Monomial.extract 0 n) sumInterp
 
   -- Step 4.3: RLP = Σ_k (r^k * h_k^n) proofs[k].
   let weightedRPowers : Array Fr ← (Array.range numCells).mapM fun k => do
     let h_k ← cosetShiftForCell cellIndices[k]!
     pure (rPowers[k]! * (h_k ^ (Fr.ofNat n)))
-  let rlp : G1 := (Bls.G1.uncompress (← g1Lincomb proofs weightedRPowers)).toOption.get!
+  let rlp : G1 ← uncompressG1 (← g1Lincomb proofs weightedRPowers)
 
   -- Step 4.4: RL = RLC - RLI + RLP.
   let rl : G1 := Bls.G1.add (Bls.G1.add rlc (Bls.G1.neg rli)) rlp

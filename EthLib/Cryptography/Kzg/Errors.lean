@@ -68,6 +68,8 @@ inductive KzgError where
   polynomial for that case is not representable here (and recovery
   requires at least half the cells anyway). -/
   | tooManyMissingCells
+  /-- A buffer of packed 8-byte indices has a length that is not a multiple of 8. -/
+  | badIndicesBytesSize (actual : Nat)
 
 /-- Human-readable description, used at the C-ABI boundary. -/
 def KzgError.message : KzgError → String
@@ -98,6 +100,8 @@ def KzgError.message : KzgError → String
   | .duplicateCommitments       => "duplicate commitments"
   | .invalidG1Point             => "invalid G1 point"
   | .tooManyMissingCells        => "too many missing cells"
+  | .badIndicesBytesSize actual =>
+      s!"bad indices byte buffer size: {actual} (must be a multiple of 8)"
 
 /-- The KZG implementation monad: `IO` (for the trusted setup) with
 typed `KzgError` domain failures. -/

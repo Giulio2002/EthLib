@@ -117,10 +117,13 @@ def dividePolynomialcoeff (a b : PolynomialCoeff) :
   -- An empty divisor is invalid.
   if b.size = 0 then
     throw .zeroDivisorPolynomial
-  -- A zero leading coefficient would make every quotient step below a
-  -- division by zero, silently yielding 0 (see the `Div Fr` docstring)
-  -- instead of failing. Only reachable when the loop runs at least once.
-  if a.size ≥ b.size ∧ b[b.size - 1]!.isZero then
+  -- A dividend shorter than the divisor has quotient zero.
+  -- The specification's loop runs zero times and returns the empty list.
+  if a.size < b.size then
+    return #[]
+  -- A zero leading coefficient would make every quotient step a division by zero.
+  -- Field division by zero returns 0 here, so it would fail silently.
+  if b[b.size - 1]!.isZero then
     throw .zeroDivisorPolynomial
   let bpos := b.size - 1
   -- The divisor's leading coefficient is loop-invariant; precompute its
