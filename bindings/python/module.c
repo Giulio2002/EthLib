@@ -24,6 +24,9 @@ size_t XMSS_SEED_LEN;
 size_t XMSS_PUB_KEY_SIZE;
 size_t XMSS_SIG_SIZE;
 
+size_t MODEXP_LENGTH_HEADER_BYTES;
+size_t MODEXP_MAX_LENGTH_BYTES;
+
 /* ---- Lean externs: size accessors ------------------------------------ */
 
 extern uint64_t
@@ -96,6 +99,16 @@ eth_xmss_const_sig_size(
   uint8_t unit
 );
 
+extern uint64_t
+eth_modexp_const_length_header_bytes(
+  uint8_t unit
+);
+
+extern uint64_t
+eth_modexp_const_max_length_bytes(
+  uint8_t unit
+);
+
 /* ---- Lean externs: runtime + module init ----------------------------- */
 
 extern void
@@ -108,6 +121,11 @@ lean_initialize_runtime_module(void);
  * init of everything it imports, so this boots the specification too. */
 extern lean_object*
 initialize_EthLib_EthLib_Cryptography_Exports(
+  uint8_t builtin
+);
+
+extern lean_object*
+initialize_EthLib_EthLib_Precompiles_Modexp(
   uint8_t builtin
 );
 
@@ -188,6 +206,36 @@ run_io_into_bool(
   return 0;
 }
 
+/* `IO.Error.toString`, exported by the Lean core but absent from `lean.h`. */
+extern lean_object*
+lean_io_error_to_string(
+  lean_object* err
+);
+
+/* Run an IO action and return its inner ByteArray as a Python `bytes`.
+ * `lean_io_result_get_value` returns a *borrowed* reference. A failed
+ * action raises `ValueError` with the Lean error message. */
+PyObject*
+run_io_into_pybytes(
+  lean_object* io_result,
+  const char* what
+) {
+  if (!lean_io_result_is_ok(io_result)) {
+    lean_object* err = lean_io_result_get_error(io_result);
+    lean_inc(err);
+    lean_object* msg = lean_io_error_to_string(err);
+    PyErr_Format(PyExc_ValueError, "%s: %s", what, lean_string_cstr(msg));
+    lean_dec(msg);
+    lean_dec(io_result);
+    return NULL;
+  }
+  lean_object* ba = lean_io_result_get_value(io_result);
+  PyObject* out = PyBytes_FromStringAndSize(
+    (const char*) lean_sarray_cptr(ba), (Py_ssize_t) lean_sarray_size(ba));
+  lean_dec(io_result);
+  return out;
+}
+
 /* ---- Argument parsing helpers ---------------------------------------- */
 
 /* Validate that `obj` is a `bytes` of exactly `expected` length. Returns
@@ -261,6 +309,8 @@ static PyMethodDef methods[] = {
   {"xmss_key_gen", py_xmss_key_gen, METH_VARARGS, NULL},
   {"xmss_sign", py_xmss_sign, METH_VARARGS, NULL},
   {"xmss_verify", py_xmss_verify, METH_VARARGS, NULL},
+  {"modexp", py_modexp, METH_VARARGS, NULL},
+  {"modexp_gas_cost", py_modexp_gas_cost, METH_VARARGS, NULL},
   {NULL, NULL, 0, NULL},
 };
 
@@ -280,6 +330,10 @@ PyInit__native(void) {
   if (!initialized) {
     lean_initialize_runtime_module();
     lean_object* res = initialize_EthLib_EthLib_Cryptography_Exports(1);
+    if (lean_io_result_is_ok(res)) {
+      lean_dec_ref(res);
+      res = initialize_EthLib_EthLib_Precompiles_Modexp(1);
+    }
     if (lean_io_result_is_ok(res)) {
       lean_dec_ref(res);
     } else {
@@ -311,6 +365,9 @@ PyInit__native(void) {
     XMSS_PUB_KEY_SIZE = (size_t) eth_xmss_const_pub_key_size(0);
     XMSS_SIG_SIZE     = (size_t) eth_xmss_const_sig_size(0);
 
+    MODEXP_LENGTH_HEADER_BYTES = (size_t) eth_modexp_const_length_header_bytes(0);
+    MODEXP_MAX_LENGTH_BYTES    = (size_t) eth_modexp_const_max_length_bytes(0);
+
     initialized = 1;
   }
 
@@ -332,5 +389,7 @@ PyInit__native(void) {
   PyModule_AddIntConstant(m, "XMSS_SEED_LEN", XMSS_SEED_LEN);
   PyModule_AddIntConstant(m, "XMSS_PUB_KEY_SIZE", XMSS_PUB_KEY_SIZE);
   PyModule_AddIntConstant(m, "XMSS_SIG_SIZE", XMSS_SIG_SIZE);
+  PyModule_AddIntConstant(m, "MODEXP_LENGTH_HEADER_BYTES", MODEXP_LENGTH_HEADER_BYTES);
+  PyModule_AddIntConstant(m, "MODEXP_MAX_LENGTH_BYTES", MODEXP_MAX_LENGTH_BYTES);
   return m;
 }
