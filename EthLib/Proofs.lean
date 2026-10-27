@@ -1,4 +1,5 @@
 import EthLib.Cryptography.Proofs
+import EthLib.Precompiles.Proofs
 
 /-!
 # `EthLib.Proofs`
