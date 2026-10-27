@@ -1,5 +1,4 @@
 import EthLib.Cryptography.Xmss.Blake2s
-import Mathlib.Tactic
 
 /-!
 # Proofs: `Xmss.Blake2s`
@@ -46,8 +45,7 @@ theorem finalBlock_counter_toNat (length : Nat) (h : length < 2 ^ 64) :
   rw [finalBlock_counter]
   -- Conversion preserves every value inside the RFC's input-length domain.
   simp [UInt64.ofNat, UInt64.toNat, BitVec.toNat_ofNat]
-  norm_num at h ⊢
-  exact h
+  omega
 
 /-- Splitting and recombining a byte counter preserves all 64 bits. -/
 theorem counter_words_recombine (counter : UInt64) :
@@ -69,8 +67,8 @@ theorem counter_words_recombine (counter : UInt64) :
     BitVec.toNat_ushiftRight, BitVec.toNat_shiftLeft, BitVec.toNat_ofNat, Nat.testBit_or,
     Nat.reducePow, Nat.reduceMod]
   -- Name the two moduli as powers of two, which is what the bit lemmas expect.
-  rw [show (4294967296 : Nat) = 2 ^ 32 from by norm_num,
-      show (18446744073709551616 : Nat) = 2 ^ 64 from by norm_num]
+  rw [show (4294967296 : Nat) = 2 ^ 32 from rfl,
+      show (18446744073709551616 : Nat) = 2 ^ 64 from rfl]
   -- A masked, shifted bit is the source bit, guarded by the index range it covers.
   simp only [Nat.testBit_mod_two_pow, Nat.testBit_shiftRight, Nat.testBit_shiftLeft]
   rcases Nat.lt_or_ge i 32 with h | h
@@ -93,8 +91,8 @@ theorem little32_wordBytes (word : UInt32) :
   simp [BitVec.getElem_eq_testBit_toNat, BitVec.toNat_or, BitVec.toNat_umod,
     BitVec.toNat_ushiftRight, BitVec.toNat_shiftLeft, BitVec.toNat_ofNat, Nat.testBit_or]
   -- Name the byte mask and the word modulus as powers of two.
-  rw [show (256 : Nat) = 2 ^ 8 from by norm_num,
-      show (4294967296 : Nat) = 2 ^ 32 from by norm_num]
+  rw [show (256 : Nat) = 2 ^ 8 from rfl,
+      show (4294967296 : Nat) = 2 ^ 32 from rfl]
   -- A masked, shifted bit is the source bit, guarded by the byte it belongs to.
   simp only [Nat.testBit_mod_two_pow, Nat.testBit_shiftRight, Nat.testBit_shiftLeft]
   -- Each of the four bytes covers one eight-bit window, and the windows tile the word.
@@ -136,10 +134,17 @@ theorem sigma_row_permutation (round : Fin 10) :
     (Internal.sigma[round.val]!).toList.Perm (List.range 16) := by
   -- Ten finite cases check the literal rows without trusting array indexing.
   -- The kernel decides each row directly: `List.Perm` over sixteen numerals is small.
-  fin_cases round <;> decide
+  revert round
+  decide
 
-/-! ## Known answers -/
+/-! ## Known answers
 
+The kernel evaluates each digest itself, so no compiled code is trusted.
+
+Unfolding a full hash recurses deeply, so each known answer raises the recursion limit for itself only.
+-/
+
+set_option maxRecDepth 200000 in
 /-- Hashing the empty byte string matches the standard digest. -/
 theorem hash_empty : (hash ⟨#[]⟩).toArray = #[
     0x69, 0x21, 0x7a, 0x30, 0x79, 0x90, 0x80, 0x94,
@@ -147,9 +152,10 @@ theorem hash_empty : (hash ⟨#[]⟩).toArray = #[
     0x1f, 0x55, 0xb6, 0x48, 0x2c, 0xa1, 0xa5, 0x1e,
     0x1b, 0x25, 0x0d, 0xfd, 0x1e, 0xd0, 0xee, 0xf9
   ] := by
-  -- The native evaluator checks the closed computation.
-  native_decide
+  -- The kernel evaluator checks the closed computation.
+  decide +kernel
 
+set_option maxRecDepth 200000 in
 /-- Hashing the RFC 7693 Appendix B message matches its standard digest. -/
 theorem hash_abc : (hash ⟨#[0x61, 0x62, 0x63]⟩).toArray = #[
     0x50, 0x8c, 0x5e, 0x8c, 0x32, 0x7c, 0x14, 0xe2,
@@ -157,9 +163,10 @@ theorem hash_abc : (hash ⟨#[0x61, 0x62, 0x63]⟩).toArray = #[
     0x37, 0x45, 0x8b, 0x20, 0x9e, 0xd6, 0x3a, 0x29,
     0x4d, 0x99, 0x9b, 0x4c, 0x86, 0x67, 0x59, 0x82
   ] := by
-  -- The native evaluator checks the closed computation.
-  native_decide
+  -- The kernel evaluator checks the closed computation.
+  decide +kernel
 
+set_option maxRecDepth 200000 in
 /-- Hashing one full block marks that data block as final. -/
 theorem hash_one_full_block : (hash ⟨Array.replicate 64 0x61⟩).toArray = #[
     0x65, 0x1d, 0x2f, 0x5f, 0x20, 0x95, 0x2e, 0xac,
@@ -167,9 +174,10 @@ theorem hash_one_full_block : (hash ⟨Array.replicate 64 0x61⟩).toArray = #[
     0x63, 0x3e, 0x51, 0x1e, 0xa2, 0xd2, 0xe4, 0xc9,
     0xae, 0x2a, 0xc0, 0xd9, 0xff, 0xb7, 0xb2, 0x52
   ] := by
-  -- The native evaluator checks the closed computation.
-  native_decide
+  -- The kernel evaluator checks the closed computation.
+  decide +kernel
 
+set_option maxRecDepth 200000 in
 /-- Hashing one block plus one byte uses two compressions. -/
 theorem hash_block_and_tail : (hash ⟨Array.replicate 65 0x61⟩).toArray = #[
     0x04, 0x5f, 0x8a, 0xe1, 0x89, 0x32, 0x11, 0x9b,
@@ -177,27 +185,26 @@ theorem hash_block_and_tail : (hash ⟨Array.replicate 65 0x61⟩).toArray = #[
     0x98, 0x92, 0x05, 0x5f, 0xad, 0x5c, 0x32, 0xf8,
     0x2d, 0x79, 0xa6, 0x54, 0x3d, 0x92, 0xa4, 0x97
   ] := by
-  -- The native evaluator checks the closed computation.
-  native_decide
+  -- The kernel evaluator checks the closed computation.
+  decide +kernel
 
-/-- Generate the deterministic pseudorandom input used by RFC 7693 Appendix E. -/
-private def selfTestInput (length seed : Nat) : ByteArray := Id.run do
-  -- The seed selects the first 32-bit Fibonacci state word.
-  let mut previous := 0xDEAD4BAD * UInt32.ofNat seed
-  -- The second state word starts at one for every test case.
-  let mut current : UInt32 := 1
-  -- Allocate the exact message length before filling it.
-  let mut output := ByteArray.mk (Array.replicate length 0)
-  for position in [:length] do
+/-- Generate the deterministic pseudorandom byte list used by RFC 7693 Appendix E. -/
+private def selfTestInputList : Nat → UInt32 → UInt32 → List UInt8
+  -- No bytes left to produce.
+  | 0, _, _ => []
+  | n + 1, previous, current =>
     -- Addition wraps modulo `2^32` as required by the C self-test module.
     let next := previous + current
-    -- Advance the two-word Fibonacci state.
-    previous := current
-    current := next
     -- The most significant byte becomes the next message byte.
-    output := output.set! position (next >>> 24).toUInt8
-  return output
+    -- The two-word Fibonacci state then advances by one step.
+    (next >>> 24).toUInt8 :: selfTestInputList n current next
 
+/-- Generate the deterministic pseudorandom input used by RFC 7693 Appendix E. -/
+private def selfTestInput (length seed : Nat) : ByteArray :=
+  -- The seed selects the first state word, and the second state word starts at one.
+  ⟨(selfTestInputList length (0xDEAD4BAD * UInt32.ofNat seed) 1).toArray⟩
+
+set_option maxRecDepth 200000 in
 /-- The 255-byte Appendix E input matches an independent BLAKE2s-256 digest. -/
 theorem hash_selfTest_255 : (hash (selfTestInput 255 255)).toArray = #[
     0xad, 0x42, 0x86, 0xd0, 0xcb, 0x75, 0x44, 0xfe,
@@ -205,9 +212,10 @@ theorem hash_selfTest_255 : (hash (selfTestInput 255 255)).toArray = #[
     0x3b, 0x60, 0x76, 0xd9, 0xa2, 0xc6, 0xb4, 0xbb,
     0xdb, 0x79, 0x75, 0xba, 0x7f, 0x74, 0x08, 0xa1
   ] := by
-  -- Native evaluation covers four blocks and a 63-byte final tail.
-  native_decide
+  -- Kernel evaluation covers four blocks and a 63-byte final tail.
+  decide +kernel
 
+set_option maxRecDepth 200000 in
 /-- The 1024-byte Appendix E input matches an independent BLAKE2s-256 digest. -/
 theorem hash_selfTest_1024 : (hash (selfTestInput 1024 1024)).toArray = #[
     0xc7, 0x95, 0xe9, 0xac, 0x66, 0xad, 0x49, 0x54,
@@ -215,7 +223,7 @@ theorem hash_selfTest_1024 : (hash (selfTestInput 1024 1024)).toArray = #[
     0x2c, 0x61, 0xc1, 0xe6, 0x05, 0x1f, 0x06, 0x08,
     0xbb, 0x10, 0x9c, 0x14, 0xd2, 0x4e, 0x4e, 0xbb
   ] := by
-  -- Native evaluation covers sixteen full blocks with the final flag on block 16.
-  native_decide
+  -- Kernel evaluation covers sixteen full blocks with the final flag on block 16.
+  decide +kernel
 
 end EthLib.Cryptography.Xmss.Blake2s

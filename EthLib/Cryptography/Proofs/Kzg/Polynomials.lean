@@ -29,7 +29,7 @@ private theorem bytesBEToNatAux_eq_fromBytesBEAux (acc : Nat)
     exact ih _
 
 /-- Shifting left by a byte and or-ing in a byte is base-256 arithmetic. -/
-private theorem shiftLeft_eight_or (a u : Nat) (hu : u < 256) :
+theorem shiftLeft_eight_or (a u : Nat) (hu : u < 256) :
     (a <<< 8) ||| u = a * 256 + u := by
   have h28 : (2 : Nat) ^ 8 = 256 := by decide
   have h1 : ((a <<< 8) ||| u) % 2 ^ 8 = u := by
@@ -45,7 +45,7 @@ private theorem shiftLeft_eight_or (a u : Nat) (hu : u < 256) :
 
 /-- The accumulator contributes linearly: `acc` is worth
 `acc * 256 ^ length`. -/
-private theorem bytesBEToNatAux_linear (acc : Nat) (l : List UInt8) :
+theorem bytesBEToNatAux_linear (acc : Nat) (l : List UInt8) :
     bytesBEToNatAux acc l = acc * 256 ^ l.length + bytesBEToNatAux 0 l := by
   induction l generalizing acc with
   | nil => simp [bytesBEToNatAux]
@@ -56,21 +56,22 @@ private theorem bytesBEToNatAux_linear (acc : Nat) (l : List UInt8) :
     generalize (256 : Nat) ^ rest.length = P
     rw [Nat.add_mul, Nat.mul_comm P 256, ← Nat.mul_assoc, Nat.add_assoc]
 
+/-- A big-endian decoding of a byte list fits in `8 * length` bits. -/
+theorem bytesBEToNatAux_lt (l : List UInt8) : bytesBEToNatAux 0 l < 256 ^ l.length := by
+  induction l with
+  | nil => simp [bytesBEToNatAux]
+  | cons u rest ih =>
+    rw [bytesBEToNatAux, Nat.zero_shiftLeft, Nat.zero_or,
+      bytesBEToNatAux_linear, List.length_cons, Nat.pow_succ]
+    have h1 : u.toNat * 256 ^ rest.length + 256 ^ rest.length
+        ≤ 256 * 256 ^ rest.length := by
+      rw [← Nat.succ_mul]
+      exact Nat.mul_le_mul_right _ u.toNat_lt_size
+    omega
+
 /-- A big-endian decoding fits in `8 * size` bits. -/
 theorem bytesBEToNat_lt (b : ByteArray) : bytesBEToNat b < 256 ^ b.size := by
-  have haux : ∀ l : List UInt8, bytesBEToNatAux 0 l < 256 ^ l.length := by
-    intro l
-    induction l with
-    | nil => simp [bytesBEToNatAux]
-    | cons u rest ih =>
-      rw [bytesBEToNatAux, Nat.zero_shiftLeft, Nat.zero_or,
-        bytesBEToNatAux_linear, List.length_cons, Nat.pow_succ]
-      have h1 : u.toNat * 256 ^ rest.length + 256 ^ rest.length
-          ≤ 256 * 256 ^ rest.length := by
-        rw [← Nat.succ_mul]
-        exact Nat.mul_le_mul_right _ u.toNat_lt_size
-      omega
-  have := haux b.data.toList
+  have := bytesBEToNatAux_lt b.data.toList
   simpa [bytesBEToNat] using this
 
 /-- Decoding the encoding of `n` over `len` bytes recovers `n` modulo
@@ -107,6 +108,70 @@ theorem bytesBEToNat_intToBytesBE_of_lt {n len : Nat}
     (h : n < 256 ^ len) :
     bytesBEToNat (intToBytesBE n len) = n := by
   rw [bytesBEToNat_intToBytesBE, Nat.mod_eq_of_lt h]
+
+/-- Decoding is injective on byte lists of one length.
+
+Two lists of length `n` are two base-256 numbers with `n` digits.
+Equal values force equal digits, read from the most significant one down.
+-/
+theorem bytesBEToNatAux_inj {l₁ l₂ : List UInt8}
+    (hlen : l₁.length = l₂.length)
+    (h : bytesBEToNatAux 0 l₁ = bytesBEToNatAux 0 l₂) :
+    l₁ = l₂ := by
+  induction l₁ generalizing l₂ with
+  | nil =>
+    -- Two empty lists are equal, and an empty list never matches a non-empty one in length.
+    cases l₂ with
+    | nil => rfl
+    | cons _ _ => cases hlen
+  | cons u₁ r₁ ih =>
+    cases l₂ with
+    | nil => cases hlen
+    | cons u₂ r₂ =>
+      -- The two tails have the same length n, so both heads carry the weight 256^n.
+      have hlen' : r₁.length = r₂.length := Nat.succ.inj hlen
+      -- Split each value into its head digit and its tail:
+      --
+      --     u₁ * 256^n + tail₁ = u₂ * 256^n + tail₂
+      have hsplit : ∀ (u : UInt8) (r : List UInt8),
+          bytesBEToNatAux 0 (u :: r) = u.toNat * 256 ^ r.length + bytesBEToNatAux 0 r :=
+        fun u r => by
+          rw [bytesBEToNatAux, Nat.zero_shiftLeft, Nat.zero_or, bytesBEToNatAux_linear]
+      rw [hsplit, hsplit, ← hlen'] at h
+      -- Each tail is a remainder below 256^n.
+      have hr₁ := bytesBEToNatAux_lt r₁
+      have hr₂ : bytesBEToNatAux 0 r₂ < 256 ^ r₁.length := hlen' ▸ bytesBEToNatAux_lt r₂
+      -- Dividing both sides by 256^n keeps exactly the head digit.
+      have hpos : 0 < 256 ^ r₁.length := Nat.pow_pos (by decide)
+      have hu : u₁.toNat = u₂.toNat := by
+        have hdiv := congrArg (· / 256 ^ r₁.length) h
+        simp only [Nat.mul_comm _ (256 ^ r₁.length), Nat.mul_add_div hpos,
+          Nat.div_eq_of_lt hr₁, Nat.div_eq_of_lt hr₂] at hdiv
+        simpa using hdiv
+      -- Equal heads leave equal tails, and the induction hypothesis finishes them.
+      rw [hu] at h
+      rw [UInt8.toNat_inj.mp hu, ih hlen' (by omega)]
+
+/-- Decoding is injective on byte arrays of one size. -/
+theorem bytesBEToNat_inj {a b : ByteArray} (hsz : a.size = b.size)
+    (h : bytesBEToNat a = bytesBEToNat b) : a = b := by
+  -- Pass to the underlying byte lists, which have the same length.
+  have hlen : a.data.toList.length = b.data.toList.length := by
+    rw [Array.length_toList, Array.length_toList]
+    exact hsz
+  exact ByteArray.ext (Array.ext' (bytesBEToNatAux_inj hlen h))
+
+/-- Encoding a decoded byte array at its own size gives back the same bytes.
+
+Big-endian encoding has no slack once the length is fixed.
+So any byte array is the canonical encoding of its own value.
+-/
+theorem intToBytesBE_bytesBEToNat (b : ByteArray) :
+    intToBytesBE (bytesBEToNat b) b.size = b :=
+  -- The decoded value fits in the size, so encoding then decoding returns it.
+  -- Both arrays then have the same size and the same value, hence the same bytes.
+  bytesBEToNat_inj Array.size_ofFn
+    (bytesBEToNat_intToBytesBE_of_lt (bytesBEToNat_lt b))
 
 /-- A successful `bytesToBlsField` implies: the input was 32 bytes, the
 value is the big-endian decoding, and the value is canonical. -/
