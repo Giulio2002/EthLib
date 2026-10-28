@@ -212,6 +212,21 @@ lean_io_error_to_string(
   lean_object* err
 );
 
+/* Raise `ValueError` with the Lean error message of a failed IO action,
+ * then free the result. `what` names the operation in the message. */
+static void
+raise_io_error(
+  lean_object* io_result,
+  const char* what
+) {
+  lean_object* err = lean_io_result_get_error(io_result);
+  lean_inc(err);
+  lean_object* msg = lean_io_error_to_string(err);
+  PyErr_Format(PyExc_ValueError, "%s: %s", what, lean_string_cstr(msg));
+  lean_dec(msg);
+  lean_dec(io_result);
+}
+
 /* Run an IO action and return its inner ByteArray as a Python `bytes`.
  * `lean_io_result_get_value` returns a *borrowed* reference. A failed
  * action raises `ValueError` with the Lean error message. */
@@ -221,12 +236,7 @@ run_io_into_pybytes(
   const char* what
 ) {
   if (!lean_io_result_is_ok(io_result)) {
-    lean_object* err = lean_io_result_get_error(io_result);
-    lean_inc(err);
-    lean_object* msg = lean_io_error_to_string(err);
-    PyErr_Format(PyExc_ValueError, "%s: %s", what, lean_string_cstr(msg));
-    lean_dec(msg);
-    lean_dec(io_result);
+    raise_io_error(io_result, what);
     return NULL;
   }
   lean_object* ba = lean_io_result_get_value(io_result);
@@ -234,6 +244,22 @@ run_io_into_pybytes(
     (const char*) lean_sarray_cptr(ba), (Py_ssize_t) lean_sarray_size(ba));
   lean_dec(io_result);
   return out;
+}
+
+/* Run an IO action and return its inner UInt64 as a Python `int`.
+ * A failed action raises `ValueError` with the Lean error message. */
+PyObject*
+run_io_into_pyint(
+  lean_object* io_result,
+  const char* what
+) {
+  if (!lean_io_result_is_ok(io_result)) {
+    raise_io_error(io_result, what);
+    return NULL;
+  }
+  uint64_t value = lean_unbox_uint64(lean_io_result_get_value(io_result));
+  lean_dec(io_result);
+  return PyLong_FromUnsignedLongLong(value);
 }
 
 /* ---- Argument parsing helpers ---------------------------------------- */

@@ -7,8 +7,8 @@ import EthLib.Precompiles.Modexp.Bytes
 
 How the call data is read and the output is written.
 
-- `bytesToNat` is the big-endian value, so it is bounded by `256 ^ length`.
-- `natToBytes` writes a number as exactly `len` bytes and reads back as `n % 256 ^ len`.
+- A list of `k` bytes holds a big-endian value below `256 ^ k`.
+- Writing `n` on `len` bytes gives exactly `len` bytes, which read back as `n % 256 ^ len`.
 - Reading past the end of the call data gives zeros.
   So padding the call data with zeros changes no read.
 - A read depends only on the bytes it covers.
@@ -49,18 +49,19 @@ theorem bytesToNat_lt (bytes : List UInt8) : bytesToNat bytes < 256 ^ bytes.leng
     rw [hcons, List.length_cons, Nat.pow_succ]
     nlinarith [Nat.zero_le (256 ^ rest.length)]
 
-/-- `natToBytes len n` has exactly `len` bytes. -/
+/-- Writing on `len` bytes gives exactly `len` bytes. -/
 theorem natToBytes_length (len n : Nat) : (natToBytes len n).length = len := by
   induction len generalizing n with
   | zero => simp [natToBytes]
   | succ len ih => simp [natToBytes, ih]
 
-/-- Reading `natToBytes len n` back gives `n` modulo `256 ^ len`. -/
+/-- Writing `n` on `len` bytes and reading it back gives `n % 256 ^ len`. -/
 theorem bytesToNat_natToBytes (len n : Nat) :
     bytesToNat (natToBytes len n) = n % 256 ^ len := by
   induction len generalizing n with
   | zero => simp [natToBytes, bytesToNat, Nat.mod_one]
   | succ len ih =>
+    -- Split off the lowest byte, which is written last.
     rw [natToBytes, bytesToNat_append, ih, List.length_singleton]
     have : bytesToNat [UInt8.ofNat (n % 256)] = n % 256 := by
       simp [bytesToNat]
@@ -77,7 +78,7 @@ theorem bytesToNat_natToBytes_of_lt {len n : Nat} (h : n < 256 ^ len) :
     bytesToNat (natToBytes len n) = n := by
   rw [bytesToNat_natToBytes, Nat.mod_eq_of_lt h]
 
-/-- `bufferRead` returns exactly the `size` bytes asked for. -/
+/-- A window of the call data has exactly the `size` bytes asked for. -/
 theorem bufferRead_length (data : ByteArray) (start size : Nat) :
     (bufferRead data start size).length = size := by
   simp [bufferRead]

@@ -57,7 +57,6 @@ py_modexp_gas_cost(
   lean_object* res = eth_modexp_gas_cost(
     mk_bytearray((const uint8_t*) PyBytes_AS_STRING(data_obj),
                  (size_t) PyBytes_GET_SIZE(data_obj)));
-  /* The price is returned as big-endian bytes: it can exceed 2^64.
-   * The Python package turns it into an `int`. */
-  return run_io_into_pybytes(res, "modexp_gas_cost");
+  /* The price is at most 528449536, so it always fits in a `UInt64`. */
+  return run_io_into_pyint(res, "modexp_gas_cost");
 }

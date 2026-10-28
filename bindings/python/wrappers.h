@@ -72,6 +72,15 @@ run_io_into_pybytes(
   const char* what
 );
 
+/* Run an IO action and return its inner UInt64 as a Python `int`.
+ * On failure sets a `ValueError` carrying the Lean error message and
+ * returns NULL. `what` names the operation in the message. */
+PyObject*
+run_io_into_pyint(
+  lean_object* io_result,
+  const char* what
+);
+
 /* ---- Argument parsing helpers ---------------------------------------- */
 
 const uint8_t*

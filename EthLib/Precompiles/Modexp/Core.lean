@@ -13,17 +13,24 @@ The input has this layout, from EIP-198:
     [ len_base: 32 | len_exp: 32 | len_mod: 32 | BASE | EXPONENT | MODULUS ]
 ```
 
-- Each length is a 32-byte big-endian integer, in bytes.
-- The call data is read as if it were followed by infinitely many zero bytes.
-  So a short input is padded and a long one has its excess ignored.
+- Each length is a 32-byte big-endian integer, counted in bytes.
+- The call data reads as if followed by infinitely many zero bytes.
+- So a short input is padded, and data past the last field is ignored.
 - Each length must be at most 1024 (EIP-7823).
 
-The output is `BASE ^ EXPONENT mod MODULUS` as exactly `len_mod` big-endian bytes.
+The output is `BASE ^ EXPONENT mod MODULUS`, as exactly `len_mod` big-endian bytes.
+
 It is `len_mod` zero bytes when `MODULUS` is 0.
 
-The steps run in the order of `modexp` in the execution-specs module.
-That module is `forks/bpo2/vm/precompiled_contracts/modexp.py`, in execution-specs at `2c0c8e7`.
-First the bounds are checked, then the gas is charged, then the operation runs.
+The steps run in the order of `modexp` in `forks/bpo2/vm/precompiled_contracts/modexp.py`.
+That module is in execution-specs at `2c0c8e7`.
+
+```text
+    read the three lengths
+      -> reject any length above 1024     (no gas charged)
+      -> charge the gas                   (out of gas ends the call)
+      -> read BASE, EXPONENT, MODULUS and compute the output
+```
 -/
 
 namespace EthLib.Precompiles.Modexp
@@ -39,17 +46,20 @@ structure Lengths where
 /-- Read the three length headers.
 
 EIP-198, Specification.
-The first lines of `modexp` in the execution-specs module. -/
+
+The first lines of `modexp` in execution-specs. -/
 def parseLengths (data : ByteArray) : Lengths where
   base := readNat data 0 LENGTH_HEADER_BYTES
   exponent := readNat data LENGTH_HEADER_BYTES LENGTH_HEADER_BYTES
   modulus := readNat data (2 * LENGTH_HEADER_BYTES) LENGTH_HEADER_BYTES
 
-/-- Reject a length above `MAX_LENGTH_BYTES`.
+/-- Reject a length above 1024 bytes.
 
 EIP-7823, Specification.
-The three `ExceptionalHalt` checks of `modexp` in the execution-specs module.
-They run in the order base, exponent, modulus. -/
+
+These are the three `ExceptionalHalt` checks of `modexp` in execution-specs.
+
+They run in the order base, exponent, modulus, so the first oversized field is reported. -/
 def checkLengths (l : Lengths) : Except ModexpError Unit :=
   if l.base > MAX_LENGTH_BYTES then .error (.lengthTooLarge .base l.base)
   else if l.exponent > MAX_LENGTH_BYTES then .error (.lengthTooLarge .exponent l.exponent)
@@ -64,25 +74,37 @@ def Lengths.exponentStart (l : Lengths) : Nat :=
 def Lengths.modulusStart (l : Lengths) : Nat :=
   l.exponentStart + l.exponent
 
-/-- The first 32 bytes of `EXPONENT` (fewer when it is shorter), as an integer.
+/-- The first 32 bytes of `EXPONENT` as an integer, or all of it when shorter.
 
-`exp_head` in `modexp` in the execution-specs module. -/
+`exp_head` in `modexp` in execution-specs. -/
 def exponentHead (data : ByteArray) (l : Lengths) : Nat :=
   readNat data l.exponentStart (min EXPONENT_HEAD_BYTES l.exponent)
 
 /-- The gas the call is charged, read from the input.
 
-This is `gas_cost(base_length, modulus_length, exp_length, exp_head)`
-in `modexp` in the execution-specs module. -/
+`gas_cost(base_length, modulus_length, exp_length, exp_head)` in `modexp` in execution-specs. -/
 def requiredGas (data : ByteArray) (l : Lengths) : Nat :=
   gasCost l.base l.modulus l.exponent (exponentHead data l)
 
-/-- `b ^ e mod m` by square-and-multiply, in `log2 e` steps.
+/-- `b ^ e mod m` by square-and-multiply.
 
-Each step halves the exponent and squares the base modulo `m`.
-The naive `b ^ e % m` is out of reach for a 1024-byte exponent,
-so the specification needs this form to be executable.
-`Proofs.Modexp.PowMod` shows it equals `b ^ e % m`. -/
+It takes one step per bit of `e`, at most 8192 for a 1024-byte exponent.
+
+The direct `b ^ e % m` would first build `b ^ e`, a number of up to about `2 ^ 8205` bits.
+
+Here `f(b, e)` stands for the result modulo 7:
+
+```text
+    f(3, 5)   e odd    = f(2, 2) * 3 mod 7     (3 * 3 mod 7 = 2)
+    f(2, 2)   e even   = f(4, 1)               (2 * 2 mod 7 = 4)
+    f(4, 1)   e odd    = f(2, 0) * 4 mod 7     (4 * 4 mod 7 = 2)
+    f(2, 0)   e = 0    = 1
+
+    unwinding:  1 * 4 mod 7 = 4,  then 4,  then 4 * 3 mod 7 = 5
+    check:      3 ^ 5 = 243 = 34 * 7 + 5
+```
+
+A proof in the proofs library shows it equals `b ^ e % m` for every `m`. -/
 def powMod (b e m : Nat) : Nat :=
   if h : e = 0 then 1 % m
   else
@@ -95,14 +117,16 @@ decreasing_by omega
 
 /-- The operation of the precompile: the output bytes, once the gas is paid.
 
-The `# OPERATION` part of `modexp` in the execution-specs module.
-Python's `pow(base, exp, modulus)` is `powMod`, and a zero modulus gives zero bytes.
-When `base` and `modulus` are both empty the output is empty,
-which is the explicit early return of the execution-specs module. -/
+The `# OPERATION` part of `modexp` in execution-specs.
+
+- Python's `pow(base, exp, modulus)` is the square-and-multiply loop above.
+- A zero modulus gives `len_mod` zero bytes.
+- An empty base and modulus give an empty output, the early return of execution-specs. -/
 def compute (data : ByteArray) (l : Lengths) : ByteArray :=
   let base := readNat data BASE_OFFSET l.base
   let exponent := readNat data l.exponentStart l.exponent
   let modulus := readNat data l.modulusStart l.modulus
+  -- The result is below the modulus, so it fits in `len_mod` bytes.
   let result := if modulus = 0 then 0 else powMod base exponent modulus
   ByteArray.mk (natToBytes l.modulus result).toArray
 
@@ -116,7 +140,8 @@ def chargedGas (data : ByteArray) : Except ModexpError Nat :=
 /-- Run the precompile on `data` with `gas` available.
 
 Returns the output, or the error that consumes all the gas.
-`modexp` in the execution-specs module. -/
+
+`modexp` in execution-specs. -/
 def modexp (data : ByteArray) (gas : Nat) : Except ModexpError ByteArray :=
   let l := parseLengths data
   -- EIP-7823: bounds first, before any gas is charged.

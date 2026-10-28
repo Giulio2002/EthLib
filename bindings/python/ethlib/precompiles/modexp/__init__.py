@@ -20,7 +20,7 @@ def gas_cost(data: bytes) -> int:
 
     Raises `ValueError` when a length exceeds `MODEXP_MAX_LENGTH_BYTES`.
     """
-    return int.from_bytes(_native.modexp_gas_cost(data), "big")
+    return _native.modexp_gas_cost(data)
 
 
 __all__ = [

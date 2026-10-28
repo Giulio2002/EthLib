@@ -6,9 +6,10 @@ import EthLib.Precompiles.Modexp.Constants
 Reading big-endian integers out of the call data, and writing them back.
 
 EIP-198 says the call data is "assumed to be infinitely right-padded with zero bytes".
-So `byteAt` is total: every index past the end reads as zero.
-That is the rule of `buffer_read`.
-It lives in `forks/bpo2/vm/memory.py`, in execution-specs at `2c0c8e7`.
+
+So every read is total: an index past the end reads as zero.
+
+That is the rule of `buffer_read` in `forks/bpo2/vm/memory.py`, in execution-specs at `2c0c8e7`.
 -/
 
 namespace EthLib.Precompiles.Modexp
@@ -17,7 +18,9 @@ namespace EthLib.Precompiles.Modexp
 def byteAt (data : ByteArray) (i : Nat) : UInt8 :=
   data.data.getD i 0
 
-/-- The big-endian integer written by a byte list. -/
+/-- The big-endian integer written by a byte list.
+
+The first byte is the most significant one. -/
 def bytesToNat (bytes : List UInt8) : Nat :=
   bytes.foldl (fun acc b => acc * 256 + b.toNat) 0
 
@@ -31,12 +34,14 @@ def bufferRead (data : ByteArray) (start size : Nat) : List UInt8 :=
 def readNat (data : ByteArray) (start size : Nat) : Nat :=
   bytesToNat (bufferRead data start size)
 
-/-- `n` as exactly `len` big-endian bytes, dropping any bits above `256 ^ len`.
+/-- `n` as exactly `len` big-endian bytes, keeping only `n mod 256 ^ len`.
 
-The execution-specs module fixes the width the same way,
-with `to_bytes(Uint(modulus_length), "big")`. -/
+Python's `to_bytes(modulus_length, "big")` fixes the width the same way.
+
+The callers only pass a value below `256 ^ len`, so nothing is dropped in practice. -/
 def natToBytes : Nat → Nat → List UInt8
   | 0, _ => []
+  -- The higher bytes first, then the lowest byte last.
   | len + 1, n => natToBytes len (n / 256) ++ [UInt8.ofNat (n % 256)]
 
 end EthLib.Precompiles.Modexp

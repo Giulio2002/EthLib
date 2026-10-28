@@ -3,10 +3,13 @@ import EthLib.Precompiles.Proofs.Modexp
 /-!
 # `EthLib.Precompiles.Proofs`
 
-Machine-checked properties of the executable specification. This tree
-mirrors the layout of the definitions it proves things about: proofs for
-`EthLib.Precompiles.Foo` live in `EthLib.Precompiles.Proofs.Foo`.
+Machine-checked properties of the precompile specifications.
 
-The proofs are compiled by the `Proofs` Lake library, which the runtime
-code does not depend on: nothing here is linked into the Python extension.
+The tree mirrors the definitions it proves things about.
+
+The proofs for `EthLib.Precompiles.Foo` live in `EthLib.Precompiles.Proofs.Foo`.
+
+They build in the `Proofs` Lake library, which the library code does not depend on.
+
+So nothing here is linked into the Python extension.
 -/

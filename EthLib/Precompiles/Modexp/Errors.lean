@@ -6,7 +6,8 @@ import EthLib.Precompiles.Modexp.Constants
 Typed failures of the MODEXP precompile.
 
 Both failures end the call and consume all its gas.
-They differ in why.
+
+They differ in when they happen:
 
 - A length above the bound of EIP-7823 is an exceptional halt, raised before any gas is charged.
 - A call whose gas is below the price runs out of gas.
@@ -19,19 +20,21 @@ inductive LengthField where
   | base
   | exponent
   | modulus
+  deriving Repr, DecidableEq
 
 /-- Every way a MODEXP call can fail. -/
 inductive ModexpError where
-  /-- A length header exceeded `MAX_LENGTH_BYTES`.
+  /-- A length header exceeded 1024 bytes.
 
-  EIP-7823, Specification: "the precompile execution stops, returns an error,
-  and consumes all gas".
+  EIP-7823, Specification: "the precompile execution stops, returns an error, and consumes all gas".
+
   `ExceptionalHalt` in `forks/bpo2/vm/precompiled_contracts/modexp.py`. -/
   | lengthTooLarge (field : LengthField) (length : Nat)
   /-- The gas given was below the price.
 
   `charge_gas` raises `OutOfGasError` in `forks/bpo2/vm/gas.py`. -/
   | outOfGas (cost gas : Nat)
+  deriving Repr, DecidableEq
 
 /-- Human-readable description, used at the C-ABI boundary. -/
 def ModexpError.message : ModexpError → String
@@ -45,7 +48,7 @@ def ModexpError.message : ModexpError → String
 
 /-- Run a fallible MODEXP computation down to `IO`.
 
-The C-ABI layer surfaces failures to Python as exceptions. -/
+The C-ABI layer turns an `IO` error into a Python exception. -/
 def runModexp {α : Type} (act : Except ModexpError α) : IO α :=
   match act with
   | .ok a => pure a
