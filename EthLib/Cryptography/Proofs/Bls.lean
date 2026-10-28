@@ -1,3 +1,6 @@
+import EthLib.Cryptography.Proofs.Bls.Fp2
+import EthLib.Cryptography.Proofs.Bls.Fp6
+import EthLib.Cryptography.Proofs.Bls.Fp12
 import EthLib.Cryptography.Proofs.Bls.FpZMod
 import EthLib.Cryptography.Proofs.Bls.Fr
 import EthLib.Cryptography.Proofs.Bls.FrZMod
