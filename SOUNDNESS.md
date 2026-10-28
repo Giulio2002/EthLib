@@ -208,7 +208,7 @@ Exported constants it does not call: `eth_xmss_const_chains`, `eth_xmss_const_di
 <!-- end generated -->
 
 <!-- generated: c-lines -->
-1352 lines of hand-written C sit between them and Python: `bls.c` (87), `kzg.c` (533), `modexp.c` (62), `module.c` (422), `wrappers.h` (125), `xmss.c` (123).
+1364 lines of hand-written C sit between them and Python: `bls.c` (87), `kzg.c` (533), `modexp.c` (61), `module.c` (431), `wrappers.h` (129), `xmss.c` (123).
 <!-- end generated -->
 
 They convert arguments, own and free Lean objects, and turn errors into Python exceptions.

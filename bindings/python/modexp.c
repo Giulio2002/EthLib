@@ -1,9 +1,8 @@
-/*
- * MODEXP precompile wrappers. Each function parses Python arguments,
- * marshals them into Lean runtime objects, invokes the corresponding
- * `@[export]`-d `eth_modexp*` symbol, and unwraps the IO result back to
- * Python.
- */
+/* Python wrappers of the MODEXP exports.
+ *
+ * Each wrapper checks its Python arguments.
+ *
+ * It then calls the Lean export and turns the result into a Python value. */
 #include "wrappers.h"
 
 /* ---- Lean externs ----------------------------------------------------- */

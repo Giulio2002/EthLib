@@ -63,9 +63,11 @@ run_io_into_bool(
   uint8_t* out_ok
 );
 
-/* Run an IO action and return its inner ByteArray as a Python `bytes`
- * of any length. On failure sets a `ValueError` carrying the Lean error
- * message and returns NULL. `what` names the operation in the message. */
+/* Run an IO action and return its inner ByteArray as a Python `bytes`.
+ *
+ * On failure it sets a `ValueError` and returns NULL.
+ *
+ * `what` names the operation in the message. */
 PyObject*
 run_io_into_pybytes(
   lean_object* io_result,
@@ -73,8 +75,10 @@ run_io_into_pybytes(
 );
 
 /* Run an IO action and return its inner UInt64 as a Python `int`.
- * On failure sets a `ValueError` carrying the Lean error message and
- * returns NULL. `what` names the operation in the message. */
+ *
+ * On failure it sets a `ValueError` and returns NULL.
+ *
+ * `what` names the operation in the message. */
 PyObject*
 run_io_into_pyint(
   lean_object* io_result,

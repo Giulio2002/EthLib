@@ -114,12 +114,15 @@ eth_modexp_const_max_length_bytes(
 extern void
 lean_initialize_runtime_module(void);
 
-/* We boot `EthLib.Cryptography.Exports` and `EthLib.Precompiles.Exports`
- * rather than the root of the `Exports` library, `EthLib.Exports`: Lake
- * produces a `.c` file for the library root but does *not* compile it to
- * a `.c.o.export`, so its init symbol would never get linked in. The init
- * of a module runs the init of everything it imports, so this boots the
- * specification too. */
+/* We boot the export root of each domain, not the library root `EthLib.Exports`.
+ *
+ * Lake writes a `.c` file for the library root but never compiles it.
+ *
+ * So the init symbol of the library root is never linked in.
+ *
+ * The init of a module runs the init of everything it imports.
+ *
+ * So booting the export roots boots the specification too. */
 extern lean_object*
 initialize_EthLib_EthLib_Cryptography_Exports(
   uint8_t builtin
@@ -213,8 +216,11 @@ lean_io_error_to_string(
   lean_object* err
 );
 
-/* Raise `ValueError` with the Lean error message of a failed IO action,
- * then free the result. `what` names the operation in the message. */
+/* Raise `ValueError` with the Lean error message of a failed IO action.
+ *
+ * The result is freed.
+ *
+ * `what` names the operation in the message. */
 static void
 raise_io_error(
   lean_object* io_result,
@@ -229,8 +235,10 @@ raise_io_error(
 }
 
 /* Run an IO action and return its inner ByteArray as a Python `bytes`.
- * `lean_io_result_get_value` returns a *borrowed* reference. A failed
- * action raises `ValueError` with the Lean error message. */
+ *
+ * The inner value is borrowed, so only the result is freed.
+ *
+ * A failed action raises `ValueError` with the Lean error message. */
 PyObject*
 run_io_into_pybytes(
   lean_object* io_result,
@@ -248,6 +256,7 @@ run_io_into_pybytes(
 }
 
 /* Run an IO action and return its inner UInt64 as a Python `int`.
+ *
  * A failed action raises `ValueError` with the Lean error message. */
 PyObject*
 run_io_into_pyint(
