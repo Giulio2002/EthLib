@@ -245,9 +245,8 @@ It also trusts every `@[implemented_by]` and `@[extern]` that the compiled code 
 A new use fails `lake exe check-decls`.
 
 <!-- generated: native -->
-2 theorems still use them, and `scripts/check_decls_baseline.txt` lists each one:
+1 theorems still use them, and `scripts/check_decls_baseline.txt` lists each one:
 
-- `EthLib.Cryptography.Xmss.keyGen_known_answer`
 - `EthLib.Cryptography.Xmss.sign_known_answer`
 <!-- end generated -->
 

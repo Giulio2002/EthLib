@@ -1,5 +1,7 @@
 import EthLib.Cryptography.Xmss.KeyGen
 import EthLib.Cryptography.Proofs.Xmss.Verify
+import EthLib.Cryptography.Proofs.Xmss.KeyGenPath
+import EthLib.Cryptography.Proofs.Xmss.KeyGenReveal7
 
 /-!
 # Proofs: `Xmss.KeyGen`
@@ -65,15 +67,25 @@ theorem leaves_toNat (sk : SecretKey) (epoch : Epoch) :
 
 /-! ## Known answer -/
 
-/-- The seed `0, 1, ..., 31` the reference key is grown from. -/
-def exampleSeed : Seed := Vector.ofFn fun i => UInt8.ofNat i.val
-
 /-- Key generation over epochs 6 to 8 gives the reference public key. -/
 theorem keyGen_known_answer :
     (keyGen exampleSeed 6 8).toOption.map Prod.snd = some examplePublicKey := by
-  -- A root over three leaves is too deep for the kernel's evaluator.
-  -- The native evaluator checks the closed computation.
-  native_decide
+  -- The root is the climb from leaf 7 along its path.
+  -- The leaf and the path match the reference signature, whose climb is already checked.
+  have hroot : exampleSk.tree.root exampleSk.leaves = examplePublicKey.merkleRoot := by
+    rw [← computeRoot_authPath exampleSk.tree exampleSk.leaves 7 (by decide) (by decide)]
+    change computeRoot exampleSk.publicParam 7
+      (exampleSk.tree.authPath exampleSk.leaves 7) (exampleSk.leaves 7) = _
+    rw [katPublicParam, katAuthPath7, katLeaf7_eq]
+    exact katRoot32
+  -- The public key holds that root and the public parameter.
+  have hpk : exampleSk.publicKey = examplePublicKey := by
+    unfold SecretKey.publicKey
+    rw [hroot, katPublicParam]
+  -- The range 6 to 8 is not empty, so key generation returns that key.
+  unfold keyGen SecretKey.ofSeed
+  rw [dif_pos (by decide)]
+  exact congrArg some hpk
 
 /-- An empty epoch range rejects. -/
 theorem keyGen_empty_range : (keyGen exampleSeed 8 6).toOption.isNone := by

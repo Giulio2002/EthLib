@@ -9,7 +9,6 @@
 
 # Known answers decided by compiled code rather than by the kernel.
 # `native_decide` and `bv_decide` trust the compiler and every `@[extern]` it calls.
-native EthLib.Cryptography.Xmss.keyGen_known_answer
 native EthLib.Cryptography.Xmss.sign_known_answer
 
 # Exponentiation by `partial` recursion, which the kernel cannot unfold.
