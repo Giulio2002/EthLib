@@ -191,15 +191,19 @@ example : gasCost 64 64 1 3 = 500 := by decide
 example : gasCost 64 64 3 0x10001 = 2048 := by decide
 -- `modexp_nagydani_2_*`: 128-byte operands.
 example : gasCost 128 128 1 2 = 512 := by decide
+example : gasCost 128 128 1 3 = 512 := by decide
 example : gasCost 128 128 3 0x10001 = 8192 := by decide
 -- `modexp_nagydani_3_*`: 256-byte operands.
 example : gasCost 256 256 1 2 = 2048 := by decide
+example : gasCost 256 256 1 3 = 2048 := by decide
 example : gasCost 256 256 3 0x10001 = 32768 := by decide
 -- `modexp_nagydani_4_*`: 512-byte operands.
 example : gasCost 512 512 1 2 = 8192 := by decide
+example : gasCost 512 512 1 3 = 8192 := by decide
 example : gasCost 512 512 3 0x10001 = 131072 := by decide
 -- `modexp_nagydani_5_*`: 1024-byte operands.
 example : gasCost 1024 1024 1 2 = 32768 := by decide
+example : gasCost 1024 1024 1 3 = 32768 := by decide
 example : gasCost 1024 1024 3 0x10001 = 524288 := by decide
 
 end EthLib.Precompiles.Modexp

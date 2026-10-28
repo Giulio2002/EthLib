@@ -114,18 +114,19 @@ eth_modexp_const_max_length_bytes(
 extern void
 lean_initialize_runtime_module(void);
 
-/* We boot `EthLib.Cryptography.Exports` rather than the root of the
- * `Exports` library, `EthLib.Exports`: Lake produces a `.c` file for the
- * library root but does *not* compile it to a `.c.o.export`, so its
- * init symbol would never get linked in. The init of a module runs the
- * init of everything it imports, so this boots the specification too. */
+/* We boot `EthLib.Cryptography.Exports` and `EthLib.Precompiles.Exports`
+ * rather than the root of the `Exports` library, `EthLib.Exports`: Lake
+ * produces a `.c` file for the library root but does *not* compile it to
+ * a `.c.o.export`, so its init symbol would never get linked in. The init
+ * of a module runs the init of everything it imports, so this boots the
+ * specification too. */
 extern lean_object*
 initialize_EthLib_EthLib_Cryptography_Exports(
   uint8_t builtin
 );
 
 extern lean_object*
-initialize_EthLib_EthLib_Precompiles_Modexp(
+initialize_EthLib_EthLib_Precompiles_Exports(
   uint8_t builtin
 );
 
@@ -358,7 +359,7 @@ PyInit__native(void) {
     lean_object* res = initialize_EthLib_EthLib_Cryptography_Exports(1);
     if (lean_io_result_is_ok(res)) {
       lean_dec_ref(res);
-      res = initialize_EthLib_EthLib_Precompiles_Modexp(1);
+      res = initialize_EthLib_EthLib_Precompiles_Exports(1);
     }
     if (lean_io_result_is_ok(res)) {
       lean_dec_ref(res);

@@ -3,7 +3,6 @@ import EthLib.Precompiles.Modexp.Bytes
 import EthLib.Precompiles.Modexp.Gas
 import EthLib.Precompiles.Modexp.Errors
 import EthLib.Precompiles.Modexp.Core
-import EthLib.Precompiles.Modexp.Exports
 
 /-!
 # `EthLib.Precompiles.Modexp`

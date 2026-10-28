@@ -96,6 +96,16 @@ It holds under four hypotheses besides the checks themselves:
 - `previousTauNonzero`, that the previous transcript's tau point is not at infinity;
 - `pubkeyNonzero`, that the contributor's public key is not at infinity.
 
+### MODEXP
+
+`compute_eq_pow_mod` (`Precompiles/Proofs/Modexp/Core.lean`): the output is `BASE ^ EXPONENT mod MODULUS`, or 0 for a zero modulus.
+It rests on `powMod_eq` (`Precompiles/Proofs/Modexp/PowMod.lean`): the square-and-multiply loop equals `b ^ e % m`.
+
+`modexp_out_of_gas` and `modexp_ok` (`Precompiles/Proofs/Modexp/Core.lean`): with every length within the EIP-7823 bound, a call fails exactly when the gas is below the price.
+
+These state agreement with EIP-198 and EIP-7823.
+No theorem relates the module to the execution-specs code it follows.
+
 ### What cannot be proved yet
 
 These definitions prevent direct kernel evaluation.
@@ -192,13 +202,13 @@ A proof is unaffected unless it uses one of the tactics of C2.
 ### B4. The C boundary
 
 <!-- generated: exports -->
-Lean exports 17 operations and 19 size constants.
-The Python extension calls 17 of the operations and 14 of the constants.
+Lean exports 19 operations and 21 size constants.
+The Python extension calls 19 of the operations and 16 of the constants.
 Exported constants it does not call: `eth_xmss_const_chains`, `eth_xmss_const_digest_len`, `eth_xmss_const_layer_height`, `eth_xmss_const_public_param_len`, `eth_xmss_const_randomizer_len`.
 <!-- end generated -->
 
 <!-- generated: c-lines -->
-1181 lines of hand-written C sit between them and Python: `bls.c` (87), `kzg.c` (533), `module.c` (336), `wrappers.h` (102), `xmss.c` (123).
+1352 lines of hand-written C sit between them and Python: `bls.c` (87), `kzg.c` (533), `modexp.c` (62), `module.c` (422), `wrappers.h` (125), `xmss.c` (123).
 <!-- end generated -->
 
 They convert arguments, own and free Lean objects, and turn errors into Python exceptions.

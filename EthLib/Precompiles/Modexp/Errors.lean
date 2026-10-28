@@ -36,7 +36,7 @@ inductive ModexpError where
   | outOfGas (cost gas : Nat)
   deriving Repr, DecidableEq
 
-/-- Human-readable description, used at the C-ABI boundary. -/
+/-- Human-readable description of the failure. -/
 def ModexpError.message : ModexpError → String
   | .lengthTooLarge .base length =>
       s!"base length {length} exceeds {Constants.MAX_LENGTH_BYTES}"
@@ -45,13 +45,5 @@ def ModexpError.message : ModexpError → String
   | .lengthTooLarge .modulus length =>
       s!"modulus length {length} exceeds {Constants.MAX_LENGTH_BYTES}"
   | .outOfGas cost gas => s!"out of gas: price {cost}, gas {gas}"
-
-/-- Run a fallible MODEXP computation down to `IO`.
-
-The C-ABI layer turns an `IO` error into a Python exception. -/
-def runModexp {α : Type} (act : Except ModexpError α) : IO α :=
-  match act with
-  | .ok a => pure a
-  | .error e => throw (IO.userError e.message)
 
 end EthLib.Precompiles.Modexp

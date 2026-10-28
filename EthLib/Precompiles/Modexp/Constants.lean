@@ -71,18 +71,4 @@ EIP-7883, Specification, `calculate_gas_cost`.
 EIP-2565 charged at least 200. -/
 def MIN_GAS : Nat := 500
 
-/-! ## C-callable size accessors
-
-The Python bindings read these at load time, so they hard-code no length.
-
-Each takes a `Unit` to keep the C signature predictable. -/
-
-@[export eth_modexp_const_length_header_bytes]
-def constLengthHeaderBytes (_ : Unit) : UInt64 :=
-  UInt64.ofNat LENGTH_HEADER_BYTES
-
-@[export eth_modexp_const_max_length_bytes]
-def constMaxLengthBytes (_ : Unit) : UInt64 :=
-  UInt64.ofNat MAX_LENGTH_BYTES
-
 end EthLib.Precompiles.Modexp.Constants
