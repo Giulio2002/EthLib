@@ -144,6 +144,38 @@ recovers `cosetEvals[j]!`. -/
       .ok cosetEvals[j]! := by
   rw [extract_cosetEvalsToCell cosetEvals hj, bytesToBlsField_blsFieldToBytes]
 
+/-- A loop over the indices below `n` returns `ys` when the step at each index returns its element. -/
+private theorem mapM_range_eq_ok {ε α : Type} [Inhabited α] {n : Nat} {ys : Array α}
+    (f : Nat → Except ε α) (hsize : ys.size = n) (hf : ∀ i < n, f i = .ok ys[i]!) :
+    (Array.range n).mapM f = .ok ys := by
+  -- On a list of indices below `n`, the loop is a plain map.
+  have hlist (is : List Nat) (his : ∀ i ∈ is, i < n) :
+      is.mapM f = .ok (is.map fun i => ys[i]!) := by
+    induction is with
+    | nil => rfl
+    | cons i is ih =>
+      rw [List.mapM_cons, hf i (his i (by simp)), ih fun j hj => his j (by simp [hj])]
+      rfl
+  rw [Array.mapM_eq_mapM_toList, Array.toList_range, hlist _ fun i hi => List.mem_range.mp hi]
+  -- Reading every index below the size gives back the array.
+  refine congrArg Except.ok ?_
+  apply Array.ext
+  · simp [hsize]
+  · intro i _ hi
+    simp [getElem!_pos ys i hi]
+
+/-- Encoding a cell and decoding it gives back the same field elements. -/
+theorem cellToCosetEvals_cosetEvalsToCell
+    (ys : CosetEvals) (hsize : ys.size = FIELD_ELEMENTS_PER_CELL) :
+    cellToCosetEvals (cosetEvalsToCell ys) = .ok ys := by
+  unfold cellToCosetEvals
+  -- The encoding has the cell size, so the size check passes.
+  rw [if_neg (by simp), pure_bind]
+  -- Each 32-byte chunk decodes to its element.
+  refine mapM_range_eq_ok _ hsize fun i hi => ?_
+  simp only [bytesToBlsField_extract_cosetEvalsToCell ys hi]
+  rfl
+
 /-- The cell-batch challenge is a canonical field element. -/
 theorem val_computeVerifyCellKzgProofBatchChallenge_lt
     (commitments : Array KZGCommitment)
