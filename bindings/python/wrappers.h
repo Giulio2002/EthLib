@@ -32,6 +32,9 @@ extern size_t XMSS_SEED_LEN;
 extern size_t XMSS_PUB_KEY_SIZE;
 extern size_t XMSS_SIG_SIZE;
 
+extern size_t MODEXP_LENGTH_HEADER_BYTES;
+extern size_t MODEXP_MAX_LENGTH_BYTES;
+
 /* ---- Lean ↔ C marshalling helpers ------------------------------------ */
 
 lean_object*
@@ -58,6 +61,28 @@ int
 run_io_into_bool(
   lean_object* io_result,
   uint8_t* out_ok
+);
+
+/* Run an IO action and return its inner ByteArray as a Python `bytes`.
+ *
+ * On failure it sets a `ValueError` and returns NULL.
+ *
+ * `what` names the operation in the message. */
+PyObject*
+run_io_into_pybytes(
+  lean_object* io_result,
+  const char* what
+);
+
+/* Run an IO action and return its inner UInt64 as a Python `int`.
+ *
+ * On failure it sets a `ValueError` and returns NULL.
+ *
+ * `what` names the operation in the message. */
+PyObject*
+run_io_into_pyint(
+  lean_object* io_result,
+  const char* what
 );
 
 /* ---- Argument parsing helpers ---------------------------------------- */
@@ -98,5 +123,7 @@ PyObject* py_recover_cells_and_kzg_proofs                 (PyObject* self, PyObj
 PyObject* py_xmss_key_gen                                 (PyObject* self, PyObject* args);
 PyObject* py_xmss_sign                                    (PyObject* self, PyObject* args);
 PyObject* py_xmss_verify                                  (PyObject* self, PyObject* args);
+PyObject* py_modexp                                       (PyObject* self, PyObject* args);
+PyObject* py_modexp_gas_cost                              (PyObject* self, PyObject* args);
 
 #endif /* ETHCS_WRAPPERS_H */

@@ -33,7 +33,8 @@ Each domain's proof tree is also a root, so that its modules belong to
 this library rather than to `EthLib`. -/
 @[default_target]
 lean_lib «Proofs» where
-  roots := #[`EthLib.Proofs, `EthLib.Cryptography.Proofs, `EthLib.Networking.Proofs]
+  roots := #[`EthLib.Proofs, `EthLib.Cryptography.Proofs, `EthLib.Networking.Proofs,
+    `EthLib.Precompiles.Proofs]
   precompileModules := false
 
 /-- The C exports the Python extension calls, and nothing else. A separate
@@ -46,7 +47,7 @@ Each domain's export tree is also a root, so that its modules belong to
 this library rather than to `EthLib`. -/
 @[default_target]
 lean_lib «Exports» where
-  roots := #[`EthLib.Exports, `EthLib.Cryptography.Exports]
+  roots := #[`EthLib.Exports, `EthLib.Cryptography.Exports, `EthLib.Precompiles.Exports]
   precompileModules := true
 
 /-- Checks the compiled declarations of every library: their axioms, and any
