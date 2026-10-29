@@ -9,7 +9,13 @@ import EthLib.Cryptography.Proofs.Bls.G1Group
 import EthLib.Cryptography.Proofs.Bls.Compress
 import EthLib.Cryptography.Proofs.Bls.G1Msm
 import EthLib.Cryptography.Proofs.Bls.G1Order
-
+import EthLib.Cryptography.Proofs.Bls.G1Cardinality
+import EthLib.Cryptography.Proofs.Bls.G1SubgroupSpan
+import EthLib.Cryptography.Proofs.Bls.G2Group
+import EthLib.Cryptography.Proofs.Bls.G2Validity
+import EthLib.Cryptography.Proofs.Bls.G2Equiv
+import EthLib.Cryptography.Proofs.Bls.G2Order
+import EthLib.Cryptography.Proofs.Bls.G2Subgroup
 
 /-!
 # `EthLib.Cryptography.Proofs.Bls`
