@@ -20,6 +20,10 @@ import EthLib.Cryptography.Proofs.Kzg.RecoveryFlatten
 import EthLib.Cryptography.Proofs.Kzg.RecoveryMasked
 import EthLib.Cryptography.Proofs.Kzg.RecoveryReconstruction
 import EthLib.Cryptography.Proofs.Kzg.RecoveryCapacity
+import EthLib.Cryptography.Proofs.Kzg.ExtendedCells
+import EthLib.Cryptography.Proofs.Kzg.CosetInterpolation
+import EthLib.Cryptography.Proofs.Kzg.FftG1
+import EthLib.Cryptography.Proofs.Kzg.Fk20Proofs
 
 /-!
 # `EthLib.Cryptography.Proofs.Kzg`
