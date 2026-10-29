@@ -536,4 +536,143 @@ private theorem sqrtWith_ok {invFn : Fp → Fp} {twoInv : Fp}
 theorem sqrt_ok {a c : Fp2} (h : Fp2.sqrt a = .ok c) : c * c = a :=
   sqrtWith_ok (fun _ hx => fp_mul_inverse hx) two_mul_inverse h
 
+/-! ## Sign-bit flip and square-root completeness -/
+
+/-- Negating a nonzero `Fp2` element flips its sign bit (`draft-irtf-cfrg-pairing-friendly-curves-07` Appendix C).
+
+When `c1 != 0`, the sign comes from `c1`, which is negated.
+
+When `c1 = 0`, `c0` is nonzero, and the sign comes from `c0`, which is negated.
+-/
+theorem signBit_neg {y : Fp2} (hy : y ≠ 0) :
+    Fp2.signBit (-y) = !Fp2.signBit y := by
+  unfold Fp2.signBit
+  -- Negation preserves whether the imaginary part is zero.
+  have hc1_zero : (-y).c1.isZero = y.c1.isZero := by
+    rw [Bool.eq_iff_iff, G1.isZero_iff, G1.isZero_iff, Fp2.neg_c1, neg_eq_zero]
+  rw [hc1_zero]
+  by_cases hc1 : y.c1.isZero = true
+  -- When c1 = 0, a nonzero element has c0 != 0, so signBit inspects c0.
+  · simp only [hc1, Bool.not_true, Bool.false_eq_true, ↓reduceIte, Fp2.neg_c0]
+    have hc1_eq : y.c1 = 0 := G1.isZero_iff.mp hc1
+    have hc0_ne : y.c0 ≠ 0 := fun hc0_eq => hy (Fp2.ext hc0_eq hc1_eq)
+    exact G1.signBit_neg hc0_ne
+  -- When c1 != 0, signBit inspects c1 directly.
+  · simp only [hc1, Bool.not_false, ↓reduceIte, Fp2.neg_c1]
+    have hc1_ne : y.c1 ≠ 0 := fun hc1_eq => hc1 (G1.isZero_iff.mpr hc1_eq)
+    exact G1.signBit_neg hc1_ne
+
+private theorem c1_zero_factors_zmod {b0 b1 : ZMod Fp.modulus}
+    (h : b0 * b1 + b1 * b0 = 0) : b0 = 0 ∨ b1 = 0 := by
+  -- 2 is invertible modulo p, so 2 * b0 * b1 = 0 forces b0 = 0 or b1 = 0.
+  have h2 : (2 : ZMod Fp.modulus) * (b0 * b1) = 0 := by linear_combination h
+  have h2ne : (2 : ZMod Fp.modulus) ≠ 0 := by decide
+  exact mul_eq_zero.mp ((mul_eq_zero.mp h2).resolve_left h2ne)
+
+private theorem norm_sq_zmod (b0 b1 : ZMod Fp.modulus) :
+    (b0 * b0 + b1 * b1) * (b0 * b0 + b1 * b1) =
+      (b0 * b0 - b1 * b1) * (b0 * b0 - b1 * b1) +
+      (b0 * b1 + b1 * b0) * (b0 * b1 + b1 * b0) := by
+  ring
+
+private theorem sq_pm_zmod {s n : ZMod Fp.modulus} (h : s * s = n * n) :
+    s = n ∨ s = -n := by
+  -- Factor s^2 - n^2 as (s - n) * (s + n) over the prime field.
+  have hfac : (s - n) * (s + n) = 0 := by linear_combination h
+  rcases mul_eq_zero.mp hfac with h1 | h2
+  · exact Or.inl (sub_eq_zero.mp h1)
+  · exact Or.inr (eq_neg_of_add_eq_zero_left h2)
+
+private theorem neg_sub_zero_mul_zmod {a0 b0 b1 : ZMod Fp.modulus}
+    (ha0 : a0 = b0 * b0 - b1 * b1) (hb0 : b0 = 0) :
+    b1 * b1 = -a0 := by
+  subst hb0
+  linear_combination ha0
+
+private theorem sub_zero_mul_zmod {a0 b0 b1 : ZMod Fp.modulus}
+    (ha0 : a0 = b0 * b0 - b1 * b1) (hb1 : b1 = 0) :
+    b0 * b0 = a0 := by
+  subst hb1
+  linear_combination -ha0
+
+private theorem half_add_norm_zmod {a0 b0 b1 s twoInv : ZMod Fp.modulus}
+    (h2 : (2 : ZMod Fp.modulus) * twoInv = 1)
+    (ha0 : a0 = b0 * b0 - b1 * b1)
+    (hs : s = b0 * b0 + b1 * b1) :
+    b0 * b0 = (a0 + s) * twoInv := by
+  linear_combination -b0 * b0 * h2 - twoInv * ha0 - twoInv * hs
+
+private theorem half_sub_norm_zmod {a0 b0 b1 s twoInv : ZMod Fp.modulus}
+    (h2 : (2 : ZMod Fp.modulus) * twoInv = 1)
+    (ha0 : a0 = b0 * b0 - b1 * b1)
+    (hs : s = -(b0 * b0 + b1 * b1)) :
+    b0 * b0 = (a0 - s) * twoInv := by
+  linear_combination -b0 * b0 * h2 - twoInv * ha0 + twoInv * hs
+
+-- `sqrt.match_1` matches the inner fallback branch of `Fp2.sqrt` without unfolding `Fp.inverse`.
+set_option linter.auxLemma false in
+private theorem sqrtWith_complete {invFn : Fp → Fp} {twoInv : Fp}
+    (h2inv : (Fp.ofNat 2 : ZMod Fp.modulus) * (twoInv : ZMod Fp.modulus) = 1)
+    {a b : Fp2} (hb : b * b = a) :
+    ∃ c, sqrtWith invFn twoInv a = .ok c := by
+  have ha0 : (a.c0 : ZMod Fp.modulus) = b.c0 * b.c0 - b.c1 * b.c1 := by rw [← hb]; rfl
+  have ha1 : (a.c1 : ZMod Fp.modulus) = b.c0 * b.c1 + b.c1 * b.c0 := by rw [← hb]; rfl
+  unfold sqrtWith
+  split
+  · rename_i hc1z
+    -- When a.c1 = 0, we have 2 * b0 * b1 = 0, so either b0 = 0 or b1 = 0.
+    have hc1 : (a.c1 : ZMod Fp.modulus) = 0 := G1.isZero_iff.mp hc1z
+    rw [ha1] at hc1
+    rcases c1_zero_factors_zmod hc1 with hb0 | hb1
+    -- Purely imaginary root: b1^2 = -a0, so either a0.sqrt or (-a0).sqrt succeeds.
+    · have hna0 : (b.c1 : ZMod Fp.modulus) * b.c1 = (-a.c0 : Fp) :=
+        neg_sub_zero_mul_zmod ha0 hb0
+      have hs2 := Fp.sqrt_complete hna0
+      cases hs1 : a.c0.sqrt with
+      | ok s => exact ⟨⟨s, Fp.zero⟩, rfl⟩
+      | error _ =>
+        rw [hs2]
+        exact ⟨⟨Fp.zero, _⟩, rfl⟩
+    -- Purely real root: b0^2 = a0, so the first Fp.sqrt succeeds directly.
+    · have ha0' : (b.c0 : ZMod Fp.modulus) * b.c0 = a.c0 :=
+        sub_zero_mul_zmod ha0 hb1
+      rw [Fp.sqrt_complete ha0']
+      exact ⟨⟨_, Fp.zero⟩, rfl⟩
+  · dsimp only
+    -- When a.c1 != 0, N(b) = b0^2 + b1^2 is a square root of N(a) = a0^2 + a1^2.
+    have hnsq : ((b.c0 * b.c0 + b.c1 * b.c1 : Fp) : ZMod Fp.modulus) *
+        (b.c0 * b.c0 + b.c1 * b.c1 : Fp) = a.c0 * a.c0 + a.c1 * a.c1 := by
+      rw [ha0, ha1]
+      exact norm_sq_zmod b.c0 b.c1
+    have hsqrt_n := Fp.sqrt_complete hnsq
+    rw [hsqrt_n]
+    dsimp only
+    -- The norm root s equals +(b0^2 + b1^2) or -(b0^2 + b1^2), so (a0 + s)/2 or (a0 - s)/2 equals b0^2.
+    have hs_sq : (Fp.powNat (a.c0 * a.c0 + a.c1 * a.c1) ((Fp.modulus + 1) / 4) : ZMod Fp.modulus) *
+        Fp.powNat (a.c0 * a.c0 + a.c1 * a.c1) ((Fp.modulus + 1) / 4) =
+        ((b.c0 * b.c0 + b.c1 * b.c1 : Fp) : ZMod Fp.modulus) * (b.c0 * b.c0 + b.c1 * b.c1 : Fp) := by
+      rw [Fp.sqrt_ok hsqrt_n, ← hnsq]
+    rcases sq_pm_zmod hs_sq with hs_pos | hs_neg
+    -- Positive norm root: (a0 + s) / 2 = b0^2, so try1 succeeds.
+    · have htry1_sq : (b.c0 : ZMod Fp.modulus) * b.c0 =
+          (a.c0 + Fp.powNat (a.c0 * a.c0 + a.c1 * a.c1) ((Fp.modulus + 1) / 4)) * twoInv :=
+        half_add_norm_zmod h2inv ha0 hs_pos
+      rw [Fp.sqrt_complete htry1_sq]
+      exact ⟨_, rfl⟩
+    -- Negative norm root: (a0 - s) / 2 = b0^2, so the fallback succeeds if try1 fails.
+    · have htry2_sq : (b.c0 : ZMod Fp.modulus) * b.c0 =
+          (a.c0 - Fp.powNat (a.c0 * a.c0 + a.c1 * a.c1) ((Fp.modulus + 1) / 4)) * twoInv :=
+        half_sub_norm_zmod h2inv ha0 hs_neg
+      cases htry1 : ((a.c0 + Fp.powNat (a.c0 * a.c0 + a.c1 * a.c1) ((Fp.modulus + 1) / 4)) * twoInv).sqrt with
+      | ok s1 => exact ⟨_, rfl⟩
+      | error _ =>
+        dsimp only [sqrt.match_1]
+        rw [Fp.sqrt_complete htry2_sq]
+        exact ⟨_, rfl⟩
+
+/-- Completeness of `Fp2.sqrt`: if `b * b = a`, then `Fp2.sqrt a` returns a root. -/
+theorem sqrt_complete {a b : Fp2} (hb : b * b = a) :
+    ∃ c, Fp2.sqrt a = .ok c :=
+  sqrtWith_complete two_mul_inverse hb
+
 end EthLib.Cryptography.Bls.Fp2

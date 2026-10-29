@@ -16,6 +16,7 @@ import EthLib.Cryptography.Proofs.Bls.G2Validity
 import EthLib.Cryptography.Proofs.Bls.G2Equiv
 import EthLib.Cryptography.Proofs.Bls.G2Order
 import EthLib.Cryptography.Proofs.Bls.G2Subgroup
+import EthLib.Cryptography.Proofs.Bls.G2Compress
 
 /-!
 # `EthLib.Cryptography.Proofs.Bls`
