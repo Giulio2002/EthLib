@@ -76,4 +76,8 @@ The decoder rejects, each with its own error:
 - The encoding refuses every payload of `2^64` bytes or more.
 - The encoding matches every case of `RLPTests/rlptest.json` in [`ethereum/tests`](https://github.com/ethereum/tests/blob/c67e485ff8b5be9abc8ad15345ec21aa22e290d9/RLPTests/rlptest.json).
 - The decoder rejects each of the five non-canonical forms of [Coglio, §4.2.1](https://doi.org/10.4204/EPTCS.327.11), whatever bytes follow.
+- Decoding undoes encoding: the encoding of every item decodes to that item.
+- So two items never share an encoding.
+- No encoding is a proper prefix of another, so encodings one after another split in only one way.
+- An encoding followed by more bytes is rejected, with the count of bytes left over.
 - The decoding matches every case of `RLPTests/rlptest.json`, and rejects every case of [`RLPTests/invalidRLPTest.json`](https://github.com/ethereum/tests/blob/c67e485ff8b5be9abc8ad15345ec21aa22e290d9/RLPTests/invalidRLPTest.json).
