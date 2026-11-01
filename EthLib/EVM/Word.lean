@@ -8,7 +8,7 @@ The source is the Shanghai Yellow Paper, revision
 https://github.com/ethereum/yellowpaper/blob/efc5f9a1f356cba376c978eedb63cb0363c2aa85/Paper.tex
 
 Section 9.1 fixes the word width at 256 bits.
-Appendix H.2, "0s: Stop and Arithmetic Operations", gives addition modulo `2^256`.
+Appendix H.2, "0s: Stop and Arithmetic Operations", gives arithmetic modulo `2^256`.
 Only the arithmetic result is modeled here.
 Stack effects, gas, program counters, and instruction execution are outside this module.
 -/
@@ -51,6 +51,24 @@ def ofNat (n : Nat) : Except InputError Word :=
 Reduction here is the specified arithmetic operation, not input validation.
 -/
 def add (a b : Word) : Word := BitVec.ofNat 256 (a.toNat + b.toNat)
+
+/-- Unsigned subtraction modulo `2^256`.
+
+Cancun execution-specs `fd9298410ec7218838c8348f69c1eb633f1797dc`,
+`vm/instructions/arithmetic.py`, `sub`, and Yellow Paper Appendix H.2 specify
+first popped operand minus second popped operand.
+Here `a` is the first popped operand and `b` is the second.
+This helper computes only the result and does not pop a stack.
+-/
+def sub (a b : Word) : Word := a - b
+
+/-- Unsigned multiplication modulo `2^256`.
+
+Cancun execution-specs `fd9298410ec7218838c8348f69c1eb633f1797dc`,
+`vm/instructions/arithmetic.py`, `mul`, and Yellow Paper Appendix H.2 give
+this arithmetic result.
+-/
+def mul (a b : Word) : Word := a * b
 
 end Word
 end EthLib.EVM
