@@ -36,3 +36,13 @@ The contract covers representation, checked natural construction and the additio
 It does not cover all inherited BitVec operations, an interpreter, gas, stack effects or other instructions.
 It makes no claim about compiled runtime correctness, cryptography or security.
 The precompile modules keep their existing paths and ownership.
+
+## EXP result
+
+Cancun execution-specs `exp` at revision `fd9298410ec7218838c8348f69c1eb633f1797dc` pops the base first and exponent second.
+The operation computes the power modulo `2^256`.
+The Yellow Paper Appendix H.2 gives the same result.
+`Word.exp` uses the MODEXP square-and-multiply algorithm with the entire word exponent.
+Its proof establishes the natural result, bounded reference refinement, corner cases and the 256-bit step bound.
+The correspondence between the sources and this model is a human interpretation.
+The Lean proofs concern the result, not opcode gas, stack or interpreter behavior.
