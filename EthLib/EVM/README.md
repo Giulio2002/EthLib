@@ -163,3 +163,22 @@ The Yellow Paper Appendix H.2 gives the same result.
 Its proof establishes the natural result, bounded reference refinement, corner cases and the 256-bit step bound.
 The correspondence between the sources and this model is a human interpretation.
 The Lean proofs concern the result, not opcode gas, stack or interpreter behavior.
+
+## Subtraction, multiplication and bitwise results
+
+`Word.sub` and `Word.mul` reduce their results modulo `2^256`.
+`Word.bitwiseAnd`, `Word.bitwiseOr`, `Word.bitwiseXor` and `Word.bitwiseNot` operate on all 256 bits.
+The Yellow Paper Appendix H.2 gives SUB, MUL, AND, OR, XOR and NOT.
+The separate proofs establish arithmetic refinement and bitwise equations for all inputs.
+
+## Big-endian word codecs
+
+`Word.toBytesBE` encodes exactly 32 bytes in most-significant-byte-first order.
+`Word.ofBytesBE` rejects every other length.
+The proofs establish both round trips, exact length, byte positions and injectivity.
+The length check is a library boundary and does not model EVM memory padding.
+
+The codec reuses byte conversion from MODEXP, and EXP reuses its modular arithmetic.
+Neither uses the precompile's later-fork gas rules or input size restrictions.
+The current EXP import of `Modexp.Core` does transitively import its gas module; only `powMod` is called.
+The precompile remains in its existing domain, and shared cryptography remains separate.
