@@ -33,7 +33,7 @@ They do not establish the contract by themselves.
 The machine-checked claim is refinement to this Lean mathematical model.
 Correspondence between that model and the cited paper is a human reading of the source.
 The contract covers representation, checked natural construction and addition.
-It also covers signed and unsigned division and remainder results.
+The sections below cover further word result contracts.
 It does not cover all inherited BitVec operations, an interpreter, gas, stack effects or other instructions.
 It makes no claim about compiled runtime correctness, cryptography or security.
 The precompile modules keep their existing paths and ownership.
@@ -109,3 +109,28 @@ The kernel checks the piecewise equations, signed quotient range, sign preservat
 Boundary examples supplement those contracts.
 The correspondence between the Lean equations and the sources is a human interpretation.
 These helpers give word results only and do not model opcode execution, gas or stack effects.
+
+## BYTE and SIGNEXTEND results
+
+`Word.byte` and `Word.signextend` take the byte index first and the value second.
+Both inputs are full-width words.
+The index is checked before calculating a power.
+
+The sources are Cancun execution-specs revision
+[fd929841](https://github.com/ethereum/execution-specs/tree/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions),
+functions `get_byte` and `signextend`, and the Shanghai Yellow Paper revision
+[efc5f9a](https://github.com/ethereum/yellowpaper/blob/efc5f9a1f356cba376c978eedb63cb0363c2aa85/Paper.tex),
+Appendix H.2, BYTE and SIGNEXTEND.
+BYTE counts bytes from the most significant end.
+SIGNEXTEND selects low bytes and copies their sign bit into the upper bits.
+
+The proof module gives natural-number reference functions and proves equality for all word inputs.
+It proves the byte bound and extraction equation, including indices at least 32.
+It proves the exact unsigned sign-extension equation, low-bit preservation and upper-bit replication.
+It also proves index 31 and larger are identities, idempotence, and agreement with the signed interpretation of the selected low bytes.
+Boundary examples supplement these universal results.
+
+The kernel checks refinement to the Lean reference functions.
+Their correspondence to the pinned sources is a human reading of those sources.
+These contracts concern result helpers only.
+They do not cover byte codecs, instruction execution, gas, stack effects or compiled runtime correctness.
