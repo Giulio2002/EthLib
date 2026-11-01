@@ -2,6 +2,7 @@ module
 
 public import EthLib.EVM.Word
 public import EthLib.EVM.Word.SignedDivMod
+public import EthLib.EVM.Word.Shifts
 
 /-!
 # `EthLib.EVM`
