@@ -36,3 +36,22 @@ The contract covers representation, checked natural construction and the additio
 It does not cover all inherited BitVec operations, an interpreter, gas, stack effects or other instructions.
 It makes no claim about compiled runtime correctness, cryptography or security.
 The precompile modules keep their existing paths and ownership.
+
+# Byte contents contract
+
+The sparse store models byte contents independently of allocated memory size.
+The source is Cancun execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`, `vm/memory.py`, functions `memory_write` and `memory_read_bytes`.
+Those functions access an allocated bytearray.
+Interpreting unallocated addresses as zero in a total function is this module's abstraction, not a claim that the source reads outside the bytearray.
+Allocation, expansion, gas, ranges and instructions remain outside this contract.
+
+Every finite list of address and byte pairs is a valid store.
+The first occurrence of an address determines its byte, and an absent address reads zero.
+A write adds one pair, including for zero, so it does not allocate up to the address.
+The finite support list contains every address whose observed byte is nonzero, but may also contain zero and shadowed writes.
+It is not the logical memory size.
+
+The kernel checks that empty reads zero, a write changes exactly its address, and support remains finite.
+It checks overwrite, write-back and commutation for distinct addresses as equality of total observed byte functions.
+These equalities do not assert equality of write histories.
+The source interpretation is a human reading; the proofs establish refinement to the stated Lean abstraction.
