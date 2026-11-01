@@ -37,36 +37,26 @@ It does not cover all inherited BitVec operations, an interpreter, gas, stack ef
 It makes no claim about compiled runtime correctness, cryptography or security.
 The precompile modules keep their existing paths and ownership.
 
-# Byte contents contract
+# Signed division and remainder
 
-The sparse store models byte contents independently of allocated memory size.
-The source is Cancun execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`, `vm/memory.py`, functions `memory_write` and `memory_read_bytes`.
-Those functions access an allocated bytearray.
-Interpreting unallocated addresses as zero in a total function is this module's abstraction, not a claim that the source reads outside the bytearray.
-Allocation, expansion, gas, ranges and instructions remain outside this contract.
+The Shanghai Yellow Paper revision linked above specifies SDIV and SMOD in Appendix H.2.
+The Cancun execution specification revision [fd92984](https://github.com/ethereum/execution-specs/blob/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions/arithmetic.py) gives the same result rules in `sdiv` and `smod`.
+The first operand is the first popped word and is the numerator.
+The second operand is the divisor.
 
-Every finite list of address and byte pairs is a valid store.
-The first occurrence of an address determines its byte, and an absent address reads zero.
-A write adds one pair, including for zero, so it does not allocate up to the address.
-The finite support list contains every address whose observed byte is nonzero, but may also contain zero and shadowed writes.
-It is not the logical memory size.
+`Word.signed` interprets each word as a signed two's-complement integer.
+`Word.ofSigned` accepts any integer and wraps it modulo `2^256`.
+Unlike `Word.ofNat`, it does not reject out-of-range inputs.
+The `signed_ofSigned` theorem gives its signed result for every integer using balanced remainder.
+`Word.sdiv` truncates the quotient toward zero.
+`Word.smod` gives the remainder the numerator's sign.
+Both return zero for a zero divisor.
+The signed minimum divided by -1 returns the signed minimum word.
 
-The kernel checks that empty reads zero, a write changes exactly its address, and support remains finite.
-It checks overwrite, write-back and commutation for distinct addresses as equality of total observed byte functions.
-These equalities do not assert equality of write histories.
-The source interpretation is a human reading; the proofs establish refinement to the stated Lean abstraction.
-## Unsigned division and remainder
-
-The first argument is the first-popped numerator.
-The second argument is the divisor.
-The Yellow Paper Appendix H.2 DIV and MOD equations return zero for a zero divisor.
-For a nonzero divisor they give the natural quotient and remainder.
-The pinned Cancun execution specification agrees with this order and zero case.
-Its source is [arithmetic.py at fd92984](https://github.com/ethereum/execution-specs/blob/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions/arithmetic.py).
-
-`Word.div` and `Word.mod` implement those result equations.
-`Reference.div` and `Reference.mod` model bounded natural values independently.
-The proofs establish both numeric equations and refinement for every pair of words.
-They also establish range, the remainder bound and quotient-remainder decomposition.
-The latter two laws assume a nonzero divisor.
-These helpers do not model instruction execution, stack effects or gas.
+`EthLib.EVM.Proofs.Word.SignedDivMod.Reference` defines integer quotient and remainder using natural magnitudes and signs.
+The kernel checks refinement for every pair of words, including zero divisors and overflow.
+The proofs also establish signed range and representation round trips, the remainder sign and magnitude, and the quotient and remainder identity outside the overflow case.
+The machine-checked result is refinement to this Lean model.
+Correspondence between the model and the cited sources is a human interpretation.
+These helpers do not execute instructions or model the stack, gas, or an interpreter.
+They make no claim about compiled runtime correctness or security.
