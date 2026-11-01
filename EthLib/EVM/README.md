@@ -153,3 +153,13 @@ Boundary examples include carries and high product bits.
 The source-to-model correspondence is a human interpretation of these sources.
 The kernel checks refinement of the word results to that model.
 These helpers make no claim about opcode execution, gas, stack or runtime behavior.
+
+## EXP result
+
+Cancun execution-specs `exp` at revision `fd9298410ec7218838c8348f69c1eb633f1797dc` pops the base first and exponent second.
+The operation computes the power modulo `2^256`.
+The Yellow Paper Appendix H.2 gives the same result.
+`Word.exp` uses the MODEXP square-and-multiply algorithm with the entire word exponent.
+Its proof establishes the natural result, bounded reference refinement, corner cases and the 256-bit step bound.
+The correspondence between the sources and this model is a human interpretation.
+The Lean proofs concern the result, not opcode gas, stack or interpreter behavior.
