@@ -77,5 +77,6 @@ The kernel checks that membership is exactly a boundary containing byte `0x5b`.
 It also checks strict ordering, bounds, progress and agreement of the decoder step with the byte ranges.
 The correspondence between that Lean relation and the source is a human source review.
 
-Parent iteration 04 remains incomplete until its child gates and combined tests pass.
+The combined opcode decoder, PUSH immediate reader and jump destination scanner pass their library, proof and standalone test gates.
+This completes the scoped decoding milestone, not EVM execution or EELS differential validation.
 This module implements no frames, gas, stack effects or instruction execution.
