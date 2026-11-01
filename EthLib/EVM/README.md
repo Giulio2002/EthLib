@@ -77,3 +77,18 @@ The machine-checked result is refinement to this Lean model.
 Correspondence between the model and the cited sources is a human interpretation.
 These helpers do not execute instructions or model the stack, gas, or an interpreter.
 They make no claim about compiled runtime correctness or security.
+
+# Comparison results
+
+The Cancun execution specification revision [fd92984](https://github.com/ethereum/execution-specs/blob/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions/comparison.py) defines the comparison results.
+The Yellow Paper revision linked above gives the same equations in Appendix H.2.
+The left operand is the first popped word.
+Each helper returns 1 when its condition holds and 0 otherwise.
+
+`Word.ltResult` and `Word.gtResult` compare unsigned natural values.
+`Word.sltResult` and `Word.sgtResult` compare `Word.signed` integer values.
+`Word.eqResult` and `Word.iszeroResult` test equality and zero.
+The separate proof module establishes exact equations, result bounds, predicate equivalences, and ordering identities for all operands.
+The kernel checks refinement to these Lean mathematical predicates.
+Correspondence with the cited sources is a human interpretation.
+The helpers do not model instruction execution, stack effects, gas, or an interpreter.
