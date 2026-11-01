@@ -61,17 +61,19 @@ Correspondence between the model and the cited sources is a human interpretation
 These helpers do not execute instructions or model the stack, gas, or an interpreter.
 They make no claim about compiled runtime correctness or security.
 
-# Comparison results
+# Shift results
 
-The Cancun execution specification revision [fd92984](https://github.com/ethereum/execution-specs/blob/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions/comparison.py) defines the comparison results.
-The Yellow Paper revision linked above gives the same equations in Appendix H.2.
-The left operand is the first popped word.
-Each helper returns 1 when its condition holds and 0 otherwise.
+The Cancun execution specification revision [fd92984](https://github.com/ethereum/execution-specs/blob/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions/bitwise.py) gives `bitwise_shl`, `bitwise_shr` and `bitwise_sar`.
+The Yellow Paper revision linked above gives SHL, SHR and SAR in Appendix H.2.
+[EIP-145, Specification](https://eips.ethereum.org/EIPS/eip-145#specification), gives their arithmetic equations.
+The shift count is the first popped word and the value is the second.
+The helpers take the full unsigned count.
+They guard counts at least 256 before computing powers.
+For such counts, SHL and SHR return zero.
+SAR returns the all-ones word for a negative value and zero otherwise.
+For smaller counts, SAR divides the signed value and rounds down.
 
-`Word.ltResult` and `Word.gtResult` compare unsigned natural values.
-`Word.sltResult` and `Word.sgtResult` compare `Word.signed` integer values.
-`Word.eqResult` and `Word.iszeroResult` test equality and zero.
-The separate proof module establishes exact equations, result bounds, predicate equivalences, and ordering identities for all operands.
-The kernel checks refinement to these Lean mathematical predicates.
-Correspondence with the cited sources is a human interpretation.
-The helpers do not model instruction execution, stack effects, gas, or an interpreter.
+The kernel checks the piecewise equations, signed quotient range, sign preservation and zero-shift identities for all words.
+Boundary examples supplement those contracts.
+The correspondence between the Lean equations and the sources is a human interpretation.
+These helpers give word results only and do not model opcode execution, gas or stack effects.

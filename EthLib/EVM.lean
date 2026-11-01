@@ -1,7 +1,10 @@
 module
 
 public import EthLib.EVM.Word
-Unsigned 256-bit words, modular addition and bitwise results.
-This domain does not implement instruction execution or fork selection.
-The existing precompile modules retain their paths and ownership.
--/
+public import EthLib.EVM.Word.SignedDivMod
+public import EthLib.EVM.Word.Shifts
+
+/-!
+# `EthLib.EVM`
+
+256-bit words and selected arithmetic results.
