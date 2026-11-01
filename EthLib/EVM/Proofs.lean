@@ -14,6 +14,8 @@ public import EthLib.EVM.Proofs.Word.Shifts
 public import EthLib.EVM.Proofs.Word.ByteSignExtend
 public import EthLib.EVM.Proofs.Word.AddMulMod
 public import EthLib.EVM.Proofs.Word.Exp
+public import EthLib.EVM.Proofs.Opcode
+public import EthLib.EVM.Proofs.PushImmediate
 
 /-!
 # `EthLib.EVM.Proofs`
@@ -22,5 +24,6 @@ Word representation, construction, and memory access contracts.
 Arithmetic, comparison, bitwise, BYTE and SIGNEXTEND result contracts.
 Division and remainder contracts cover signed and unsigned results.
 Arithmetic contracts include modular addition and exponentiation.
+Cancun opcode classification and PUSH immediate decoding contracts.
 This root belongs to the separate `Proofs` library.
 -/

@@ -14,6 +14,8 @@ public import EthLib.EVM.Word.Shifts
 public import EthLib.EVM.Word.ByteSignExtend
 public import EthLib.EVM.Word.AddMulMod
 public import EthLib.EVM.Word.Exp
+public import EthLib.EVM.Opcode
+public import EthLib.EVM.PushImmediate
 
 /-!
 # `EthLib.EVM`
@@ -21,5 +23,6 @@ public import EthLib.EVM.Word.Exp
 256-bit words, result helpers, and logically allocated byte memory.
 Division and remainder include signed and unsigned results.
 Arithmetic includes modular addition and exponentiation results.
+Opcode classification and PUSH immediate decoding follow Cancun.
 This domain does not implement instruction execution or fork selection.
 -/
