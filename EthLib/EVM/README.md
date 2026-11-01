@@ -37,43 +37,27 @@ It does not cover all inherited BitVec operations, an interpreter, gas, stack ef
 It makes no claim about compiled runtime correctness, cryptography or security.
 The precompile modules keep their existing paths and ownership.
 
-# Signed division and remainder
+## BYTE and SIGNEXTEND results
 
-The Shanghai Yellow Paper revision linked above specifies SDIV and SMOD in Appendix H.2.
-The Cancun execution specification revision [fd92984](https://github.com/ethereum/execution-specs/blob/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions/arithmetic.py) gives the same result rules in `sdiv` and `smod`.
-The first operand is the first popped word and is the numerator.
-The second operand is the divisor.
+`Word.byte` and `Word.signextend` take the byte index first and the value second.
+Both inputs are full-width words.
+The index is checked before calculating a power.
 
-`Word.signed` interprets each word as a signed two's-complement integer.
-`Word.ofSigned` accepts any integer and wraps it modulo `2^256`.
-Unlike `Word.ofNat`, it does not reject out-of-range inputs.
-The `signed_ofSigned` theorem gives its signed result for every integer using balanced remainder.
-`Word.sdiv` truncates the quotient toward zero.
-`Word.smod` gives the remainder the numerator's sign.
-Both return zero for a zero divisor.
-The signed minimum divided by -1 returns the signed minimum word.
+The sources are Cancun execution-specs revision
+[fd929841](https://github.com/ethereum/execution-specs/tree/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions),
+functions `get_byte` and `signextend`, and the Shanghai Yellow Paper revision
+[efc5f9a](https://github.com/ethereum/yellowpaper/blob/efc5f9a1f356cba376c978eedb63cb0363c2aa85/Paper.tex),
+Appendix H.2, BYTE and SIGNEXTEND.
+BYTE counts bytes from the most significant end.
+SIGNEXTEND selects low bytes and copies their sign bit into the upper bits.
 
-`EthLib.EVM.Proofs.Word.SignedDivMod.Reference` defines integer quotient and remainder using natural magnitudes and signs.
-The kernel checks refinement for every pair of words, including zero divisors and overflow.
-The proofs also establish signed range and representation round trips, the remainder sign and magnitude, and the quotient and remainder identity outside the overflow case.
-The machine-checked result is refinement to this Lean model.
-Correspondence between the model and the cited sources is a human interpretation.
-These helpers do not execute instructions or model the stack, gas, or an interpreter.
-They make no claim about compiled runtime correctness or security.
+The proof module gives natural-number reference functions and proves equality for all word inputs.
+It proves the byte bound and extraction equation, including indices at least 32.
+It proves the exact unsigned sign-extension equation, low-bit preservation and upper-bit replication.
+It also proves index 31 and larger are identities, idempotence, and agreement with the signed interpretation of the selected low bytes.
+Boundary examples supplement these universal results.
 
-# Shift results
-
-The Cancun execution specification revision [fd92984](https://github.com/ethereum/execution-specs/blob/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions/bitwise.py) gives `bitwise_shl`, `bitwise_shr` and `bitwise_sar`.
-The Yellow Paper revision linked above gives SHL, SHR and SAR in Appendix H.2.
-[EIP-145, Specification](https://eips.ethereum.org/EIPS/eip-145#specification), gives their arithmetic equations.
-The shift count is the first popped word and the value is the second.
-The helpers take the full unsigned count.
-They guard counts at least 256 before computing powers.
-For such counts, SHL and SHR return zero.
-SAR returns the all-ones word for a negative value and zero otherwise.
-For smaller counts, SAR divides the signed value and rounds down.
-
-The kernel checks the piecewise equations, signed quotient range, sign preservation and zero-shift identities for all words.
-Boundary examples supplement those contracts.
-The correspondence between the Lean equations and the sources is a human interpretation.
-These helpers give word results only and do not model opcode execution, gas or stack effects.
+The kernel checks refinement to the Lean reference functions.
+Their correspondence to the pinned sources is a human reading of those sources.
+These contracts concern result helpers only.
+They do not cover byte codecs, instruction execution, gas, stack effects or compiled runtime correctness.
