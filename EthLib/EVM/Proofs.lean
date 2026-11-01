@@ -7,6 +7,7 @@ public import EthLib.EVM.Proofs.Word.Comparisons
 public import EthLib.EVM.Proofs.Word.Bitwise
 public import EthLib.EVM.Proofs.Word.Shifts
 public import EthLib.EVM.Proofs.Word.ByteSignExtend
+public import EthLib.EVM.Proofs.Word.AddMulMod
 
 /-!
 # `EthLib.EVM.Proofs`

@@ -134,3 +134,22 @@ The kernel checks refinement to the Lean reference functions.
 Their correspondence to the pinned sources is a human reading of those sources.
 These contracts concern result helpers only.
 They do not cover byte codecs, instruction execution, gas, stack effects or compiled runtime correctness.
+
+## Modular addition and multiplication
+
+`Word.addmod` and `Word.mulmod` model the ADDMOD and MULMOD results.
+The first two arguments are arithmetic operands and the third is the modulus.
+The sum or product is formed in natural numbers before reduction.
+A zero modulus gives zero.
+
+The sources are Cancun execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`,
+`vm/instructions/arithmetic.py`, functions `addmod` and `mulmod`, and the cited
+Yellow Paper Appendix H.2 ADDMOD and MULMOD equations.
+The proof module gives independent natural-number reference equations, bounds,
+commutativity, identities and invariance under reducing the operands first.
+The exact equations have no residual reduction modulo `2^256`.
+Boundary examples include carries and high product bits.
+
+The source-to-model correspondence is a human interpretation of these sources.
+The kernel checks refinement of the word results to that model.
+These helpers make no claim about opcode execution, gas, stack or runtime behavior.

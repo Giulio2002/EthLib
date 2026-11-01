@@ -7,6 +7,7 @@ public import EthLib.EVM.Word.Comparisons
 public import EthLib.EVM.Word.Bitwise
 public import EthLib.EVM.Word.Shifts
 public import EthLib.EVM.Word.ByteSignExtend
+public import EthLib.EVM.Word.AddMulMod
 
 /-!
 # `EthLib.EVM`
