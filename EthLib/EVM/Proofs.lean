@@ -4,10 +4,13 @@ public import EthLib.EVM.Proofs.Word
 public import EthLib.EVM.Proofs.Word.DivMod
 public import EthLib.EVM.Proofs.Word.SignedDivMod
 public import EthLib.EVM.Proofs.Word.Comparisons
+public import EthLib.EVM.Proofs.Word.Bitwise
 
 /-!
 # `EthLib.EVM.Proofs`
 
-Word representation, modular addition, and signed and unsigned division and remainder contracts.
+Word representation, range, and strict construction contracts.
+Arithmetic, comparison, and bitwise result contracts.
+Division and remainder contracts cover signed and unsigned results.
 This root belongs to the separate `Proofs` library.
 -/
