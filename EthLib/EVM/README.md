@@ -32,7 +32,23 @@ They do not establish the contract by themselves.
 
 The machine-checked claim is refinement to this Lean mathematical model.
 Correspondence between that model and the cited paper is a human reading of the source.
-The contract covers representation, checked natural construction and the addition result.
+The contract covers representation, checked natural construction and the addition, unsigned division and unsigned remainder results.
 It does not cover all inherited BitVec operations, an interpreter, gas, stack effects or other instructions.
 It makes no claim about compiled runtime correctness, cryptography or security.
 The precompile modules keep their existing paths and ownership.
+
+## Unsigned division and remainder
+
+The first argument is the first-popped numerator.
+The second argument is the divisor.
+The Yellow Paper Appendix H.2 DIV and MOD equations return zero for a zero divisor.
+For a nonzero divisor they give the natural quotient and remainder.
+The pinned Cancun execution specification agrees with this order and zero case.
+Its source is [arithmetic.py at fd92984](https://github.com/ethereum/execution-specs/blob/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions/arithmetic.py).
+
+`Word.div` and `Word.mod` implement those result equations.
+`Reference.div` and `Reference.mod` model bounded natural values independently.
+The proofs establish both numeric equations and refinement for every pair of words.
+They also establish range, the remainder bound and quotient-remainder decomposition.
+The latter two laws assume a nonzero divisor.
+These helpers do not model instruction execution, stack effects or gas.
