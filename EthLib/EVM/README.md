@@ -36,3 +36,33 @@ The contract covers representation, checked natural construction and the additio
 It does not cover all inherited BitVec operations, an interpreter, gas, stack effects or other instructions.
 It makes no claim about compiled runtime correctness, cryptography or security.
 The precompile modules keep their existing paths and ownership.
+
+# Cancun opcode decoding
+
+`Opcode` represents the assigned Cancun opcode bytes.
+PUSH lengths and DUP, SWAP and LOG indices are bounded in the type.
+DUP and SWAP indices start at zero, so index zero denotes DUP1 or SWAP1.
+`INVALID` is a designated instruction at `0xfe`.
+The decoder returns `none` for unassigned bytes.
+Classification does not mean instruction execution is implemented.
+
+The source is execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`.
+The Cancun `vm.instructions.Ops` enum and `op_implementation` give the byte assignments.
+The Shanghai Yellow Paper revision `efc5f9a1f356cba376c978eedb63cb0363c2aa85`, Appendix H.2, names `INVALID`.
+The EELS enum omits that byte from its dispatch.
+Cancun adds BLOBHASH, BLOBBASEFEE, TLOAD, TSTORE and MCOPY to the Shanghai table.
+
+The proof module independently lists byte and constructor pairs from those sources.
+It proves equality with the decoder for every byte and both encoding round trips.
+The kernel checks the proof; the source transcription is a human review.
+
+`PushImmediate` reads the length from a PUSH constructor.
+It pads missing bytes on the right and interprets the result as a big-endian word.
+Its natural-number program counter does not wrap.
+Execution-specs Cancun `vm.instructions.stack.push_n` and `vm.memory.buffer_read` specify the read, padding and advance.
+The arbitrary natural offset extends the source's bounded offset representation.
+The proofs cover each byte, the length, the exact numeric value, padding and PUSH0.
+
+The jump destination scan belongs to iteration 04b.
+Parent iteration 04 needs that scan and integration before it is complete.
+This module implements no frames, gas, stack effects or instruction execution.
