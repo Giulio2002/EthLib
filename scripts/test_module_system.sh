@@ -28,6 +28,18 @@ if classic:
     raise SystemExit("Missing module headers: " + ", ".join(classic))
 PY
 
+# A domain consumer must reduce word operations without importing any proofs.
+cat > "$module_test_dir/EVMConsumer.lean" <<'EOF'
+module
+import EthLib.EVM
+
+example : EthLib.EVM.Word.modulus = 2 ^ 256 := rfl
+example : (EthLib.EVM.Word.add 1 1).toNat = 2 := rfl
+example : EthLib.EVM.Word.ofNat (2 ^ 256) = .error .outOfRange := rfl
+example : (EthLib.EVM.Word.add (BitVec.ofNat 256 (2 ^ 256 - 1)) 1).toNat = 0 := rfl
+EOF
+lake env lean -DwarningAsError=true --root="$module_test_dir" "$module_test_dir/EVMConsumer.lean"
+
 cat > "$module_test_dir/Consumer.lean" <<'EOF'
 module
 import EthLib
@@ -38,6 +50,12 @@ example : EthLib.Networking.Encoding.Varint.groupSize = 128 := rfl
 
 example : EthLib.Networking.Encoding.Varint.groupSize = 128 :=
   EthLib.Networking.Proofs.Encoding.Varint.groupSize_eq
+
+-- EVM definitions reduce through an ordinary root import without proof bodies.
+example : EthLib.EVM.Word.modulus = 2 ^ 256 := rfl
+example : (EthLib.EVM.Word.add 1 1).toNat = 2 := rfl
+example : EthLib.EVM.Word.add 1 1 = (2 : EthLib.EVM.Word) :=
+  EthLib.EVM.Proofs.Word.one_add_one
 
 #check EthLib.Cryptography.Bls.Exports.constBytesPerPubkey
 EOF

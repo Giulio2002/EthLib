@@ -3,6 +3,7 @@ module
 public import EthLib.Base.Proofs
 public import EthLib.Serialization.Proofs
 public import EthLib.Cryptography.Proofs
+public import EthLib.EVM.Proofs
 public import EthLib.Networking.Proofs
 public import EthLib.Execution.Proofs
 
