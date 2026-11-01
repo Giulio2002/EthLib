@@ -108,5 +108,7 @@ It also checks strict ordering, bounds, progress and agreement of the decoder st
 The correspondence between that Lean relation and the source is a human source review.
 
 The jump destination scan belongs to iteration 04b.
+The combined opcode decoder, PUSH immediate reader and jump destination scanner pass their library, proof and standalone test gates.
+This completes the scoped decoding milestone, not EVM execution or EELS differential validation.
 Parent iteration 04 remains incomplete until integration, its child gates and combined tests pass.
 This module implements no frames, gas, stack effects or instruction execution.
