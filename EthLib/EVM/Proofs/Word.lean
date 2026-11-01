@@ -1,6 +1,8 @@
 module
 
 public import EthLib.EVM.Word
+public import EthLib.Precompiles.Proofs.Modexp.Bytes
+public import Mathlib.Data.List.Induction
 
 /-!
 # EVM word addition laws
@@ -218,5 +220,120 @@ theorem add_refines (a b : Word) :
     decode (add a b) = Reference.add (decode a) (decode b) := by
   apply Subtype.ext
   exact toNat_add a b
+
+open EthLib.Precompiles.Modexp
+
+/-- Every byte list survives the big-endian numeric conversion at its own length. -/
+theorem natToBytes_bytesToNat (xs : List UInt8) :
+    natToBytes xs.length (bytesToNat xs) = xs := by
+  induction xs using List.reverseRecOn with
+  | nil => rfl
+  | append_singleton xs b ih =>
+    have hb : b.toNat < 256 := b.toNat_lt
+    -- The last byte is the low base-256 digit.
+    have hv : bytesToNat (xs ++ [b]) = bytesToNat xs * 256 + b.toNat := by
+      simp [bytesToNat]
+    have hd : bytesToNat (xs ++ [b]) / 256 = bytesToNat xs := by
+      rw [hv]
+      omega
+    have hm : bytesToNat (xs ++ [b]) % 256 = b.toNat := by
+      rw [hv]
+      omega
+    simp only [List.length_append, List.length_singleton, natToBytes, hd, hm, ih,
+      UInt8.ofNat_toNat]
+
+/-- Each position holds the corresponding base-256 digit, most significant first. -/
+theorem natToBytes_get (len n i : Nat) (h : i < len) :
+    (natToBytes len n)[i]'(by simpa [natToBytes_length] using h) =
+      UInt8.ofNat ((n / 256 ^ (len - 1 - i)) % 256) := by
+  induction len generalizing n i with
+  | zero => omega
+  | succ len ih =>
+    change (natToBytes len (n / 256) ++ [UInt8.ofNat (n % 256)])[i]'
+      (by simp [natToBytes_length]; omega) = _
+    -- The last position is the low digit; earlier positions come from the quotient.
+    by_cases hi : i < len
+    · rw [List.getElem_append_left (show i < (natToBytes len (n / 256)).length by simpa [natToBytes_length] using hi)]
+      rw [ih (n / 256) i hi, Nat.div_div_eq_div_mul]
+      congr 2
+      have he : len + 1 - 1 - i = (len - 1 - i) + 1 := by omega
+      rw [he, Nat.pow_succ']
+    · have hi' : i = len := by omega
+      subst i
+      rw [List.getElem_append_right (show (natToBytes len (n / 256)).length ≤ len by simp [natToBytes_length])]
+      simp [natToBytes_length]
+
+/-- Every encoded word has exactly 32 bytes. -/
+theorem toBytesBE_size (w : Word) : w.toBytesBE.size = 32 := by
+  change (natToBytes 32 w.toNat).toArray.size = 32
+  simpa using natToBytes_length 32 w.toNat
+
+/-- Byte `i` is the base-256 digit at position `31 - i`. -/
+theorem toBytesBE_get (w : Word) (i : Nat) (h : i < 32) :
+    w.toBytesBE.data[i]'(by simpa [← toBytesBE_size w] using h) =
+      UInt8.ofNat ((w.toNat / 256 ^ (31 - i)) % 256) := by
+  change (natToBytes 32 w.toNat).toArray[i]'(by simp [natToBytes_length]; exact h) = _
+  rw [List.getElem_toArray]
+  simpa using natToBytes_get 32 w.toNat i h
+
+/-- The decoder rejects exactly the lengths outside the word representation. -/
+theorem ofBytesBE_error_iff (b : ByteArray) :
+    Word.ofBytesBE b = .error .invalidLength ↔ b.size ≠ 32 := by
+  simp [Word.ofBytesBE]
+
+/-- The decoder succeeds exactly at the required length. -/
+theorem ofBytesBE_success_iff (b : ByteArray) :
+    (∃ w, Word.ofBytesBE b = .ok w) ↔ b.size = 32 := by
+  by_cases h : b.size = 32 <;> simp [Word.ofBytesBE, h]
+
+/-- The fold of any accepted input fits in a word. -/
+theorem bytesToNat_lt_word (b : ByteArray) (h : b.size = 32) :
+    bytesToNat b.data.toList < modulus := by
+  -- A 32-byte fold is strictly below the word modulus.
+  have ht := bytesToNat_lt b.data.toList
+  simp only [Array.length_toList] at ht
+  change b.data.size = 32 at h
+  rw [h] at ht
+  convert ht using 1
+  decide
+
+/-- Successful decoding preserves the exact big-endian numeric fold. -/
+theorem ofBytesBE_ok_iff (b : ByteArray) (w : Word) :
+    Word.ofBytesBE b = .ok w ↔
+      b.size = 32 ∧ w.toNat = bytesToNat b.data.toList := by
+  by_cases h : b.size = 32
+  · simp only [Word.ofBytesBE, h, ite_true, Except.ok.injEq, true_and]
+    constructor
+    · intro hw
+      rw [← hw, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (show bytesToNat b.data.toList < 2 ^ 256 from bytesToNat_lt_word b h)]
+    · intro hw
+      apply BitVec.eq_of_toNat_eq
+      rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (show bytesToNat b.data.toList < 2 ^ 256 from bytesToNat_lt_word b h), hw]
+  · simp [Word.ofBytesBE, h]
+
+/-- Encoding followed by decoding returns the original word. -/
+theorem ofBytesBE_toBytesBE (w : Word) : Word.ofBytesBE w.toBytesBE = .ok w := by
+  apply (ofBytesBE_ok_iff _ _).2
+  refine ⟨toBytesBE_size w, ?_⟩
+  simp only [Word.toBytesBE, List.toList_toArray]
+  symm
+  apply bytesToNat_natToBytes_of_lt
+  convert w.isLt using 1
+
+/-- Every accepted byte array is the canonical encoding of its decoded word. -/
+theorem toBytesBE_ofBytesBE (b : ByteArray) (w : Word)
+    (h : Word.ofBytesBE b = .ok w) : w.toBytesBE = b := by
+  obtain ⟨hlen, hw⟩ := (ofBytesBE_ok_iff b w).mp h
+  apply ByteArray.ext
+  change (natToBytes 32 w.toNat).toArray = b.data
+  rw [hw]
+  have hl : b.data.toList.length = 32 := by simpa using hlen
+  rw [← hl, natToBytes_bytesToNat]
+
+/-- Equal encodings represent equal words. -/
+theorem toBytesBE_injective : Function.Injective Word.toBytesBE := by
+  intro a b h
+  have he := congrArg Word.ofBytesBE h
+  simpa only [ofBytesBE_toBytesBE, Except.ok.injEq] using he
 
 end EthLib.EVM.Proofs.Word
