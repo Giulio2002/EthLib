@@ -1,6 +1,7 @@
 module
 
 public import EthLib.EVM.Proofs.Word
+public import EthLib.EVM.Proofs.Word.AddMulMod
 
 /-!
 # `EthLib.EVM.Proofs`
