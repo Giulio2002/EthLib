@@ -3,6 +3,7 @@ module
 public import EthLib.EVM.Proofs.Word
 public import EthLib.EVM.Proofs.Opcode
 public import EthLib.EVM.Proofs.PushImmediate
+public import EthLib.EVM.Proofs.JumpDest
 
 /-!
 # `EthLib.EVM.Proofs`

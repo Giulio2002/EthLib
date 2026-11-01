@@ -63,6 +63,19 @@ Execution-specs Cancun `vm.instructions.stack.push_n` and `vm.memory.buffer_read
 The arbitrary natural offset extends the source's bounded offset representation.
 The proofs cover each byte, the length, the exact numeric value, padding and PUSH0.
 
-The jump destination scan belongs to iteration 04b.
-Parent iteration 04 needs that scan and integration before it is complete.
+# Jump destination scan
+
+The scanner uses the Cancun `vm.runtime.get_valid_jump_destinations` rule at revision `fd9298410ec7218838c8348f69c1eb633f1797dc`.
+The Shanghai Yellow Paper revision `efc5f9a1f356cba376c978eedb63cb0363c2aa85`, section 9.4.3, gives the same boundary rule.
+It scans the entire code and skips PUSH1 through PUSH32 data.
+PUSH0 has no data.
+The scan continues past all other bytes, including unassigned bytes.
+Its program counters use natural arithmetic.
+
+The proof defines instruction boundaries independently from the scanner using source byte lengths.
+The kernel checks that membership is exactly a boundary containing byte `0x5b`.
+It also checks strict ordering, bounds, progress and agreement of the decoder step with the byte ranges.
+The correspondence between that Lean relation and the source is a human source review.
+
+Parent iteration 04 remains incomplete until its child gates and combined tests pass.
 This module implements no frames, gas, stack effects or instruction execution.

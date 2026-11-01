@@ -3,6 +3,7 @@ module
 public import EthLib.EVM.Word
 public import EthLib.EVM.Opcode
 public import EthLib.EVM.PushImmediate
+public import EthLib.EVM.JumpDest
 
 /-!
 # `EthLib.EVM`
