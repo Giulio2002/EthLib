@@ -34,6 +34,7 @@ A module imports only from its own layer or from those below it, and the executi
 | Execution | [`Evm`](EthLib/Execution/Evm/) | the arithmetic, comparison and bitwise instructions of the EVM |
 | Execution | [`Precompiles`](EthLib/Execution/Evm/Precompiles/) | all 18 precompiles of Bogota, from ECRECOVER to P256VERIFY, run by address from one table |
 | Execution | [`Trie`](EthLib/Execution/Trie/) | the root of the Merkle Patricia Trie, plain and secured, its Merkle proofs, and the hex-prefix encoding of its paths |
+| EVM | [Word correctness contract](EthLib/EVM/README.md) | 256-bit words and result operations |
 
 The theorems about a module live under `Proofs/` in its layer, and the C exports that the bindings call under `Exports/`.
 
