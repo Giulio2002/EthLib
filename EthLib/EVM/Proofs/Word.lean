@@ -101,4 +101,122 @@ theorem max_add_max :
     BitVec.ofNatLT (modulus - 2) (by decide) := by
   decide
 
+/-- The reference modulus is positive, so modular reduction preserves its bound. -/
+theorem modulus_pos : 0 < modulus := by decide
+
+/-- Unsigned observation distinguishes every pair of words. -/
+theorem toNat_injective (a b : Word) : a.toNat = b.toNat ↔ a = b := by
+  constructor
+  · exact BitVec.eq_of_toNat_eq
+  · exact congrArg BitVec.toNat
+
+/-- Success characterizes both the accepted range and the exact returned value. -/
+theorem ofNat_ok_iff (n : Nat) (w : Word) :
+    ofNat n = .ok w ↔ n < modulus ∧ w.toNat = n := by
+  by_cases h : n < modulus
+  · rw [ofNat_ok n h]
+    -- The successful branch contains the bounded input without reduction.
+    simp only [Except.ok.injEq, h, true_and]
+    constructor
+    · intro hw
+      rw [← hw]
+      rfl
+    · intro hw
+      apply BitVec.eq_of_toNat_eq
+      exact hw.symm
+  · rw [ofNat_error n (Nat.le_of_not_gt h)]
+    simp [h]
+
+/-- Some output exists exactly when the input is in range. -/
+theorem ofNat_success_iff (n : Nat) :
+    (∃ w, ofNat n = .ok w) ↔ n < modulus := by
+  constructor
+  · rintro ⟨w, hw⟩
+    exact ((ofNat_ok_iff n w).mp hw).1
+  · intro h
+    exact ⟨_, ofNat_ok n h⟩
+
+/-- The sole error occurs exactly for out-of-range input. -/
+theorem ofNat_error_iff (n : Nat) :
+    ofNat n = .error .outOfRange ↔ modulus ≤ n := by
+  by_cases h : n < modulus
+  · rw [ofNat_ok n h]
+    simp [Nat.not_le.mpr h]
+  · rw [ofNat_error n (Nat.le_of_not_gt h)]
+    simp [Nat.le_of_not_gt h]
+
+/-- Observing and checking any word returns that same word. -/
+theorem ofNat_toNat (w : Word) : ofNat w.toNat = .ok w := by
+  exact (ofNat_ok_iff _ _).mpr ⟨toNat_lt w, rfl⟩
+
+/-! A mathematical model independent of BitVec and the executable operations.
+
+The bound follows Yellow Paper section 9.1.
+Addition follows Appendix H.2's arithmetic preamble and ADD result equation.
+The checked constructor expresses the library boundary policy.
+-/
+namespace Reference
+
+/-- The model represents a word by a bounded natural number. -/
+abbrev Value := { n : Nat // n < 2 ^ 256 }
+
+/-- Mathematical addition on bounded naturals, with modular reduction. -/
+def add (a b : Value) : Value :=
+  ⟨(a.val + b.val) % (2 ^ 256), Nat.mod_lt _ (by decide)⟩
+
+/-- The model accepts precisely the bounded naturals. -/
+def ofNat (n : Nat) : Except InputError Value :=
+  if h : n < 2 ^ 256 then .ok ⟨n, h⟩ else .error .outOfRange
+
+end Reference
+
+/-- Interpret a concrete word as a bounded natural number. -/
+def decode (w : Word) : Reference.Value := ⟨w.toNat, toNat_lt w⟩
+
+/-- Represent a bounded natural number without modular reduction. -/
+def encode (n : Reference.Value) : Word := BitVec.ofNatLT n.val n.property
+
+/-- Every mathematical value survives representation and observation. -/
+theorem decode_encode (n : Reference.Value) : decode (encode n) = n := by
+  apply Subtype.ext
+  rfl
+
+/-- Every concrete word survives observation and representation. -/
+theorem encode_decode (w : Word) : encode (decode w) = w := by
+  apply BitVec.eq_of_toNat_eq
+  rfl
+
+/-- The interpretation identifies no distinct concrete words. -/
+theorem decode_injective : Function.Injective decode := by
+  intro a b h
+  exact BitVec.eq_of_toNat_eq (congrArg Subtype.val h)
+
+/-- Every bounded natural has a concrete representation. -/
+theorem decode_surjective : Function.Surjective decode := by
+  intro n
+  exact ⟨encode n, decode_encode n⟩
+
+/-- Checked construction refines the independent model on every natural input.
+
+Mapping the success value preserves the exact error as well.
+-/
+theorem ofNat_refines (n : Nat) :
+    (ofNat n).map decode = Reference.ofNat n := by
+  by_cases h : n < modulus
+  · rw [ofNat_ok n h]
+    simp only [Reference.ofNat, show n < 2 ^ 256 from h, dite_true]
+    rfl
+  · rw [ofNat_error n (Nat.le_of_not_gt h)]
+    simp only [Reference.ofNat, show ¬ n < 2 ^ 256 from h, dite_false]
+    rfl
+
+/-- Addition refines bounded natural modular arithmetic for every operand pair.
+
+The existing toNat_add theorem supplies the arithmetic fact for all carries.
+-/
+theorem add_refines (a b : Word) :
+    decode (add a b) = Reference.add (decode a) (decode b) := by
+  apply Subtype.ext
+  exact toNat_add a b
+
 end EthLib.EVM.Proofs.Word

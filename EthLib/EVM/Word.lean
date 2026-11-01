@@ -17,7 +17,12 @@ Stack effects, gas, program counters, and instruction execution are outside this
 
 namespace EthLib.EVM
 
-/-- An unsigned 256-bit word, as specified by Yellow Paper section 9.1. -/
+/-- An unsigned 256-bit word, as specified by Yellow Paper section 9.1.
+
+This abbreviation leaves BitVec constructors, literals and operators available.
+Only `Word.ofNat` enforces the checked natural-input boundary.
+The formal refinement contract is in `EthLib.EVM.Proofs.Word`.
+-/
 abbrev Word := BitVec 256
 
 namespace Word
