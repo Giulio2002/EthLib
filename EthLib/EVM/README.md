@@ -32,7 +32,8 @@ They do not establish the contract by themselves.
 
 The machine-checked claim is refinement to this Lean mathematical model.
 Correspondence between that model and the cited paper is a human reading of the source.
-The contract covers representation, checked natural construction and the addition, unsigned division and unsigned remainder results.
+The contract covers representation, checked natural construction and addition.
+It also covers signed and unsigned division and remainder results.
 It does not cover all inherited BitVec operations, an interpreter, gas, stack effects or other instructions.
 It makes no claim about compiled runtime correctness, cryptography or security.
 The precompile modules keep their existing paths and ownership.
@@ -52,3 +53,27 @@ The proofs establish both numeric equations and refinement for every pair of wor
 They also establish range, the remainder bound and quotient-remainder decomposition.
 The latter two laws assume a nonzero divisor.
 These helpers do not model instruction execution, stack effects or gas.
+
+## Signed division and remainder
+
+The Shanghai Yellow Paper revision linked above specifies SDIV and SMOD in Appendix H.2.
+The Cancun execution specification revision [fd92984](https://github.com/ethereum/execution-specs/blob/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions/arithmetic.py) gives the same result rules in `sdiv` and `smod`.
+The first operand is the first popped word and is the numerator.
+The second operand is the divisor.
+
+`Word.signed` interprets each word as a signed two's-complement integer.
+`Word.ofSigned` accepts any integer and wraps it modulo `2^256`.
+Unlike `Word.ofNat`, it does not reject out-of-range inputs.
+The `signed_ofSigned` theorem gives its signed result for every integer using balanced remainder.
+`Word.sdiv` truncates the quotient toward zero.
+`Word.smod` gives the remainder the numerator's sign.
+Both return zero for a zero divisor.
+The signed minimum divided by -1 returns the signed minimum word.
+
+`EthLib.EVM.Proofs.Word.SignedDivMod.Reference` defines integer quotient and remainder using natural magnitudes and signs.
+The kernel checks refinement for every pair of words, including zero divisors and overflow.
+The proofs also establish signed range and representation round trips, the remainder sign and magnitude, and the quotient and remainder identity outside the overflow case.
+The machine-checked result is refinement to this Lean model.
+Correspondence between the model and the cited sources is a human interpretation.
+These helpers do not execute instructions or model the stack, gas, or an interpreter.
+They make no claim about compiled runtime correctness or security.
