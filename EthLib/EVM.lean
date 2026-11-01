@@ -16,6 +16,7 @@ public import EthLib.EVM.Word.AddMulMod
 public import EthLib.EVM.Word.Exp
 public import EthLib.EVM.Opcode
 public import EthLib.EVM.PushImmediate
+public import EthLib.EVM.JumpDest
 
 /-!
 # `EthLib.EVM`
