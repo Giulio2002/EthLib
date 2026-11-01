@@ -3,7 +3,7 @@ module
 public import EthLib.EVM.Word
 
 /-!
-# EVM word addition laws
+# EVM word arithmetic laws
 
 These statements concern unsigned values and arithmetic results only.
 The boundary examples pin arithmetic identities, not external execution test vectors.
@@ -218,5 +218,108 @@ theorem add_refines (a b : Word) :
     decode (add a b) = Reference.add (decode a) (decode b) := by
   apply Subtype.ext
   exact toNat_add a b
+
+/-- The unsigned difference is the integer difference modulo the word modulus. -/
+theorem toNat_sub_int (a b : Word) :
+    ((sub a b).toNat : Int) = ((a.toNat : Int) - (b.toNat : Int)) % (modulus : Int) := by
+  simp only [sub, BitVec.toNat_sub]
+  simp only [modulus]
+  omega
+
+/-- The product is reduced only after the full natural-number multiplication. -/
+theorem toNat_mul (a b : Word) :
+    (mul a b).toNat = (a.toNat * b.toNat) % modulus := by
+  exact BitVec.toNat_mul a b
+
+/-- Subtraction preserves the word range. -/
+theorem sub_lt (a b : Word) : (sub a b).toNat < modulus := toNat_lt _
+
+/-- Multiplication preserves the word range. -/
+theorem mul_lt (a b : Word) : (mul a b).toNat < modulus := toNat_lt _
+
+/-- Subtraction without underflow is natural subtraction. -/
+theorem sub_no_wrap (a b : Word) (h : b.toNat ≤ a.toNat) :
+    (sub a b).toNat = a.toNat - b.toNat := by
+  apply BitVec.toNat_sub_of_not_usubOverflow
+  simpa [BitVec.usubOverflow] using h
+
+/-- An underflow adds exactly one modulus to the integer difference. -/
+theorem sub_wrap (a b : Word) (h : a.toNat < b.toNat) :
+    (sub a b).toNat = modulus - b.toNat + a.toNat := by
+  have ha := toNat_lt a
+  have hb := toNat_lt b
+  change (a - b).toNat = _
+  rw [BitVec.toNat_sub, Nat.mod_eq_of_lt]
+  simp only [modulus] at *
+  omega
+
+/-- A product below the modulus is unchanged. -/
+theorem mul_no_wrap (a b : Word) (h : a.toNat * b.toNat < modulus) :
+    (mul a b).toNat = a.toNat * b.toNat := by
+  rw [toNat_mul, Nat.mod_eq_of_lt h]
+
+/-- Multiplication is commutative. -/
+theorem mul_comm (a b : Word) : mul a b = mul b a := by
+  exact BitVec.mul_comm a b
+
+/-- A product at or above the modulus is the full product less its quotient
+multiples of the modulus. -/
+theorem mul_wrap (a b : Word) (_h : modulus ≤ a.toNat * b.toNat) :
+    (mul a b).toNat = a.toNat * b.toNat -
+      (a.toNat * b.toNat / modulus) * modulus := by
+  rw [toNat_mul]
+  have := Nat.mod_add_div (a.toNat * b.toNat) modulus
+  simp only [Nat.mul_comm modulus] at this
+  omega
+
+/-- Subtracting zero leaves the operand unchanged. -/
+theorem sub_zero (a : Word) : sub a 0 = a := by
+  simp [sub]
+
+/-- One is a multiplicative identity. -/
+theorem mul_one (a : Word) : mul a 1 = a := by
+  simp [mul]
+
+/-- Zero annihilates multiplication. -/
+theorem mul_zero (a : Word) : mul a 0 = 0 := by
+  simp [mul]
+
+/-- Subtracting a word from itself yields zero. -/
+theorem sub_self (a : Word) : sub a a = 0 := by
+  simp [sub]
+
+/-- One minus two pins operand order and underflow. -/
+theorem one_sub_two : sub 1 2 = BitVec.ofNat 256 (modulus - 1) := by decide
+
+/-- Multiplying the high bit by two wraps to zero. -/
+theorem high_bit_mul_two : mul (BitVec.ofNat 256 (2 ^ 255)) 2 = 0 := by decide
+
+namespace Reference
+
+/-- Integer difference reduced to the unique unsigned representative. -/
+def sub (a b : Value) : Value :=
+  ⟨(((a.val : Int) - (b.val : Int)) % (2 ^ 256 : Int)).toNat, by
+    have h := Int.emod_lt_of_pos ((a.val : Int) - (b.val : Int)) (by decide : (0 : Int) < 2 ^ 256)
+    omega⟩
+
+/-- Full natural product reduced to the word range. -/
+def mul (a b : Value) : Value :=
+  ⟨(a.val * b.val) % (2 ^ 256), Nat.mod_lt _ (by decide)⟩
+
+end Reference
+
+/-- Concrete subtraction refines the independent integer model. -/
+theorem sub_refines (a b : Word) :
+    decode (sub a b) = Reference.sub (decode a) (decode b) := by
+  apply Subtype.ext
+  change (sub a b).toNat = (((a.toNat : Int) - b.toNat) % (modulus : Int)).toNat
+  rw [← toNat_sub_int]
+  simp
+
+/-- Concrete multiplication refines the full-precision natural model. -/
+theorem mul_refines (a b : Word) :
+    decode (mul a b) = Reference.mul (decode a) (decode b) := by
+  apply Subtype.ext
+  exact toNat_mul a b
 
 end EthLib.EVM.Proofs.Word
