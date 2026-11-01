@@ -1,5 +1,7 @@
 module
 
+public import EthLib.Execution.Precompiles.Modexp.Bytes
+
 /-!
 # EVM words
 
@@ -69,6 +71,30 @@ Cancun execution-specs `fd9298410ec7218838c8348f69c1eb633f1797dc`,
 this arithmetic result.
 -/
 def mul (a b : Word) : Word := a * b
+/-- A byte sequence whose length is not exactly 32. -/
+inductive BytesError where
+  | invalidLength
+  deriving DecidableEq, Repr
+
+/-- Encode a word in 32 big-endian bytes.
+
+Cancun execution-specs at `fd9298410ec7218838c8348f69c1eb633f1797dc`
+uses `U256.to_be_bytes32` in `vm/instructions/storage.py`.
+Yellow Paper section 9.1 fixes the word width at 256 bits.
+Appendix H.2 BYTE numbers bytes from the most significant end.
+-/
+def toBytesBE (w : Word) : ByteArray :=
+  ⟨(EthLib.Execution.Precompiles.Modexp.natToBytes 32 w.toNat).toArray⟩
+
+/-- Decode exactly 32 big-endian bytes, rejecting every other length.
+
+The length check is an API boundary, independent of EVM memory padding.
+-/
+def ofBytesBE (bytes : ByteArray) : Except BytesError Word :=
+  if bytes.size = 32 then
+    .ok (BitVec.ofNat 256 (EthLib.Execution.Precompiles.Modexp.bytesToNat bytes.data.toList))
+  else
+    .error .invalidLength
 
 end Word
 end EthLib.EVM
