@@ -17,6 +17,7 @@ public import EthLib.EVM.Word.Exp
 public import EthLib.EVM.Opcode
 public import EthLib.EVM.PushImmediate
 public import EthLib.EVM.JumpDest
+public import EthLib.EVM.Stack
 
 /-!
 # `EthLib.EVM`
@@ -25,5 +26,6 @@ public import EthLib.EVM.JumpDest
 Division and remainder include signed and unsigned results.
 Arithmetic includes modular addition and exponentiation results.
 Opcode classification and PUSH immediate decoding follow Cancun.
+Bounded stack helpers.
 This domain does not implement instruction execution or fork selection.
 -/

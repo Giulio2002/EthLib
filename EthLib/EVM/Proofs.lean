@@ -17,6 +17,7 @@ public import EthLib.EVM.Proofs.Word.Exp
 public import EthLib.EVM.Proofs.Opcode
 public import EthLib.EVM.Proofs.PushImmediate
 public import EthLib.EVM.Proofs.JumpDest
+public import EthLib.EVM.Proofs.Stack
 
 /-!
 # `EthLib.EVM.Proofs`
@@ -26,5 +27,6 @@ Arithmetic, comparison, bitwise, BYTE and SIGNEXTEND result contracts.
 Division and remainder contracts cover signed and unsigned results.
 Arithmetic contracts include modular addition and exponentiation.
 Cancun opcode classification and PUSH immediate decoding contracts.
+Bounded stack correctness and source-model refinement.
 This root belongs to the separate `Proofs` library.
 -/
