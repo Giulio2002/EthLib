@@ -5,6 +5,7 @@ public import EthLib.EVM.Proofs.Word.DivMod
 public import EthLib.EVM.Proofs.Word.SignedDivMod
 public import EthLib.EVM.Proofs.Word.Comparisons
 public import EthLib.EVM.Proofs.Word.Bitwise
+public import EthLib.EVM.Proofs.Word.Shifts
 
 /-!
 # `EthLib.EVM.Proofs`
