@@ -2,6 +2,7 @@ module
 
 public import EthLib.EVM.Word
 public import EthLib.EVM.Memory
+public import EthLib.EVM.Memory.Ranges
 
 /-!
 # `EthLib.EVM`
