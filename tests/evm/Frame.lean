@@ -126,3 +126,27 @@ def withStack (code : ByteArray) (gas : Nat) (xs : List Word)
 #eval match Runner.run 1 (withStack ⟨#[0x90]⟩ 3 [9] (by decide)) with
     | .exception _ .stackUnderflow => true
     | _ => false
+
+-- A single STOP needs one step, and extra fuel keeps the result.
+example : match Runner.run 1 (initial ⟨#[0x00]⟩ 9) with
+    | .stopped s => s.pc = 1 ∧ s.gas = 9
+    | _ => False := by cbv
+example : match Runner.run 5 (initial ⟨#[0x00]⟩ 9) with
+    | .stopped s => s.pc = 1 ∧ s.gas = 9
+    | _ => False := by cbv
+
+-- The diagnostic frame keeps gas while exceptional settlement burns it.
+example : match Runner.run 1 (initial ⟨#[0xfe]⟩ 9) with
+    | .exception s e => s.gas = 9 ∧ Runner.settle (.exception s e) = some (.exceptional 0 e)
+    | _ => False := by cbv
+example : Runner.settle (Runner.run 1 (initial ⟨#[0x02]⟩ 9)) = none := by cbv
+example : Runner.settle (Runner.run 0 (initial ⟨#[0x00]⟩ 9)) = none := by cbv
+
+-- The first step exhausts, and resuming executes STOP.
+/-- info: (2, 0) -/
+#guard_msgs in
+#eval match Runner.run 1 (initial ⟨#[0x5f, 0x00]⟩ 2) with
+    | .exhausted s => match Runner.run 1 s with
+      | .stopped t => (t.pc, t.gas)
+      | _ => (0, 0)
+    | _ => (0, 0)

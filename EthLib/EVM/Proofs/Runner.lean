@@ -95,6 +95,85 @@ theorem terminates_of_run {fuel : Nat} {s : Frame.State} {result : Result}
       subst result
       exact ⟨1, by omega,  .unsupported ((Frame.step_iff_rule _ _).mp hs)⟩
 
+/-- Exactly `n` independent continuing frame rules. -/
+inductive Continues : Frame.State → Nat → Frame.State → Prop where
+  | nil (s) : Continues s 0 s
+  | next {s t u n} : Frame.Rule s (.continue t) → Continues t n u →
+      Continues s (n + 1) u
+
+/-- Exhaustion is exactly an all-continuing trace of the supplied length. -/
+theorem run_exhausted_iff (fuel : Nat) (s t : Frame.State) :
+    run fuel s = .exhausted t ↔ Continues s fuel t := by
+  induction fuel generalizing s with
+  | zero => simp only [run, Result.exhausted.injEq]; constructor
+            · intro h; subst t; exact .nil _
+            · intro h; cases h; rfl
+  | succ fuel ih =>
+    constructor
+    · intro h
+      cases hs : Frame.step s with
+      | «continue» next =>
+        exact .next ((Frame.step_iff_rule _ _).mp hs) ((ih next).mp (by simpa [run, hs] using h))
+      | stop next => simp [run, hs] at h
+      | exception input e => simp [run, hs] at h
+      | unsupported input op => simp [run, hs] at h
+    · intro h
+      cases h with
+      | next hs ht =>
+        simpa [run, Frame.rule_sound hs] using (ih _).mpr ht
+
+/-- Any bounded result is either exact exhaustion or a terminal trace within fuel. -/
+theorem run_characterization (fuel : Nat) (s : Frame.State) (r : Result) :
+    run fuel s = r ↔
+      (∃ t, r = .exhausted t ∧ Continues s fuel t) ∨
+      (∃ n, n ≤ fuel ∧ Terminates s n r) := by
+  constructor
+  · intro h
+    cases r with
+    | exhausted t => exact .inl ⟨t, rfl, (run_exhausted_iff _ _ _).mp h⟩
+    | stopped t => exact .inr (terminates_of_run h (by intros; simp))
+    | exception t e => exact .inr (terminates_of_run h (by intros; simp))
+    | unsupported t op => exact .inr (terminates_of_run h (by intros; simp))
+  · rintro (⟨t, rfl, ht⟩ | ⟨n, hn, ht⟩)
+    · exact (run_exhausted_iff _ _ _).mpr ht
+    · obtain ⟨extra, rfl⟩ := Nat.exists_eq_add_of_le hn
+      exact run_of_terminates ht extra
+
+/-- A terminal result remains the same with additional fuel. -/
+theorem run_terminal_stable {fuel : Nat} {s : Frame.State} {r : Result}
+    (h : run fuel s = r) (terminal : ∀ t, r ≠ .exhausted t) (extra : Nat) :
+    run (fuel + extra) s = r := by
+  obtain ⟨n, hn, ht⟩ := terminates_of_run h terminal
+  obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_le hn
+  simpa [Nat.add_assoc] using run_of_terminates ht (k + extra)
+
+/-- A finite terminal relation has a unique result. -/
+theorem terminates_deterministic {s : Frame.State} {n m : Nat} {r q : Result}
+    (h : Terminates s n r) (k : Terminates s m q) : r = q := by
+  have a := run_of_terminates h m
+  have b := run_of_terminates k n
+  rw [Nat.add_comm] at b
+  exact a.symm.trans b
+
+/-- Splitting fuel resumes exactly when the first run exhausts. -/
+theorem run_add (fuel extra : Nat) (s : Frame.State) :
+    run (fuel + extra) s =
+      match run fuel s with
+      | .exhausted t => run extra t
+      | r => r := by
+  induction fuel generalizing s with
+  | zero => simp [run]
+  | succ fuel ih =>
+    cases hs : Frame.step s <;> simp [run, hs, Nat.succ_add, ih]
+
+/-- The settlement projection has exactly these four cases. -/
+theorem settle_cases (r : Result) :
+    settle r = match r with
+      | .stopped s => some (.stopped s.gas)
+      | .exception _ e => some (.exceptional 0 e)
+      | .unsupported _ _ | .exhausted _ => none := by
+  cases r <;> rfl
+
 /-- All bounded runs preserve code and allocated memory. -/
 theorem run_unchanged (fuel : Nat) (s : Frame.State) :
     (run fuel s).frame.code = s.code ∧ (run fuel s).frame.memory = s.memory := by

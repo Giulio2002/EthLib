@@ -23,6 +23,16 @@ inductive Result where
 def Result.frame : Result → Frame.State
   | .stopped s | .exception s _ | .unsupported s _ | .exhausted s => s
 
+/-- Project a bounded result to a protocol boundary when one exists.
+
+Cancun `vm/interpreter.py`, `process_message`, clears gas on exceptional halt.
+Fuel exhaustion and unsupported instructions are tooling outcomes.
+-/
+def settle : Result → Option Frame.Boundary
+  | .stopped s => some (.stopped s.gas)
+  | .exception _ e => some (.exceptional 0 e)
+  | .unsupported _ _ | .exhausted _ => none
+
 /-- Execute at most `fuel` frame steps. -/
 def run : Nat → Frame.State → Result
   | 0, s => .exhausted s
