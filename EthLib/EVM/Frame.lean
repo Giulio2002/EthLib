@@ -32,10 +32,15 @@ inductive Exception where
   | invalidOpcode | outOfGas | stackUnderflow | stackOverflow
   deriving DecidableEq, Repr
 
-/-- A tooling stop for an assigned opcode outside this subset. -/
+/-- Frame outcomes include a typed revert for future semantics.
+
+The restricted step never constructs a revert.
+The carried frame is diagnostic and does not represent world-state rollback.
+Unsupported instructions are tooling outcomes. -/
 inductive Outcome where
   | continue (state : State)
   | stop (state : State)
+  | revert (input : State) (gas : Nat) (output : ByteArray)
   | exception (input : State) (reason : Exception)
   | unsupported (input : State) (opcode : Opcode)
 
@@ -90,20 +95,24 @@ def step (s : State) : Outcome :=
 
 /-- The frame carried by an outcome, including diagnostic input for failures. -/
 def Outcome.frame : Outcome → State
-  | .continue s | .stop s | .exception s _ | .unsupported s _ => s
+  | .continue s | .stop s | .revert s _ _ | .exception s _ | .unsupported s _ => s
 
 /-- Message-boundary observations modeled by this subset. -/
 inductive Boundary where
   | stopped (gas : Nat)
+  | reverted (gas : Nat) (output : ByteArray)
   | exceptional (gas : Nat) (reason : Exception)
 
-/-- Project protocol gas only for terminal EVM outcomes.
+/-- Project the modeled observations for terminal EVM outcomes.
 
 Cancun `vm/interpreter.py`, `process_message`, burns all remaining gas on
-`ExceptionalHalt` and clears output. World rollback is outside this subset.
+`ExceptionalHalt` and clears output.
+A manually supplied revert retains its gas and output.
+World rollback is outside this subset.
 -/
 def settle : Outcome → Option Boundary
   | .stop s => some (.stopped s.gas)
+  | .revert _ gas output => some (.reverted gas output)
   | .exception _ reason => some (.exceptional 0 reason)
   | .continue _ | .unsupported _ _ => none
 

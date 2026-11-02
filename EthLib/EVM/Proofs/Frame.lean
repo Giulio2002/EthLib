@@ -32,6 +32,10 @@ theorem settle_unsupported (s : State) (op : Opcode) :
 /-- A continuing step has not reached a message boundary. -/
 theorem settle_continue (s : State) : settle (.continue s) = none := rfl
 
+/-- A manually constructed revert preserves its supplied gas and output. -/
+theorem settle_revert (s : State) (gas : Nat) (output : ByteArray) :
+    settle (.revert s gas output) = some (.reverted gas output) := rfl
+
 /-- End of code is a normal stop and leaves the frame unchanged. -/
 theorem step_end (s : State) (h : s.code.size ≤ s.pc) : step s = .stop s := by
   simp [step, Nat.not_lt.mpr h]
@@ -342,6 +346,18 @@ theorem step_iff_rule (s : State) (out : Outcome) : step s = out ↔ Rule s out 
     cases this
     exact rule
   · exact rule_sound
+
+/-- No rule in the restricted frame semantics produces a revert. -/
+theorem rule_not_revert (s input : State) (gas : Nat) (output : ByteArray) :
+    ¬ Rule s (.revert input gas output) := by
+  intro h
+  cases h
+
+/-- The restricted step cannot produce a revert for any input. -/
+theorem step_not_revert (s input : State) (gas : Nat) (output : ByteArray) :
+    step s ≠ .revert input gas output := by
+  intro h
+  exact rule_not_revert s input gas output ((step_iff_rule s _).mp h)
 
 /-- Every continuing instruction preserves code and memory. -/
 theorem continue_unchanged {s t : State} (h : step s = .continue t) :

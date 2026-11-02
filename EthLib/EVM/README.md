@@ -276,7 +276,11 @@ Other assigned Cancun opcodes return a distinct unsupported tooling result.
 Unassigned bytes and INVALID cause exceptional halts.
 Fuel exhaustion is a tooling result and is not an EVM exception.
 The frame holds code, a natural program counter, a bounded stack, gas, and valid allocated memory.
-It does not model world state, calls, output, or rollback.
+It does not execute REVERT or model world state, calls, or rollback.
+A manually constructed revert carries remaining gas and output bytes as scaffolding.
+The restricted step and runner cannot produce that constructor for any input or fuel.
+World-state rollback and REVERT execution belong to milestone 12.
+Exhaustive matches on `Frame.Outcome`, `Runner.Result`, or `Frame.Boundary` must handle the new revert constructor.
 
 The source is Cancun execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`.
 `vm/instructions/control_flow.py`, `stop`, increments the program counter.

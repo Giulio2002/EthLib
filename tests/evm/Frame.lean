@@ -150,3 +150,15 @@ example : Runner.settle (Runner.run 0 (initial ⟨#[0x00]⟩ 9)) = none := by cb
       | .stopped t => (t.pc, t.gas)
       | _ => (0, 0)
     | _ => (0, 0)
+
+-- Manual revert values are boundary scaffolding, not REVERT execution.
+example (s : EthLib.EVM.Frame.State) (gas : Nat) (output : ByteArray) :
+    EthLib.EVM.Frame.settle (.revert s gas output) = some (.reverted gas output) := rfl
+
+example (s : EthLib.EVM.Frame.State) (gas : Nat) (output : ByteArray) :
+    EthLib.EVM.Runner.settle (.reverted s gas output) = some (.reverted gas output) := rfl
+
+-- The REVERT byte remains an unsupported assigned instruction.
+example : match EthLib.EVM.Runner.run 1 (initial ⟨#[0xfd]⟩ 10) with
+    | .unsupported _ .revert => True
+    | _ => False := by trivial
