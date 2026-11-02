@@ -234,8 +234,9 @@ Their sparse write histories need not be equal.
 
 # Opcode decoding
 
-`Opcode` represents the assigned Cancun bytes plus Osaka CLZ.
+`Opcode` represents the assigned Cancun bytes plus Osaka CLZ and Amsterdam SLOTNUM.
 `Opcode.decodeCancun` retains the historical Cancun classification.
+`Opcode.decodeCancunClz` adds CLZ without SLOTNUM.
 PUSH lengths and DUP, SWAP and LOG indices are bounded in the type.
 DUP and SWAP indices start at zero, so index zero denotes DUP1 or SWAP1.
 `INVALID` is a designated instruction at `0xfe`.
@@ -439,8 +440,10 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The 256-byte dispatch regression covers 126 supported instructions, 23 assigned but unsupported instructions, 106 unassigned bytes, and INVALID.
-The historical Cancun subset had 125 supported instructions and 107 unassigned bytes.
+The 256-byte dispatch regression covers 127 supported instructions and 23 assigned but unsupported instructions.
+It also covers 105 unassigned bytes and INVALID.
+The historical Cancun subset has 125 supported instructions and 107 unassigned bytes.
+The Cancun-plus-CLZ subset has 126 supported instructions and 106 unassigned bytes.
 These counts describe this restricted frame and do not cover all Amsterdam opcodes.
 
 ## KECCAK256 execution (09d)

@@ -24,6 +24,7 @@ public import EthLib.EVM.Proofs.JumpDest
 public import EthLib.EVM.Proofs.Stack
 public import EthLib.EVM.Proofs.Frame
 public import EthLib.EVM.Proofs.Frame.CountLeadingZeros
+public import EthLib.EVM.Proofs.Frame.SlotNumber
 public import EthLib.EVM.Proofs.Frame.Environment
 public import EthLib.EVM.Proofs.Frame.BlobFee
 public import EthLib.EVM.Proofs.Keccak
@@ -35,6 +36,7 @@ public import EthLib.EVM.Proofs.Frame.Memory
 public import EthLib.EVM.Proofs.Runner
 public import EthLib.EVM.Proofs.Runner.StraightLine
 public import EthLib.EVM.Proofs.Runner.Mixed
+public import EthLib.EVM.Proofs.Runner.SlotNumber
 public import EthLib.EVM.Proofs.Runner.CountLeadingZeros
 public import EthLib.EVM.Proofs.Runner.Environment
 public import EthLib.EVM.Proofs.Runner.BlockEnvironment

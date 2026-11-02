@@ -24,6 +24,7 @@ The instruction rules come from Cancun execution-specs revision
 `fd9298410ec7218838c8348f69c1eb633f1797dc`, `vm/interpreter.py`,
 `vm/instructions/stack.py`, `arithmetic.py`, `comparison.py`, `bitwise.py`,
 `control_flow.py`, `memory.py`, `block.py`, `environment.py`, and `vm/gas.py`.
+Amsterdam `vm/instructions/block.py`, `slot_number`, defines SLOTNUM at the same revision.
 The blob fee observation uses the supplied schedule, which can differ from Cancun.
 An exception retains the input frame only as diagnostic context.
 Its gas is zero at the message boundary; its stack is not a protocol final state.
@@ -250,6 +251,7 @@ def step (s : State) : Outcome :=
     | some .coinbase => observe s (fun _ => s.context.environment.coinbase.val)
     | some .timestamp => observe s (fun _ => s.context.environment.timestamp.toNat)
     | some .number => observe s (fun _ => s.context.environment.number.toNat)
+    | some .slotnum => observe s (fun _ => s.context.environment.slotNumber.val)
     | some .prevrandao => observe s (fun _ => s.context.environment.prevRandao.toNat)
     | some .gaslimit => observe s (fun _ => s.context.environment.gasLimit.toNat)
     | some .chainid => observe s (fun _ => s.context.environment.chainId.val)

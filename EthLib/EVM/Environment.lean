@@ -37,6 +37,8 @@ structure Context where
   timestamp : Word
   /-- The accepted U256 domain of Cancun `BlockEnvironment.number`. -/
   number : Word
+  /-- Amsterdam `BlockEnvironment.slot_number` is supplied as U64. -/
+  slotNumber : Fin (2 ^ 64)
   /-- The big-endian decoded Cancun `BlockEnvironment.prev_randao`. -/
   prevRandao : Word
   /-- The accepted U256 domain of Cancun `BlockEnvironment.block_gas_limit`. -/

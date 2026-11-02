@@ -11,6 +11,7 @@ The sources are Cancun execution-specs revision
 `vm/instructions/stack.py`, `arithmetic.py`, `comparison.py`, `bitwise.py`,
 `control_flow.py`, `memory.py`, `block.py`, and `environment.py`.
 CLZ follows Osaka `vm/instructions/bitwise.py`, `count_leading_zeros`, at the same revision.
+Amsterdam `vm/instructions/block.py`, `slot_number`, defines SLOTNUM at the same revision.
 The blob fee rule uses the supplied schedule, which can differ from Cancun.
 -/
 
@@ -23,7 +24,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -72,7 +73,7 @@ def ValidJumpDest (code : ByteArray) (pc : Nat) : Prop :=
 inductive Observation where
   | pc | msize | gas | calldatasize | codesize | returndatasize
   | address | origin | caller | callvalue | gasprice
-  | coinbase | timestamp | number | prevrandao | gaslimit | chainid | basefee | blobbasefee
+  | coinbase | timestamp | number | slotnum | prevrandao | gaslimit | chainid | basefee | blobbasefee
   deriving DecidableEq
 
 /-- Opcode corresponding to an observation. -/
@@ -81,6 +82,7 @@ def Observation.opcode : Observation → Opcode
   | .callvalue => .callvalue | .gasprice => .gasprice
   | .coinbase => .coinbase
   | .timestamp => .timestamp
+  | .slotnum => .slotnum
   | .number => .number
   | .prevrandao => .prevrandao
   | .gaslimit => .gaslimit
@@ -100,6 +102,7 @@ def Observation.value (o : Observation) (s : State) : Nat :=
   | .gasprice => s.context.environment.gasPrice.toNat
   | .coinbase => s.context.environment.coinbase.val
   | .timestamp => s.context.environment.timestamp.toNat
+  | .slotnum => s.context.environment.slotNumber.val
   | .number => s.context.environment.number.toNat
   | .prevrandao => s.context.environment.prevRandao.toNat
   | .gaslimit => s.context.environment.gasLimit.toNat

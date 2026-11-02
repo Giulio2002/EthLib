@@ -7,7 +7,7 @@ example (environment : Environment.Context) (data : ByteArray) : CallData.Contex
 
 example (address : Environment.Address) : Word := Environment.addressWord address
 
-private def metadata : Environment.Context := ⟨11, 22, 33, 44, 55, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩
+private def metadata : Environment.Context := ⟨11, 22, 33, 44, 55, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩
 private def input : Frame.State :=
   ⟨⟨#[0xfe]⟩, 99, ⟨[7, 8], by decide⟩, 5, Memory.Allocation.empty,
     by intro a _; rfl, ⟨⟨#[9]⟩, metadata⟩, ⟨#[10]⟩⟩
