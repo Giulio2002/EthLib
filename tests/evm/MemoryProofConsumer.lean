@@ -53,3 +53,11 @@ example (s t : Frame.State) (x y : Word) (xs : List Word)
     (run : Frame.step s = .continue t) :
     3 + Gas.rangeCost s.memory.words x.toNat 1 ≤ s.gas :=
   (Frame.mstore8_success_fields s t x y xs at_ items run).1
+
+-- An observed copy exposes the original source bytes, including overlapping ranges.
+example (s t : Frame.State) (x y z : Word) (xs : List Word)
+    (at_ : Frame.At s (some .mcopy)) (items : s.stack.val = x :: y :: z :: xs)
+    (run : Frame.step s = .continue t) (i : Nat) (hi : i < z.toNat) :
+    Memory.readByte t.memory.store (x.toNat + i) =
+      Memory.readByte s.memory.store (y.toNat + i) :=
+  (Frame.mcopy_success_output s t x y z xs at_ items run).2.2.2.2.2.1 i hi

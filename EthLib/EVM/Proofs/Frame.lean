@@ -1740,6 +1740,65 @@ theorem step_mstore8 (s t : State) (x y : Word) (xs : List Word)
   rw [update]
   rfl
 
+/-- MCOPY checks all operands before charging gas. -/
+theorem step_mcopy_empty (s : State) (h : At s (some .mcopy))
+    (short : s.stack.val.length < 3) : step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  cases items : s.stack.val with
+  | nil =>
+    have p : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr items
+    simp [step, bounds, decoded, p, failStack]
+  | cons x xs =>
+    cases xs with
+    | nil =>
+      let first : Stack := Stack.empty
+      have p : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+      have q : first.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+      simp [step, bounds, decoded, p, q, failStack]
+    | cons y ys =>
+      cases ys with
+      | nil =>
+        let first : Stack := ⟨[y], by simp⟩
+        let second : Stack := Stack.empty
+        have p : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+        have q : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+        have r : second.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+        simp [step, bounds, decoded, p, q, r, failStack]
+      | cons z zs => simp [items] at short; omega
+
+/-- MCOPY fails before copying when its gas is insufficient. -/
+theorem step_mcopy_gas (s : State) (x y z : Word) (xs : List Word)
+    (h : At s (some .mcopy)) (items : s.stack.val = x :: y :: z :: xs)
+    (gas : s.gas < Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: z :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let second : Stack := ⟨z :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let third : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have p3 : second.pop = .ok (z, third) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  simp [step, bounds, decoded, p1, p2, p3, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- A successful MCOPY uses the input memory snapshot. -/
+theorem step_mcopy (s t : State) (x y z : Word) (xs : List Word)
+    (h : At s (some .mcopy)) (items : s.stack.val = x :: y :: z :: xs)
+    (gas : Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat ≤ s.gas)
+    (fields : AdvancesMemory s t (Memory.Allocation.copy s.memory x.toNat y.toNat z.toNat)
+      (s.pc + 1) (s.gas - Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat) xs) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: z :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let second : Stack := ⟨z :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let third : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have p3 : second.pop = .ok (z, third) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have update := advancesMemory_eq s t _ (Memory.Allocation.copy_valid_for_frame _ _ _ _ s.memoryValid)
+    (s.pc + 1) (s.gas - Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat) third fields
+  simp only [step, dite_eq_left bounds, decoded, p1, p2, p3, charge, Gas.charge, ite_eq_left gas]
+  rw [update]
+
 /-- Every relational rule is accepted by the executable step. -/
 theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out := by
   cases h with
@@ -1747,6 +1806,9 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | stop at_ => exact step_stop _ at_
   | invalid at_ => rcases at_ with h | h; exact step_unassigned _ h; exact step_invalid _ h
   | unsupported op at_ unsupported => exact step_unsupported _ op at_ unsupported
+  | mcopyEmpty at_ empty => exact step_mcopy_empty _ at_ empty
+  | mcopyGas x y z xs at_ items gas => exact step_mcopy_gas _ x y z xs at_ items gas
+  | mcopy t x y z xs at_ items gas fields => exact step_mcopy _ t x y z xs at_ items gas fields
   | mloadEmpty at_ empty => exact step_mload_empty _ at_ empty
   | mloadGas x xs at_ items gas => exact step_mload_gas _ x xs at_ items gas
   | mload t x xs at_ items gas fields => exact step_mload _ t x xs at_ items gas fields
@@ -2274,6 +2336,21 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
             exact ⟨_, .swap s t i depth at_ gas (by simp [Advances, t, stack])⟩
           · exact ⟨_, .swapEmpty s i at_ gas (Nat.le_of_not_gt depth)⟩
         · exact ⟨_, .swapGas s i at_ (Nat.lt_of_not_ge gas)⟩
+      | mcopy =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .mcopyEmpty s at_ (by simp [items])⟩
+        | cons x xs =>
+          cases xs with
+          | nil => exact ⟨_, .mcopyEmpty s at_ (by simp [items])⟩
+          | cons y ys =>
+            cases ys with
+            | nil => exact ⟨_, .mcopyEmpty s at_ (by simp [items])⟩
+            | cons z zs =>
+              by_cases gas : Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat ≤ s.gas
+              · let stack : Stack := ⟨zs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+                let t : State := { s with stack, pc := s.pc + 1, gas := s.gas - Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat, memory := Memory.Allocation.copy s.memory x.toNat y.toNat z.toNat, memoryValid := Memory.Allocation.copy_valid_for_frame _ _ _ _ s.memoryValid }
+                exact ⟨_, .mcopy s t x y z zs at_ items gas (by simp [AdvancesMemory, t, stack])⟩
+              · exact ⟨_, .mcopyGas s x y z zs at_ items (Nat.lt_of_not_ge gas)⟩
       | mload =>
         cases items : s.stack.val with
         | nil => exact ⟨_, .mloadEmpty s at_ items⟩
@@ -2347,7 +2424,7 @@ theorem outcome_code_unchanged {s : State} {out : Outcome} (h : Rule s out) :
 
 /-- A frame whose current instruction is outside the memory access subset. -/
 def PureMemoryStep (s : State) : Prop :=
-  ¬ At s (some .mload) ∧ ¬ At s (some .mstore) ∧ ¬ At s (some .mstore8)
+  ¬ At s (some .mload) ∧ ¬ At s (some .mstore) ∧ ¬ At s (some .mstore8) ∧ ¬ At s (some .mcopy)
 
 /-- A pure instruction preserves memory for every outcome. -/
 theorem outcome_memory_unchanged_of_pure {s : State} {out : Outcome}

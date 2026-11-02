@@ -21,7 +21,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -32,6 +32,24 @@ def Advances (s t : State) (pc gas : Nat) (xs : List Word) : Prop :=
 def AdvancesMemory (s t : State) (memory : Memory.Allocation.State)
     (pc gas : Nat) (xs : List Word) : Prop :=
   t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs
+
+/-- A successful MCOPY with observed pops determines the resulting frame. -/
+theorem mcopy_actual_fields (s t : State) (destination source length : Word)
+    (first second rest : Stack) (at_ : At s (some .mcopy))
+    (p1 : s.stack.pop = .ok (destination, first))
+    (p2 : first.pop = .ok (source, second))
+    (p3 : second.pop = .ok (length, rest)) (run : step s = .continue t) :
+    Gas.mcopyCost s.memory.words destination.toNat source.toNat length.toNat ≤ s.gas ∧
+    AdvancesMemory s t (Memory.Allocation.copy s.memory destination.toNat source.toNat length.toNat)
+      (s.pc + 1) (s.gas - Gas.mcopyCost s.memory.words destination.toNat source.toNat length.toNat)
+      rest.val := by
+  obtain ⟨bounds, decoded⟩ := at_
+  by_cases gas : Gas.mcopyCost s.memory.words destination.toNat source.toNat length.toNat ≤ s.gas
+  · simp only [step, dite_eq_left bounds, decoded, p1, p2, p3, charge, Gas.charge,
+      ite_eq_left gas] at run
+    cases run
+    exact ⟨gas, rfl, rfl, rfl, rfl, rfl⟩
+  · simp [step, bounds, decoded, p1, p2, p3, charge, Gas.charge, gas] at run
 
 /-- Cancun `runtime.py`: the source byte length at an instruction boundary. -/
 def jumpSourceLength (b : UInt8) : Nat :=
@@ -70,6 +88,18 @@ inductive Rule : State → Outcome → Prop where
   | stop (s) : At s (some .stop) → Rule s (.stop { s with pc := s.pc + 1 })
   | invalid (s) : At s none ∨ At s (some .invalid) → Rule s (.exception s .invalidOpcode)
   | unsupported (s op) : At s (some op) → Unsupported op → Rule s (.unsupported s op)
+  | mcopyEmpty (s) : At s (some .mcopy) → s.stack.val.length < 3 →
+      Rule s (.exception s .stackUnderflow)
+  | mcopyGas (s destination source length xs) : At s (some .mcopy) →
+      s.stack.val = destination :: source :: length :: xs →
+      s.gas < Gas.mcopyCost s.memory.words destination.toNat source.toNat length.toNat →
+      Rule s (.exception s .outOfGas)
+  | mcopy (s t destination source length xs) : At s (some .mcopy) →
+      s.stack.val = destination :: source :: length :: xs →
+      Gas.mcopyCost s.memory.words destination.toNat source.toNat length.toNat ≤ s.gas →
+      AdvancesMemory s t (Memory.Allocation.copy s.memory destination.toNat source.toNat length.toNat)
+        (s.pc + 1) (s.gas - Gas.mcopyCost s.memory.words destination.toNat source.toNat length.toNat) xs →
+      Rule s (.continue t)
   | mloadEmpty (s) : At s (some .mload) → s.stack.val = [] →
       Rule s (.exception s .stackUnderflow)
   | mloadGas (s offset xs) : At s (some .mload) → s.stack.val = offset :: xs →

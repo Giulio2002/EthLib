@@ -218,6 +218,13 @@ These helpers model memory contents and allocation, not opcode execution, gas, s
 The separate proofs establish the numeric load, byte positions, round trip, allocation and validity laws.
 They also establish preservation outside writes, disjoint reads and copy-then-load consistency.
 
+The frame executes Cancun `mcopy` by popping destination, source and length.
+It charges the base, rounded copy words and expansion for both ranges before copying.
+The copy reads the input snapshot, so overlapping ranges work in either direction.
+Empty ranges do not expand memory, even at the largest word offset.
+The frame proofs derive the exact gas, allocation and byte observations from a successful step.
+`PureMemoryStep` excludes `mcopy` as well as the other memory instructions.
+
 A load entirely beyond valid allocation returns zero.
 For any prefix length `k <= 32`, a load whose remaining bytes are outside allocation
 is the prefix value multiplied by `256^(32-k)`.

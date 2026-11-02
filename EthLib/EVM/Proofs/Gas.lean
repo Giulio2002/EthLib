@@ -82,6 +82,41 @@ theorem pairCost_telescope (old a n b m : Nat) :
       rangeCost (max old (requiredWords a n)) b m := by
   exact (expansion_telescope old (requiredWords a n) (requiredWords b m)).symm
 
+/-- An empty copy pays only its base charge, regardless of either offset. -/
+theorem mcopyCost_zero (old destination source : Nat) :
+    mcopyCost old destination source 0 = 3 := by
+  simp [mcopyCost, pairCost, expansionCost, requiredWords]
+
+/-- The copy charge counts exactly the whole words needed to cover its length. -/
+theorem mcopyCost_rounding (old destination source length : Nat) :
+    mcopyCost old destination source length =
+      3 + 3 * requiredWords 0 length + pairCost old source length destination length := by
+  by_cases h : length = 0
+  · subst length
+    simp [mcopyCost, requiredWords]
+  · simp [mcopyCost, requiredWords, h]
+
+/-- The rounded word count brackets every nonempty length. -/
+theorem mcopy_words_bounds (length : Nat) (h : 0 < length) :
+    32 * (((length + 31) / 32) - 1) < length ∧
+      length ≤ 32 * ((length + 31) / 32) := by
+  omega
+
+/-- A positive multiple of 32 needs exactly that many words. -/
+theorem mcopy_words_boundary (words : Nat) :
+    (32 * words + 31) / 32 = words := by
+  omega
+
+/-- One byte beyond a word boundary needs one more word. -/
+theorem mcopy_words_after_boundary (words : Nat) :
+    (32 * words + 1 + 31) / 32 = words + 1 := by
+  omega
+
+/-- Swapping source and destination leaves the gas charge unchanged. -/
+theorem mcopyCost_comm (old destination source length : Nat) :
+    mcopyCost old destination source length = mcopyCost old source destination length := by
+  simp [mcopyCost, pairCost_comm]
+
 /-- Failure returns only an error, before an expanded state is produced. -/
 theorem chargeExpand_error (gas : Nat) (s : State) (offset length : Nat) :
     chargeExpand gas s offset length = .error .outOfGas ↔
