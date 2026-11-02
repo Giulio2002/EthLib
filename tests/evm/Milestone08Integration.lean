@@ -12,7 +12,7 @@ private def code : ByteArray := ⟨#[
   0x60, 2, 0x0a, 0x50, 0x5f, 0x5f, 0x57,
   0x58, 0x59, 0x5a, 0x00]⟩
 private def initial : Frame.State :=
-  ⟨code, 0, Stack.empty, 300, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩⟩, ByteArray.empty⟩
+  ⟨code, 0, Stack.empty, 300, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []⟩⟩, ByteArray.empty⟩
 
 -- The byte lengths place PC at 28; MSIZE is zero and 129 gas was charged, including one EXP exponent byte.
 /-- info: (32, 171, [171, 0, 28, 2]) -/

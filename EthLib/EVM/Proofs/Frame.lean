@@ -1021,6 +1021,37 @@ theorem step_calldataload (s t : State) (x : Word) (xs : List Word)
   simp only [step, dite_eq_left bounds, decoded, pop, charge, Gas.charge, ite_eq_left gas, push]
   rw [update]
 
+/-- BLOBHASH checks its operand before gas. -/
+theorem step_blobhash_empty (s : State) (h : At s (some .blobhash)) (empty : s.stack.val = []) :
+    step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr empty
+  simp [step, bounds, decoded, blobHash, pop, failStack]
+
+/-- BLOBHASH checks gas after popping its operand. -/
+theorem step_blobhash_gas (s : State) (x : Word) (xs : List Word)
+    (h : At s (some .blobhash)) (items : s.stack.val = x :: xs) (gas : s.gas < 3) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  simp [step, bounds, decoded, blobHash, pop, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- BLOBHASH replaces its operand with the result. -/
+theorem step_blobhash (s t : State) (x : Word) (xs : List Word)
+    (h : At s (some .blobhash)) (items : s.stack.val = x :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Environment.blobHash s.context.environment x :: xs)) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  let final : Stack := ⟨Environment.blobHash s.context.environment x :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have push : rest.push (Environment.blobHash s.context.environment x) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 3) final fields
+  simp only [step, dite_eq_left bounds, decoded, blobHash, pop, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
 /-- ISZERO checks its operand before gas. -/
 theorem step_iszero_empty (s : State) (h : At s (some .iszero)) (empty : s.stack.val = []) :
     step s = .exception s .stackUnderflow := by
@@ -2218,6 +2249,9 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | calldataloadEmpty at_ empty => exact step_calldataload_empty _ at_ empty
   | calldataloadGas x xs at_ items gas => exact step_calldataload_gas _ x xs at_ items gas
   | calldataload t x xs at_ items gas fields => exact step_calldataload _ t x xs at_ items gas fields
+  | blobhashEmpty at_ empty => exact step_blobhash_empty _ at_ empty
+  | blobhashGas x xs at_ items gas => exact step_blobhash_gas _ x xs at_ items gas
+  | blobhash t x xs at_ items gas fields => exact step_blobhash _ t x xs at_ items gas fields
   | returnDataCopyEmpty at_ empty =>
     obtain ⟨bounds, decoded⟩ := at_
     simp only [step, dite_eq_left bounds, decoded]
@@ -2904,6 +2938,15 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
             let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
             exact ⟨_, .calldataload s t x xs at_ items gas (by simp [Advances, t, stack])⟩
           · exact ⟨_, .calldataloadGas s x xs at_ items (Nat.lt_of_not_ge gas)⟩
+      | blobhash =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .blobhashEmpty s at_ items⟩
+        | cons x xs =>
+          by_cases gas : 3 ≤ s.gas
+          · let stack : Stack := ⟨Environment.blobHash s.context.environment x :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
+            exact ⟨_, .blobhash s t x xs at_ items gas (by simp [Advances, t, stack])⟩
+          · exact ⟨_, .blobhashGas s x xs at_ items (Nat.lt_of_not_ge gas)⟩
       | iszero =>
         cases items : s.stack.val with
         | nil => exact ⟨_, .iszeroEmpty s at_ items⟩

@@ -21,7 +21,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .coinbase | .timestamp | .number | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .blobhash | .coinbase | .timestamp | .number | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -152,6 +152,13 @@ inductive Rule : State → Outcome → Prop where
   | calldataload (s t x xs) : At s (some .calldataload) → s.stack.val = x :: xs →
       3 ≤ s.gas → Advances s t (s.pc + 1) (s.gas - 3)
         (CallData.load s.context x :: xs) → Rule s (.continue t)
+  | blobhashEmpty (s) : At s (some .blobhash) → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | blobhashGas (s x xs) : At s (some .blobhash) → s.stack.val = x :: xs →
+      s.gas < 3 → Rule s (.exception s .outOfGas)
+  | blobhash (s t x xs) : At s (some .blobhash) → s.stack.val = x :: xs →
+      3 ≤ s.gas → Advances s t (s.pc + 1) (s.gas - 3)
+        (Environment.blobHash s.context.environment x :: xs) → Rule s (.continue t)
   | returnDataCopyEmpty (s) : At s (some .returndatacopy) →
       s.stack.val.length < 3 → Rule s (.exception s .stackUnderflow)
   | returnDataCopyGas (s) (destination offset length xs) :
