@@ -683,3 +683,5 @@ The result is 256 for zero and otherwise identifies the power-of-two interval co
 `Runner.CountLeadingZeros.run` composes ADD, CLZ, PC and STOP over arbitrary accepted contexts and memory.
 The decoder also includes SLOTNUM and the EIP-8024 stack instructions.
 The frame does not implement full Amsterdam execution.
+
+The pure Amsterdam account and storage model is documented in [AmsterdamWorld10a.md](AmsterdamWorld10a.md).
