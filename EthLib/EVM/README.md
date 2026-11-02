@@ -224,3 +224,47 @@ For any prefix length `k <= 32`, a load whose remaining bytes are outside alloca
 is the prefix value multiplied by `256^(32-k)`.
 Disjoint word and byte stores commute as byte observations and allocated word counts.
 Their sparse write histories need not be equal.
+
+# Cancun opcode decoding
+
+`Opcode` represents the assigned Cancun opcode bytes.
+PUSH lengths and DUP, SWAP and LOG indices are bounded in the type.
+DUP and SWAP indices start at zero, so index zero denotes DUP1 or SWAP1.
+`INVALID` is a designated instruction at `0xfe`.
+The decoder returns `none` for unassigned bytes.
+Classification does not mean instruction execution is implemented.
+
+The source is execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`.
+The Cancun `vm.instructions.Ops` enum and `op_implementation` give the byte assignments.
+The Shanghai Yellow Paper revision `efc5f9a1f356cba376c978eedb63cb0363c2aa85`, Appendix H.2, names `INVALID`.
+The EELS enum omits that byte from its dispatch.
+Cancun adds BLOBHASH, BLOBBASEFEE, TLOAD, TSTORE and MCOPY to the Shanghai table.
+
+The proof module independently lists byte and constructor pairs from those sources.
+It proves equality with the decoder for every byte and both encoding round trips.
+The kernel checks the proof; the source transcription is a human review.
+
+`PushImmediate` reads the length from a PUSH constructor.
+It pads missing bytes on the right and interprets the result as a big-endian word.
+Its natural-number program counter does not wrap.
+Execution-specs Cancun `vm.instructions.stack.push_n` and `vm.memory.buffer_read` specify the read, padding and advance.
+The arbitrary natural offset extends the source's bounded offset representation.
+The proofs cover each byte, the length, the exact numeric value, padding and PUSH0.
+
+# Jump destination scan
+
+The scanner uses the Cancun `vm.runtime.get_valid_jump_destinations` rule at revision `fd9298410ec7218838c8348f69c1eb633f1797dc`.
+The Shanghai Yellow Paper revision `efc5f9a1f356cba376c978eedb63cb0363c2aa85`, section 9.4.3, gives the same boundary rule.
+It scans the entire code and skips PUSH1 through PUSH32 data.
+PUSH0 has no data.
+The scan continues past all other bytes, including unassigned bytes.
+Its program counters use natural arithmetic.
+
+The proof defines instruction boundaries independently from the scanner using source byte lengths.
+The kernel checks that membership is exactly a boundary containing byte `0x5b`.
+It also checks strict ordering, bounds, progress and agreement of the decoder step with the byte ranges.
+The correspondence between that Lean relation and the source is a human source review.
+
+The combined opcode decoder, PUSH immediate reader and jump destination scanner pass their library, proof and standalone test gates.
+This completes the scoped decoding milestone, not EVM execution or EELS differential validation.
+The decoder and scanner do not model frames, gas, stack effects or instruction execution.
