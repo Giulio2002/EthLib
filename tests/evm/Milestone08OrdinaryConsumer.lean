@@ -14,7 +14,7 @@ example (b : UInt8) : Option Opcode := Opcode.decode b
 
 -- A client using only the ordinary import can execute a zero-length MCOPY.
 example : match Frame.step ⟨⟨#[0x5e]⟩, 0, ⟨[0, 0, 0], by decide⟩, 3,
-    Memory.Allocation.empty, by intro a _h; rfl⟩ with
+    Memory.Allocation.empty, by intro a _h; rfl, ⟨ByteArray.empty⟩⟩ with
   | .continue t => t.gas = 0 ∧ t.memory.words = 0
   | _ => False := by cbv
 
@@ -27,3 +27,11 @@ example (s t : Frame.State) (x y z : Word) (a b rest : Stack)
     t.code = s.code := by
   have fields := (Frame.mcopy_actual_fields s t x y z a b rest at_ p1 p2 p3 run).2
   exact ⟨fields.2.1, fields.1⟩
+
+-- Ordinary clients supply the immutable message input explicitly.
+/-- info: true -/
+#guard_msgs in
+#eval match Frame.step ⟨⟨#[0x35]⟩, 0, ⟨[0], by decide⟩, 3,
+    Memory.Allocation.empty, by intro a _h; rfl, ⟨⟨#[0x12, 0x34]⟩⟩⟩ with
+  | .continue t => t.stack.val.head?.map BitVec.toNat == some (0x1234 * 256 ^ 30)
+  | _ => false

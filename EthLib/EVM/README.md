@@ -279,7 +279,7 @@ The decoder and scanner do not model frames, gas, stack effects or instruction e
 
 # Restricted frame execution
 
-The frame runner supports STOP, JUMP, JUMPI, JUMPDEST, PC, MSIZE, GAS, MLOAD, MSTORE, MSTORE8, PUSH0 through PUSH32, POP, arithmetic, comparison and bitwise instructions, DUP1 through DUP16, and SWAP1 through SWAP16.
+The frame runner supports STOP, JUMP, JUMPI, JUMPDEST, PC, MSIZE, GAS, MLOAD, MSTORE, MSTORE8, MCOPY, CALLDATALOAD, CALLDATASIZE, CODESIZE, PUSH0 through PUSH32, POP, arithmetic, comparison and bitwise instructions, DUP1 through DUP16, and SWAP1 through SWAP16.
 The implemented arithmetic and bitwise instructions are ADD, MUL, SUB, DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD, EXP, LT, GT, SLT, SGT, EQ, ISZERO, AND, OR, XOR, NOT, SHL, SHR, SAR, BYTE and SIGNEXTEND.
 The arithmetic, comparison and bitwise instructions have independent success, underflow and out-of-gas rules.
 Operand checks precede charging gas.
@@ -299,6 +299,19 @@ PC pushes the current counter, MSIZE pushes allocated bytes, and GAS pushes the 
 The frame uses unbounded natural numbers for these values.
 The observation conversion reduces them modulo 2^256 outside the source U256 domain.
 Within that domain the conversion is exact.
+CALLDATALOAD pops the full offset before charging three gas.
+It reads 32 bytes from the immutable message input in big-endian order.
+Missing bytes are zero on the right, and the read does not expand memory.
+CALLDATASIZE and CODESIZE charge two gas before pushing their sizes.
+CODESIZE observes the executing frame code, not the message input.
+The source constructs U256 from these lengths, so exact agreement requires a length below 2^256.
+For larger natural lengths the frame uses its proved modulo extension.
+
+`Frame.State` requires a `CallData.Context` as its last constructor field.
+Clients must supply message input explicitly; no default context is provided.
+The context is distinct from mutable return data and is preserved by every bounded outcome.
+The straight-line, mixed and store-load program theorems take an arbitrary context.
+
 MLOAD reads a 32-byte big-endian word and expands memory.
 MSTORE writes 32 big-endian bytes, and MSTORE8 writes the low byte.
 Each pops the full 256-bit offset before gas is charged.
@@ -310,7 +323,7 @@ Other assigned Cancun opcodes return a distinct unsupported tooling result.
 Unassigned bytes and INVALID cause exceptional halts.
 Fuel exhaustion is a tooling result and is not an EVM exception.
 The runner is fuel bounded and makes no claim that every program terminates.
-The frame holds code, a natural program counter, a bounded stack, gas, and valid allocated memory.
+The frame holds code, a natural program counter, a bounded stack, gas, valid allocated memory, and immutable message input.
 It does not execute REVERT or model world state, calls, or rollback.
 A manually constructed revert carries remaining gas and output bytes as scaffolding.
 The restricted step and runner cannot produce that constructor for any input or fuel.

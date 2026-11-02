@@ -21,17 +21,17 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
 def Advances (s t : State) (pc gas : Nat) (xs : List Word) : Prop :=
-  t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs
+  t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context
 
 /-- Exact fields after a memory instruction. -/
 def AdvancesMemory (s t : State) (memory : Memory.Allocation.State)
     (pc gas : Nat) (xs : List Word) : Prop :=
-  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs
+  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context
 
 /-- A successful MCOPY with observed pops determines the resulting frame. -/
 theorem mcopy_actual_fields (s t : State) (destination source length : Word)
@@ -48,7 +48,7 @@ theorem mcopy_actual_fields (s t : State) (destination source length : Word)
   · simp only [step, dite_eq_left bounds, decoded, p1, p2, p3, charge, Gas.charge,
       ite_eq_left gas] at run
     cases run
-    exact ⟨gas, rfl, rfl, rfl, rfl, rfl⟩
+    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl⟩
   · simp [step, bounds, decoded, p1, p2, p3, charge, Gas.charge, gas] at run
 
 /-- Cancun `runtime.py`: the source byte length at an instruction boundary. -/
@@ -68,12 +68,13 @@ def ValidJumpDest (code : ByteArray) (pc : Nat) : Prop :=
 
 /-- The natural observation selected by an introspection opcode. -/
 inductive Observation where
-  | pc | msize | gas
+  | pc | msize | gas | calldatasize | codesize
   deriving DecidableEq
 
 /-- Opcode corresponding to an observation. -/
 def Observation.opcode : Observation → Opcode
   | .pc => .pc | .msize => .msize | .gas => .gas
+  | .calldatasize => .calldatasize | .codesize => .codesize
 
 /-- Value observed after the instruction has paid its gas cost. -/
 def Observation.value (o : Observation) (s : State) : Nat :=
@@ -81,6 +82,8 @@ def Observation.value (o : Observation) (s : State) : Nat :=
   | .pc => s.pc
   | .msize => Memory.Allocation.byteSize s.memory
   | .gas => s.gas - 2
+  | .calldatasize => s.context.data.size
+  | .codesize => s.code.size
 
 /-- Source-oriented rules for one frame transition. -/
 inductive Rule : State → Outcome → Prop where
@@ -88,6 +91,13 @@ inductive Rule : State → Outcome → Prop where
   | stop (s) : At s (some .stop) → Rule s (.stop { s with pc := s.pc + 1 })
   | invalid (s) : At s none ∨ At s (some .invalid) → Rule s (.exception s .invalidOpcode)
   | unsupported (s op) : At s (some op) → Unsupported op → Rule s (.unsupported s op)
+  | calldataloadEmpty (s) : At s (some .calldataload) → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | calldataloadGas (s x xs) : At s (some .calldataload) → s.stack.val = x :: xs →
+      s.gas < 3 → Rule s (.exception s .outOfGas)
+  | calldataload (s t x xs) : At s (some .calldataload) → s.stack.val = x :: xs →
+      3 ≤ s.gas → Advances s t (s.pc + 1) (s.gas - 3)
+        (CallData.load s.context x :: xs) → Rule s (.continue t)
   | mcopyEmpty (s) : At s (some .mcopy) → s.stack.val.length < 3 →
       Rule s (.exception s .stackUnderflow)
   | mcopyGas (s destination source length xs) : At s (some .mcopy) →
