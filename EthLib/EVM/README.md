@@ -224,7 +224,7 @@ It charges the base, rounded copy words and expansion for both ranges before cop
 The copy reads the input snapshot, so overlapping ranges work in either direction.
 Empty ranges do not expand memory, even at the largest word offset.
 The frame proofs derive the exact gas, allocation and byte observations from a successful step.
-`PureMemoryStep` excludes `calldatacopy`, `codecopy`, `mcopy`, and the other memory instructions.
+`PureMemoryStep` excludes `calldatacopy`, `codecopy`, `returndatacopy`, `mcopy`, and the other memory instructions.
 
 A load entirely beyond valid allocation returns zero.
 For any prefix length `k <= 32`, a load whose remaining bytes are outside allocation
@@ -307,10 +307,33 @@ CODESIZE observes the executing frame code, not the message input.
 The source constructs U256 from these lengths, so exact agreement requires a length below 2^256.
 For larger natural lengths the frame uses its proved modulo extension.
 
-`Frame.State` requires a `CallData.Context` as its last constructor field.
-Clients must supply message input explicitly; no default context is provided.
-The context is distinct from mutable return data and is preserved by every bounded outcome.
-The straight-line, mixed and store-load program theorems take an arbitrary context.
+`Frame.State` requires a `CallData.Context` followed by a `ByteArray` return-data buffer.
+Clients must supply both inputs explicitly.
+The return-data buffer belongs to the frame and is distinct from immutable message input.
+Every supported step and bounded outcome preserves both fields.
+The straight-line, mixed, calldata and store-load program theorems take arbitrary values for both.
+
+The `Advances` and `AdvancesMemory` predicates include return-data equality.
+Proof consumers constructing these predicates must provide that equality.
+`PureMemoryStep` excludes RETURNDATACOPY.
+`Observation` includes `returndatasize`.
+Exhaustive matches on `Frame.Exception` must handle `outOfBoundsRead`.
+`Frame.returnDataCopy` is a public helper over any frame, independent of code and program counter.
+`returnDataCopy_helper_iff_rule` characterizes its stack, gas, bounds and success outcomes.
+The helper's actual-success and output theorems derive its fields and bytes from execution.
+
+RETURNDATASIZE charges two gas before checking stack capacity.
+It observes the return-data buffer and uses the same total modulo conversion as other size observations.
+The conversion agrees exactly with the source U256 value when the buffer size is less than 2^256.
+
+RETURNDATACOPY pops destination, source and length before charging gas.
+The charge covers rounded copy words and destination memory expansion.
+The source bound is checked after the charge using natural addition.
+A range past the end raises `outOfBoundsRead` without changing diagnostic memory.
+An empty range at the end succeeds, while an empty range beyond it fails.
+A successful copy writes the exact source bytes and preserves memory outside the destination.
+The copy-then-load program theorem quantifies over buffers with explicit gas and source-bound premises.
+The frame does not execute calls or creates that change the buffer.
 
 MLOAD reads a 32-byte big-endian word and expands memory.
 MSTORE writes 32 big-endian bytes, and MSTORE8 writes the low byte.
@@ -323,7 +346,7 @@ Other assigned Cancun opcodes return a distinct unsupported tooling result.
 Unassigned bytes and INVALID cause exceptional halts.
 Fuel exhaustion is a tooling result and is not an EVM exception.
 The runner is fuel bounded and makes no claim that every program terminates.
-The frame holds code, a natural program counter, a bounded stack, gas, valid allocated memory, and immutable message input.
+The frame holds code, a natural program counter, a bounded stack, gas, valid allocated memory, immutable message input, and return data.
 It does not execute REVERT or model world state, calls, or rollback.
 A manually constructed revert carries remaining gas and output bytes as scaffolding.
 The restricted step and runner cannot produce that constructor for any input or fuel.

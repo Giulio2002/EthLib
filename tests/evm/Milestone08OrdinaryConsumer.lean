@@ -14,7 +14,7 @@ example (b : UInt8) : Option Opcode := Opcode.decode b
 
 -- A client using only the ordinary import can execute a zero-length MCOPY.
 example : match Frame.step ⟨⟨#[0x5e]⟩, 0, ⟨[0, 0, 0], by decide⟩, 3,
-    Memory.Allocation.empty, by intro a _h; rfl, ⟨ByteArray.empty⟩⟩ with
+    Memory.Allocation.empty, by intro a _h; rfl, ⟨ByteArray.empty⟩, ByteArray.empty⟩ with
   | .continue t => t.gas = 0 ∧ t.memory.words = 0
   | _ => False := by cbv
 
@@ -32,7 +32,7 @@ example (s t : Frame.State) (x y z : Word) (a b rest : Stack)
 /-- info: true -/
 #guard_msgs in
 #eval match Frame.step ⟨⟨#[0x35]⟩, 0, ⟨[0], by decide⟩, 3,
-    Memory.Allocation.empty, by intro a _h; rfl, ⟨⟨#[0x12, 0x34]⟩⟩⟩ with
+    Memory.Allocation.empty, by intro a _h; rfl, ⟨⟨#[0x12, 0x34]⟩⟩, ByteArray.empty⟩ with
   | .continue t => t.stack.val.head?.map BitVec.toNat == some (0x1234 * 256 ^ 30)
   | _ => false
 
@@ -40,6 +40,6 @@ example (s t : Frame.State) (x y z : Word) (a b rest : Stack)
 /-- info: [42, 0] -/
 #guard_msgs in
 #eval match Frame.step ⟨⟨#[0x37]⟩, 0, ⟨[0, 0, 2], by decide⟩, 9,
-    Memory.Allocation.empty, by intro a _h; rfl, ⟨⟨#[42]⟩⟩⟩ with
+    Memory.Allocation.empty, by intro a _h; rfl, ⟨⟨#[42]⟩⟩, ByteArray.empty⟩ with
   | .continue s => (Memory.readRange s.memory.store 0 2).map UInt8.toNat
   | _ => []

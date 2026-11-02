@@ -3,6 +3,7 @@ module
 public import EthLib.EVM.Proofs.Frame
 public import EthLib.EVM.Proofs.Memory.WordAccess
 public import EthLib.EVM.Proofs.CallData
+public import EthLib.EVM.Proofs.ReturnData
 
 /-!
 # Memory instruction output contracts
@@ -195,6 +196,74 @@ theorem mstore8_success_output (s t : State) (x y : Word) (xs : List Word)
   obtain ⟨gas, fields⟩ := mstore8_success_fields s t x y xs at_ items run
   exact mstore8_output s t x y xs at_ items gas fields
 
+/-- A continuing return-data copy exposes every copied and untouched byte. -/
+theorem returnDataCopy_helper_actual_output (s t : State) (x y z : Word) (xs : List Word)
+    (items : s.stack.val = x :: y :: z :: xs)
+    (run : returnDataCopy s = .continue t) :
+    ∃ hbound : y.toNat + z.toNat ≤ s.returnData.size,
+    Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas ∧
+    t.code = s.code ∧ t.context = s.context ∧ t.returnData = s.returnData ∧
+    t.pc = s.pc + 1 ∧ t.gas = s.gas - Gas.inputCopyCost s.memory.words x.toNat z.toNat ∧
+    t.stack.val = xs ∧
+    t.memory.words = max s.memory.words (Memory.Allocation.requiredWords x.toNat z.toNat) ∧
+    (∀ i, (hi : i < z.toNat) → readByte t.memory.store (x.toNat + i) =
+      s.returnData[y.toNat + i]'(by omega)) ∧
+    (∀ a, ¬ (x.toNat ≤ a ∧ a < x.toNat + z.toNat) →
+      readByte t.memory.store a = readByte s.memory.store a) := by
+  obtain ⟨gas, bound, code, mem, pc, remaining, stack, context, ret⟩ :=
+    returnDataCopy_helper_actual s t x y z xs items run
+  let bytes := (s.returnData.data.toList.drop y.toNat).take z.toNat
+  have read : ReturnData.read s.returnData y.toNat z.toNat = .ok bytes := by
+    simp [ReturnData.read, bound, bytes]
+  have len : bytes.length = z.toNat := ReturnData.read_ok_length _ _ _ _ read
+  change t.memory = Memory.Allocation.write s.memory x.toNat bytes at mem
+  refine ⟨bound, gas, code, context, ret, pc, remaining, stack, ?_, ?_, ?_⟩
+  · rw [mem]
+    simp [Memory.Allocation.write, Memory.Allocation.expand, len]
+  · intro i hi
+    rw [mem, Memory.Allocation.write_observe]
+    simp only [len]
+    simp only [show x.toNat ≤ x.toNat + i ∧ x.toNat + i < x.toNat + z.toNat by omega,
+      Nat.add_sub_cancel_left]
+    exact ReturnData.read_ok_index _ _ _ _ read i hi
+  · intro a outside
+    rw [mem, Memory.Allocation.write_observe]
+    simp [len, outside]
+
+/-- A continuing return-data copy exposes every copied and untouched byte. -/
+theorem returnDataCopy_actual_output (s t : State) (x y z : Word) (xs : List Word)
+    (at_ : At s (some .returndatacopy)) (items : s.stack.val = x :: y :: z :: xs)
+    (run : step s = .continue t) :
+    ∃ hbound : y.toNat + z.toNat ≤ s.returnData.size,
+    Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas ∧
+    t.code = s.code ∧ t.context = s.context ∧ t.returnData = s.returnData ∧
+    t.pc = s.pc + 1 ∧ t.gas = s.gas - Gas.inputCopyCost s.memory.words x.toNat z.toNat ∧
+    t.stack.val = xs ∧
+    t.memory.words = max s.memory.words (Memory.Allocation.requiredWords x.toNat z.toNat) ∧
+    (∀ i, (hi : i < z.toNat) → readByte t.memory.store (x.toNat + i) =
+      s.returnData[y.toNat + i]'(by omega)) ∧
+    (∀ a, ¬ (x.toNat ≤ a ∧ a < x.toNat + z.toNat) →
+      readByte t.memory.store a = readByte s.memory.store a) := by
+  obtain ⟨gas, bound, code, mem, pc, remaining, stack, context, ret⟩ :=
+    returnDataCopy_actual s t x y z xs at_ items run
+  let bytes := (s.returnData.data.toList.drop y.toNat).take z.toNat
+  have read : ReturnData.read s.returnData y.toNat z.toNat = .ok bytes := by
+    simp [ReturnData.read, bound, bytes]
+  have len : bytes.length = z.toNat := ReturnData.read_ok_length _ _ _ _ read
+  change t.memory = Memory.Allocation.write s.memory x.toNat bytes at mem
+  refine ⟨bound, gas, code, context, ret, pc, remaining, stack, ?_, ?_, ?_⟩
+  · rw [mem]
+    simp [Memory.Allocation.write, Memory.Allocation.expand, len]
+  · intro i hi
+    rw [mem, Memory.Allocation.write_observe]
+    simp only [len]
+    simp only [show x.toNat ≤ x.toNat + i ∧ x.toNat + i < x.toNat + z.toNat by omega,
+      Nat.add_sub_cancel_left]
+    exact ReturnData.read_ok_index _ _ _ _ read i hi
+  · intro a outside
+    rw [mem, Memory.Allocation.write_observe]
+    simp [len, outside]
+
 /-- A successful input copy determines its gas and every updated field. -/
 theorem inputCopy_helper_success_fields (s t : State) (data : ByteArray) (x y z : Word) (xs : List Word)
     (items : s.stack.val = x :: y :: z :: xs)
@@ -236,7 +305,7 @@ theorem inputCopy_helper_success_output (s t : State) (data : ByteArray)
       readByte t.memory.store a = readByte s.memory.store a) := by
   obtain ⟨_, code, mem, pc, gas, stack, context⟩ :=
     inputCopy_helper_success_fields s t data x y z xs items run
-  refine ⟨code, context, pc, gas, stack, ?_, ?_, ?_⟩
+  refine ⟨code, context.1, pc, gas, stack, ?_, ?_, ?_⟩
   · rw [mem]
     simp [Memory.Allocation.write, Memory.Allocation.expand, Proofs.CallData.readRange_length]
   · intro i hi
@@ -340,6 +409,70 @@ theorem inputCopy_then_mload_program (s : State) (source : InputSource)
     simp [AdvancesMemory, u, outStack]
   have loadRun := step_mload t u x xs loadAt loadItems loadGas fields
   obtain ⟨w, result⟩ := inputCopy_then_mload_actual s t u source x y xs copyAt items copyRun loadAt loadRun
+  exact ⟨t, u, w, copyRun, loadRun, result⟩
+
+/-- A valid return-data copy followed by MLOAD exposes the 32 source bytes. -/
+theorem returnDataCopy_then_mload_actual (s t u : State) (x y : Word) (xs : List Word)
+    (copyAt : At s (some .returndatacopy))
+    (items : s.stack.val = x :: y :: (32 : Word) :: x :: xs)
+    (copyRun : step s = .continue t) (loadAt : At t (some .mload))
+    (loadRun : step t = .continue u) :
+    ∃ w, u.stack.val = w :: xs ∧ w.toNat = EthLib.Precompiles.Modexp.bytesToNat
+      ((s.returnData.data.toList.drop y.toNat).take 32) := by
+  obtain ⟨_, bound, _, mem, _, _, stack, _, _⟩ :=
+    returnDataCopy_actual s t x y 32 (x :: xs) copyAt items copyRun
+  have loaded := mload_success_output t u x xs loadAt stack loadRun
+  let bytes := (s.returnData.data.toList.drop y.toNat).take 32
+  have read : ReturnData.read s.returnData y.toNat 32 = .ok bytes := by
+    simp [ReturnData.read, bytes] at bound ⊢
+    exact bound
+  have len : bytes.length = 32 := ReturnData.read_ok_length _ _ _ _ read
+  have memoryBytes : readRange t.memory.store x.toNat 32 = bytes := by
+    rw [mem]
+    change readRange (writeRange s.memory.store x.toNat bytes) x.toNat 32 = bytes
+    rw [← len]
+    exact readRange_writeRange _ _ _
+  refine ⟨(Memory.Allocation.loadWord t.memory x.toNat).1, loaded.2.2.2.2.1, ?_⟩
+  rw [loaded.2.2.2.2.2.2.2, memoryBytes]
+
+/-- Sufficient gas and valid source bounds execute a return-data copy and MLOAD. -/
+theorem returnDataCopy_then_mload_program (s : State) (x y : Word) (xs : List Word)
+    (copyAt : At s (some .returndatacopy))
+    (next : ∃ h : s.pc + 1 < s.code.size, Opcode.decode s.code[s.pc + 1] = some .mload)
+    (items : s.stack.val = x :: y :: (32 : Word) :: x :: xs)
+    (bound : y.toNat + 32 ≤ s.returnData.size)
+    (gas : Gas.inputCopyCost s.memory.words x.toNat 32 +
+      (3 + Gas.rangeCost (max s.memory.words (Memory.Allocation.requiredWords x.toNat 32)) x.toNat 32) ≤ s.gas) :
+    ∃ t u w, step s = .continue t ∧ step t = .continue u ∧ u.stack.val = w :: xs ∧
+      w.toNat = EthLib.Precompiles.Modexp.bytesToNat ((s.returnData.data.toList.drop y.toNat).take 32) := by
+  let stack : Stack := ⟨x :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let bytes := (s.returnData.data.toList.drop y.toNat).take 32
+  have read : ReturnData.read s.returnData y.toNat 32 = .ok bytes := by simp [ReturnData.read, bytes, bound]
+  have len : bytes.length = 32 := ReturnData.read_ok_length _ _ _ _ read
+  let memory := Memory.Allocation.write s.memory x.toNat bytes
+  let t : State := { s with stack, pc := s.pc + 1, gas := s.gas - Gas.inputCopyCost s.memory.words x.toNat 32, memory, memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
+  have copyGas : Gas.inputCopyCost s.memory.words x.toNat (32 : Word).toNat ≤ s.gas := by
+    change Gas.inputCopyCost s.memory.words x.toNat 32 ≤ s.gas
+    omega
+  have copyBound : y.toNat + (32 : Word).toNat ≤ s.returnData.size := by simpa using bound
+  have copyFields : AdvancesMemory s t (Memory.Allocation.write s.memory x.toNat
+      ((s.returnData.data.toList.drop y.toNat).take (32 : Word).toNat))
+      (s.pc + 1) (s.gas - Gas.inputCopyCost s.memory.words x.toNat (32 : Word).toNat) (x :: xs) := by
+    simp [AdvancesMemory, t, stack, memory, bytes]
+  have copyRun : step s = .continue t := rule_sound (.returnDataCopy s t x y 32 (x :: xs) copyAt items copyGas copyBound copyFields)
+  have loadAt : At t (some .mload) := by simpa [At, t] using next
+  have loadItems : t.stack.val = x :: xs := rfl
+  have loadGas : 3 + Gas.rangeCost t.memory.words x.toNat 32 ≤ t.gas := by
+    simp [t, memory, Memory.Allocation.write, Memory.Allocation.expand, len] at *
+    omega
+  let outStack : Stack := ⟨(Memory.Allocation.loadWord t.memory x.toNat).1 :: xs, by
+    have b := stack.property; simp [stack] at b ⊢; omega⟩
+  let u : State := { t with stack := outStack, pc := t.pc + 1, gas := t.gas - (3 + Gas.rangeCost t.memory.words x.toNat 32), memory := (Memory.Allocation.loadWord t.memory x.toNat).2, memoryValid := Memory.Allocation.expand_valid_for_frame _ _ _ t.memoryValid }
+  have fields : AdvancesMemory t u (Memory.Allocation.loadWord t.memory x.toNat).2
+      (t.pc + 1) (t.gas - (3 + Gas.rangeCost t.memory.words x.toNat 32))
+      ((Memory.Allocation.loadWord t.memory x.toNat).1 :: xs) := by simp [AdvancesMemory, u, outStack]
+  have loadRun := step_mload t u x xs loadAt loadItems loadGas fields
+  obtain ⟨w, result⟩ := returnDataCopy_then_mload_actual s t u x y xs copyAt items copyRun loadAt loadRun
   exact ⟨t, u, w, copyRun, loadRun, result⟩
 
 /-- A successful MCOPY determines its gas and every updated field. -/

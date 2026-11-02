@@ -17,6 +17,7 @@ public import EthLib.EVM.Word.Exp
 public import EthLib.EVM.Opcode
 public import EthLib.EVM.PushImmediate
 public import EthLib.EVM.CallData
+public import EthLib.EVM.ReturnData
 public import EthLib.EVM.JumpDest
 public import EthLib.EVM.Stack
 public import EthLib.EVM.Frame
