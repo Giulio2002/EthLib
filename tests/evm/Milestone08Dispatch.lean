@@ -6,7 +6,7 @@ open EthLib.EVM
 
 -- This range list is independent of the decoder and matches the supported slice.
 private def supported (n : Nat) : Bool :=
-  n ≤ 0x0b || (0x10 ≤ n && n ≤ 0x1d) || n == 0x20 || (n == 0x30 || (0x32 ≤ n && n ≤ 0x3a)) || n == 0x3d || n == 0x3e || (0x41 ≤ n && n ≤ 0x46) || n == 0x48 || n == 0x49 || n == 0x50 || n == 0x51 || n == 0x52 || n == 0x53 ||
+  n ≤ 0x0b || (0x10 ≤ n && n ≤ 0x1d) || n == 0x20 || (n == 0x30 || (0x32 ≤ n && n ≤ 0x3a)) || n == 0x3d || n == 0x3e || (0x41 ≤ n && n ≤ 0x46) || n == 0x48 || n == 0x49 || n == 0x4a || n == 0x50 || n == 0x51 || n == 0x52 || n == 0x53 ||
   (0x56 ≤ n && n ≤ 0x5b) || n == 0x5e || (0x5f ≤ n && n ≤ 0x9f)
 
 private instance (op : Opcode) : Decidable (Frame.Unsupported op) := by
@@ -14,7 +14,7 @@ private instance (op : Opcode) : Decidable (Frame.Unsupported op) := by
 
 private def state (b : UInt8) : Frame.State :=
   ⟨⟨#[b]⟩, 0, ⟨[2, 1, 3], by decide⟩, 10000,
-    Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []⟩⟩, ByteArray.empty⟩
+    Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []⟩⟩, ByteArray.empty⟩
 
 -- Check the independent reference, classification predicate and executable dispatch.
 private def check (n : Nat) : Bool := Id.run do
@@ -39,7 +39,7 @@ private def check (n : Nat) : Bool := Id.run do
   (List.range 256).all check)
 
 -- Count the outcomes produced by executable dispatch.
-/-- info: (123, 25, 108) -/
+/-- info: (124, 24, 108) -/
 #guard_msgs in
 #eval Id.run do
   let mut executed := 0

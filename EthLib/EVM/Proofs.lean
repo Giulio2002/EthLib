@@ -1,6 +1,7 @@
 module
 public import EthLib.EVM.Proofs.Memory.WordAccess
 public import EthLib.EVM.Proofs.Gas
+public import EthLib.EVM.Proofs.BlobFee
 
 public import EthLib.EVM.Proofs.Word
 public import EthLib.EVM.Proofs.Environment
@@ -22,6 +23,7 @@ public import EthLib.EVM.Proofs.JumpDest
 public import EthLib.EVM.Proofs.Stack
 public import EthLib.EVM.Proofs.Frame
 public import EthLib.EVM.Proofs.Frame.Environment
+public import EthLib.EVM.Proofs.Frame.BlobFee
 public import EthLib.EVM.Proofs.Keccak
 public import EthLib.EVM.Proofs.KeccakBits
 public import EthLib.EVM.Proofs.FrameArithmetic
@@ -36,6 +38,7 @@ public import EthLib.EVM.Proofs.Runner.BlockEnvironment
 public import EthLib.EVM.Proofs.Runner.Memory
 public import EthLib.EVM.Proofs.Runner.CallData
 public import EthLib.EVM.Proofs.Runner.BlobHash
+public import EthLib.EVM.Proofs.Runner.BlobFee
 public import EthLib.EVM.Proofs.Runner.MixedCopy
 public import EthLib.EVM.Proofs.Runner.CopyKeccak
 public import EthLib.EVM.Proofs.ReturnData

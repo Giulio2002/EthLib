@@ -111,6 +111,10 @@ def observe (s : State) (value : Nat → Nat) : Outcome :=
     | .error e => failStack s e
     | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
 
+/-- Cancun `environment.py`, `blob_base_fee`, charges before computing and pushing. -/
+def blobBaseFee (s : State) : Outcome :=
+  observe s (fun _ => BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas)
+
 /-- Copy an immutable source after checking operands and gas.
 
 Cancun `environment.py`, `calldatacopy` and `codecopy` charge before reading.
@@ -225,6 +229,7 @@ def step (s : State) : Outcome :=
     | some .gaslimit => observe s (fun _ => s.context.environment.gasLimit.toNat)
     | some .chainid => observe s (fun _ => s.context.environment.chainId.val)
     | some .basefee => observe s (fun _ => s.context.environment.baseFee.toNat)
+    | some .blobbasefee => blobBaseFee s
     | some .calldatasize => observe s (fun _ => s.context.data.size)
     | some .codesize => observe s (fun _ => s.code.size)
     | some .returndatasize => observe s (fun _ => s.returnData.size)

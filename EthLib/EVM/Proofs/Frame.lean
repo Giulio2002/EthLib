@@ -1586,7 +1586,7 @@ theorem step_observation_gas (s : State) (o : Observation)
     (h : At s (some o.opcode)) (gas : s.gas < 2) :
     step s = .exception s .outOfGas := by
   obtain ⟨bounds, decoded⟩ := h
-  cases o <;> simp_all [Observation.opcode, step, observe, charge, Gas.charge,
+  cases o <;> simp_all [Observation.opcode, step, blobBaseFee, observe, charge, Gas.charge,
     Nat.not_le.mpr gas]
 
 /-- A full stack overflows after the gas check. -/
@@ -1596,7 +1596,7 @@ theorem step_observation_full (s : State) (o : Observation)
   obtain ⟨bounds, decoded⟩ := h
   have push (w : Word) : s.stack.push w = .error .overflow :=
     (Proofs.Stack.push_overflow_iff _ _).mpr full
-  cases o <;> simp_all [Observation.opcode, step, observe, charge, Gas.charge, failStack]
+  cases o <;> simp_all [Observation.opcode, step, blobBaseFee, observe, charge, Gas.charge, failStack]
 
 /-- An observation pushes its value and advances once. -/
 theorem step_observation (s t : State) (o : Observation)
@@ -1608,7 +1608,7 @@ theorem step_observation (s t : State) (o : Observation)
     (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨room, rfl⟩
   have update := advances_eq s t (s.pc + 1) (s.gas - 2) stack fields
   obtain ⟨bounds, decoded⟩ := h
-  cases o <;> simp_all [Observation.opcode, Observation.value, step, observe, charge,
+  cases o <;> simp_all [Observation.opcode, Observation.value, step, blobBaseFee, observe, charge,
     Gas.charge, observationWord]
 
 /-- A successful observation puts the observed word on the resulting stack. -/
@@ -2465,6 +2465,17 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
         · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
       | basefee =>
         let o := Observation.basefee
+        have atO : At s (some o.opcode) := at_
+        by_cases gas : 2 ≤ s.gas
+        · by_cases room : s.stack.val.length < 1024
+          · let stack : Stack := ⟨BitVec.ofNat 256 (o.value s) :: s.stack.val, by simp; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
+            exact ⟨_, .observation s t o atO gas room (by simp [Advances, t, stack])⟩
+          · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+            exact ⟨_, .observationFull s o atO gas full⟩
+        · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
+      | blobbasefee =>
+        let o := Observation.blobbasefee
         have atO : At s (some o.opcode) := at_
         by_cases gas : 2 ≤ s.gas
         · by_cases room : s.stack.val.length < 1024

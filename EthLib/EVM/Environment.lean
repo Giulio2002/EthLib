@@ -1,6 +1,7 @@
 module
 
 public import EthLib.EVM.Word
+public import EthLib.EVM.BlobFee
 
 /-!
 # Immutable message environment
@@ -44,6 +45,8 @@ structure Context where
   chainId : Fin (2 ^ 64)
   /-- The accepted U256 domain of Cancun `BlockEnvironment.base_fee_per_gas`. -/
   baseFee : Word
+  /-- Cancun `BlockEnvironment.excess_blob_gas` is U64. -/
+  excessBlobGas : Fin (2 ^ 64)
   /-- Transaction versioned hashes, decoded from 32-byte big-endian values. -/
   blobVersionedHashes : List Word
 
