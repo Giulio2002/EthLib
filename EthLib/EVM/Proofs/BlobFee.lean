@@ -66,6 +66,25 @@ theorem taylorExponential_spec (factor numerator : Nat) (denominator : {d : Nat 
   · intro h
     exact ⟨_, recurrence_spec _ _ _ _ _ _ _, h⟩
 
+/-- The named schedules have their pinned update fractions. -/
+theorem schedule_fractions :
+    cancun.updateFraction.val = 3338477 ∧ prague.updateFraction.val = 5007716 ∧
+    osaka.updateFraction.val = 5007716 ∧ bpo1.updateFraction.val = 8346193 ∧ bpo2.updateFraction.val = 11684671 ∧
+    amsterdam.updateFraction.val = 11684671 := by
+  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+/-- The historical function is the Cancun configuration. -/
+theorem calculateBlobGasPrice_cancun (excess : Fin (2 ^ 64)) :
+    calculateBlobGasPrice excess = calculateWith cancun excess := rfl
+
+/-- A configured price follows the source recurrence on the U64 domain. -/
+theorem calculateWith_spec (schedule : Schedule) (excessBlobGas : Fin (2 ^ 64)) (result : Nat) :
+    (∃ sum, RecurrenceSpec excessBlobGas.val schedule.updateFraction.val 1
+      schedule.updateFraction.val 0 sum ∧ result = sum / schedule.updateFraction.val) ↔
+      result = calculateWith schedule excessBlobGas := by
+  simpa [calculateWith, minBlobGasPrice] using
+    taylorExponential_spec 1 excessBlobGas.val schedule.updateFraction result
+
 /-- The Cancun price uses the source constants and the U64 excess value. -/
 theorem calculateBlobGasPrice_spec (excessBlobGas : Fin (2 ^ 64)) (result : Nat) :
     (∃ sum, RecurrenceSpec excessBlobGas.val 3338477 1 3338477 0 sum ∧

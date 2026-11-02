@@ -4,7 +4,7 @@ open EthLib.EVM
 
 private def hist : List Word := (List.range 256).map (fun n => BitVec.ofNat 256 (n + 1))
 private def env (n : Word) (hs : List Word) : Environment.Context :=
-  ⟨0, 0, 0, 0, 0, 0, 0, n, 0, 0, 0, 0, 0, [], hs⟩
+  ⟨0, 0, 0, 0, 0, 0, 0, n, 0, 0, 0, 0, 0, [], hs, BlobFee.cancun⟩
 private def state (n : Word) (hs : List Word) (xs : List Word)
     (bound : xs.length ≤ 1024) (gas : Nat) : Frame.State :=
   ⟨⟨#[0x40]⟩, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty,

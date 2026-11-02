@@ -9,15 +9,15 @@ example (s : Frame.State) (gas : s.gas < 2) :
 example (s t : Frame.State) (run : Frame.blobBaseFee s = .continue t) :
     2 ≤ s.gas ∧ s.stack.val.length < 1024 ∧
     Frame.Advances s t (s.pc + 1) (s.gas - 2)
-      (Frame.observationWord (BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas) :: s.stack.val) :=
+      (Frame.observationWord (BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas) :: s.stack.val) :=
   Frame.blobBaseFee_helper_actual s t run
 
 example (s t : Frame.State) (at_ : Frame.At s (some .blobbasefee))
     (run : Frame.step s = .continue t) :
-    ∃ sum, BlobFee.RecurrenceSpec s.context.environment.excessBlobGas.val 3338477 1 3338477 0 sum ∧
+    ∃ sum, BlobFee.RecurrenceSpec s.context.environment.excessBlobGas.val s.context.environment.blobFeeSchedule.updateFraction.val 1 s.context.environment.blobFeeSchedule.updateFraction.val 0 sum ∧
       2 ≤ s.gas ∧ s.stack.val.length < 1024 ∧
       Frame.Advances s t (s.pc + 1) (s.gas - 2)
-        (Frame.observationWord (sum / 3338477) :: s.stack.val) :=
+        (Frame.observationWord (sum / s.context.environment.blobFeeSchedule.updateFraction.val) :: s.stack.val) :=
   Frame.blobBaseFee_actual s t at_ run
 
 example (fuel : Nat) (s : Frame.State) (code : s.code = Runner.BlobFeeProgram.program) :
@@ -30,7 +30,7 @@ example (s : Frame.State) (out : Frame.Outcome) (at_ : Frame.At s (some .blobbas
 
 example (s t : Frame.State) (gas : 2 ≤ s.gas) (room : s.stack.val.length < 1024)
     (fields : Frame.Advances s t (s.pc + 1) (s.gas - 2)
-      (Frame.observationWord (BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas) :: s.stack.val)) :
+      (Frame.observationWord (BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas) :: s.stack.val)) :
     Frame.blobBaseFee s = .continue t :=
   Frame.blobBaseFee_success s t gas room fields
 
@@ -44,7 +44,7 @@ example (context : CallData.Context) (returnData : ByteArray) (x : Word)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) :
     ∃ t, Runner.run 2 ⟨Runner.BlobFeeProgram.program, 0, ⟨x :: xs, by simp; omega⟩,
         5 + g, mem, valid, context, returnData⟩ = .exhausted t ∧
-      t.stack.val = Frame.observationWord (BlobFee.calculateBlobGasPrice context.environment.excessBlobGas) ::
+      t.stack.val = Frame.observationWord (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas) ::
         Environment.blobHash context.environment x :: xs ∧
       t.context = context ∧ t.memory = mem ∧ t.returnData = returnData ∧
       t.gas = g ∧ t.pc = 2 :=
@@ -67,13 +67,13 @@ example (excess : Fin (2 ^ 64)) (result : Nat) :
 example (s t : Frame.State) (at_ : Frame.At s (some .blobbasefee))
     (run : Frame.step s = .continue t) :
     ∃ head, t.stack.val.head? = some head ∧
-      head.toNat = BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas % Word.modulus :=
+      head.toNat = BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas % Word.modulus :=
   Frame.blobBaseFee_step_head_mod s t at_ run
 
 example (s t : Frame.State) (at_ : Frame.At s (some .blobbasefee))
     (run : Frame.step s = .continue t)
-    (representable : BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas < Word.modulus) :
+    (representable : BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas < Word.modulus) :
     ∃ head, t.stack.val.head? = some head ∧
-      head.toNat = BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas ∧
-      Word.ofNat (BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas) = .ok head :=
+      head.toNat = BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas ∧
+      Word.ofNat (BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas) = .ok head :=
   Frame.blobBaseFee_step_head_exact s t at_ run representable
