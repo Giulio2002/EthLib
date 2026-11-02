@@ -6,7 +6,7 @@ open EthLib.EVM
 
 -- This range list is independent of the decoder and matches the supported slice.
 private def supported (n : Nat) : Bool :=
-  n ≤ 0x0b || (0x10 ≤ n && n ≤ 0x1d) || n == 0x50 ||
+  n ≤ 0x0b || (0x10 ≤ n && n ≤ 0x1d) || n == 0x50 || n == 0x51 || n == 0x52 || n == 0x53 ||
   (0x56 ≤ n && n ≤ 0x5b) || (0x5f ≤ n && n ≤ 0x9f)
 
 private instance (op : Opcode) : Decidable (Frame.Unsupported op) := by
@@ -25,7 +25,7 @@ private def check (n : Nat) : Bool := Id.run do
     | none | some .invalid => 0
     | some op => if decide (Frame.Unsupported op) then 1 else 2
   let expected := if n == 0xfe then 0 else if supported n then 2
-    else if decoded.isSome then 1 else 0
+    else if (Proofs.Opcode.reference.lookup b).isSome then 1 else 0
   let actual := match Frame.step (state b) with
     | .exception _ .invalidOpcode => 0
     | .unsupported _ _ => 1

@@ -196,27 +196,57 @@ theorem settle_cases (r : Result) :
       | .unsupported _ _ | .exhausted _ => none := by
   cases r <;> rfl
 
-/-- All bounded runs preserve code and allocated memory. -/
-theorem run_unchanged (fuel : Nat) (s : Frame.State) :
-    (run fuel s).frame.code = s.code ∧ (run fuel s).frame.memory = s.memory := by
+/-- All bounded runs preserve code. -/
+theorem run_code_unchanged (fuel : Nat) (s : Frame.State) :
+    (run fuel s).frame.code = s.code := by
   induction fuel generalizing s with
   | zero => simp [run, Result.frame]
   | succ fuel ih =>
     cases hs : Frame.step s with
     | «continue» next =>
-      have same := Frame.outcome_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      have same := Frame.continue_code_unchanged hs
       have rest := ih next
-      simp only [Frame.Outcome.frame] at same
-      simpa [run, hs, same.1, same.2] using rest
+      simpa [run, hs, same] using rest
     | stop next =>
-      have same := Frame.outcome_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      have same := Frame.outcome_code_unchanged ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
     | revert input gas output => exact False.elim (Frame.step_not_revert s input gas output hs)
     | exception input e =>
-      have same := Frame.outcome_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      have same := Frame.outcome_code_unchanged ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
     | unsupported input op =>
-      have same := Frame.outcome_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      have same := Frame.outcome_code_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+
+/-- Every executed instruction in the bounded run is outside memory access. -/
+def PureMemoryRun : Nat → Frame.State → Prop
+  | 0, _ => True
+  | fuel + 1, s => Frame.PureMemoryStep s ∧
+      match Frame.step s with
+      | .continue t => PureMemoryRun fuel t
+      | _ => True
+
+/-- A bounded run of pure instructions preserves memory. -/
+theorem run_memory_unchanged_of_pure (fuel : Nat) (s : Frame.State)
+    (pure : PureMemoryRun fuel s) : (run fuel s).frame.memory = s.memory := by
+  induction fuel generalizing s with
+  | zero => rfl
+  | succ fuel ih =>
+    have current := pure.1
+    cases hs : Frame.step s with
+    | «continue» next =>
+      have same := Frame.continue_memory_unchanged_of_pure current hs
+      have rest := ih next (by simpa [PureMemoryRun, hs] using pure.2)
+      simpa [run, hs, same] using rest
+    | stop next =>
+      have same := Frame.outcome_memory_unchanged_of_pure current ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | revert input gas output => exact False.elim (Frame.step_not_revert s input gas output hs)
+    | exception input e =>
+      have same := Frame.outcome_memory_unchanged_of_pure current ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | unsupported input op =>
+      have same := Frame.outcome_memory_unchanged_of_pure current ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
 
 end EthLib.EVM.Runner

@@ -21,12 +21,17 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
 def Advances (s t : State) (pc gas : Nat) (xs : List Word) : Prop :=
   t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs
+
+/-- Exact fields after a memory instruction. -/
+def AdvancesMemory (s t : State) (memory : Memory.Allocation.State)
+    (pc gas : Nat) (xs : List Word) : Prop :=
+  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs
 
 /-- Cancun `runtime.py`: the source byte length at an instruction boundary. -/
 def jumpSourceLength (b : UInt8) : Nat :=
@@ -65,6 +70,40 @@ inductive Rule : State → Outcome → Prop where
   | stop (s) : At s (some .stop) → Rule s (.stop { s with pc := s.pc + 1 })
   | invalid (s) : At s none ∨ At s (some .invalid) → Rule s (.exception s .invalidOpcode)
   | unsupported (s op) : At s (some op) → Unsupported op → Rule s (.unsupported s op)
+  | mloadEmpty (s) : At s (some .mload) → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | mloadGas (s offset xs) : At s (some .mload) → s.stack.val = offset :: xs →
+      s.gas < 3 + Gas.rangeCost s.memory.words offset.toNat 32 →
+      Rule s (.exception s .outOfGas)
+  | mload (s t offset xs) : At s (some .mload) → s.stack.val = offset :: xs →
+      3 + Gas.rangeCost s.memory.words offset.toNat 32 ≤ s.gas →
+      AdvancesMemory s t (Memory.Allocation.loadWord s.memory offset.toNat).2
+        (s.pc + 1) (s.gas - (3 + Gas.rangeCost s.memory.words offset.toNat 32))
+        ((Memory.Allocation.loadWord s.memory offset.toNat).1 :: xs) → Rule s (.continue t)
+  | mstoreEmpty (s) : At s (some .mstore) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | mstoreGas (s offset value xs) : At s (some .mstore) →
+      s.stack.val = offset :: value :: xs →
+      s.gas < 3 + Gas.rangeCost s.memory.words offset.toNat 32 →
+      Rule s (.exception s .outOfGas)
+  | mstore (s t offset value xs) : At s (some .mstore) →
+      s.stack.val = offset :: value :: xs →
+      3 + Gas.rangeCost s.memory.words offset.toNat 32 ≤ s.gas →
+      AdvancesMemory s t (Memory.Allocation.storeWord s.memory offset.toNat value)
+        (s.pc + 1) (s.gas - (3 + Gas.rangeCost s.memory.words offset.toNat 32)) xs →
+      Rule s (.continue t)
+  | mstore8Empty (s) : At s (some .mstore8) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | mstore8Gas (s offset value xs) : At s (some .mstore8) →
+      s.stack.val = offset :: value :: xs →
+      s.gas < 3 + Gas.rangeCost s.memory.words offset.toNat 1 →
+      Rule s (.exception s .outOfGas)
+  | mstore8 (s t offset value xs) : At s (some .mstore8) →
+      s.stack.val = offset :: value :: xs →
+      3 + Gas.rangeCost s.memory.words offset.toNat 1 ≤ s.gas →
+      AdvancesMemory s t (Memory.Allocation.storeByte s.memory offset.toNat value)
+        (s.pc + 1) (s.gas - (3 + Gas.rangeCost s.memory.words offset.toNat 1)) xs →
+      Rule s (.continue t)
   | jumpEmpty (s) : At s (some .jump) → s.stack.val = [] →
       Rule s (.exception s .stackUnderflow)
   | jumpGas (s x xs) : At s (some .jump) → s.stack.val = x :: xs → s.gas < 8 →

@@ -4,6 +4,7 @@ public import EthLib.EVM.Stack
 public import EthLib.EVM.PushImmediate
 public import EthLib.EVM.JumpDest
 public import EthLib.EVM.Gas
+public import EthLib.EVM.Memory.Invariant
 public import EthLib.EVM.Word.AddMulMod
 public import EthLib.EVM.Word.Exp
 public import EthLib.EVM.Word.DivMod
@@ -121,6 +122,36 @@ def step (s : State) : Outcome :=
     | some .pc => observe s (fun _ => s.pc)
     | some .msize => observe s (fun _ => Memory.Allocation.byteSize s.memory)
     | some .gas => observe s id
+    -- Cancun `memory.py`, `mload`: pop, charge, expand, then read.
+    | some .mload =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (offset, stack) =>
+        charge s (3 + Gas.rangeCost s.memory.words offset.toNat 32) fun gas =>
+          let result := Memory.Allocation.loadWord s.memory offset.toNat
+          match Stack.push stack result.1 with
+          | .error e => failStack s e
+          | .ok stack => .continue { s with stack, gas, pc := s.pc + 1, memory := result.2, memoryValid := Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid }
+    -- Cancun `memory.py`, `mstore`: the offset is popped before the value.
+    | some .mstore =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (offset, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (value, stack) =>
+          charge s (3 + Gas.rangeCost s.memory.words offset.toNat 32) fun gas =>
+            .continue { s with stack, gas, pc := s.pc + 1, memory := Memory.Allocation.storeWord s.memory offset.toNat value, memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
+    -- Cancun `memory.py`, `mstore8`: only the low byte is written.
+    | some .mstore8 =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (offset, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (value, stack) =>
+          charge s (3 + Gas.rangeCost s.memory.words offset.toNat 1) fun gas =>
+            .continue { s with stack, gas, pc := s.pc + 1, memory := Memory.Allocation.storeByte s.memory offset.toNat value, memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
     | some .pop =>
       match Stack.pop s.stack with
       | .error e => failStack s e

@@ -275,7 +275,7 @@ The decoder and scanner do not model frames, gas, stack effects or instruction e
 
 # Restricted frame execution
 
-The frame runner supports STOP, JUMP, JUMPI, JUMPDEST, PC, MSIZE, GAS, PUSH0 through PUSH32, POP, arithmetic, comparison and bitwise instructions, DUP1 through DUP16, and SWAP1 through SWAP16.
+The frame runner supports STOP, JUMP, JUMPI, JUMPDEST, PC, MSIZE, GAS, MLOAD, MSTORE, MSTORE8, PUSH0 through PUSH32, POP, arithmetic, comparison and bitwise instructions, DUP1 through DUP16, and SWAP1 through SWAP16.
 The implemented arithmetic and bitwise instructions are ADD, MUL, SUB, DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD, EXP, LT, GT, SLT, SGT, EQ, ISZERO, AND, OR, XOR, NOT, SHL, SHR, SAR, BYTE and SIGNEXTEND.
 The arithmetic, comparison and bitwise instructions have independent success, underflow and out-of-gas rules.
 Operand checks precede charging gas.
@@ -295,6 +295,13 @@ PC pushes the current counter, MSIZE pushes allocated bytes, and GAS pushes the 
 The frame uses unbounded natural numbers for these values.
 The observation conversion reduces them modulo 2^256 outside the source U256 domain.
 Within that domain the conversion is exact.
+MLOAD reads a 32-byte big-endian word and expands memory.
+MSTORE writes 32 big-endian bytes, and MSTORE8 writes the low byte.
+Each pops the full 256-bit offset before gas is charged.
+Expansion uses natural-number addresses and costs, without wrapping the end address.
+Memory contents are sparse, so expansion does not materialize zero bytes.
+Gas, allocation and program counters are natural numbers in this model.
+Values outside the source types' domains are total extensions of the source.
 Other assigned Cancun opcodes return a distinct unsupported tooling result.
 Unassigned bytes and INVALID cause exceptional halts.
 Fuel exhaustion is a tooling result and is not an EVM exception.
@@ -312,6 +319,11 @@ For `PUSH1 2; PUSH1 3; ADD; STOP` starting at zero, the final program counter is
 The STOP byte is at position five.
 This corrects any example that treats the STOP position as the final counter.
 Reaching the end of code without executing STOP leaves the counter unchanged.
+
+`Frame.continue_unchanged`, `Frame.outcome_unchanged`, and `Runner.run_unchanged` no longer hold for memory instructions.
+Use `Frame.continue_code_unchanged`, `Frame.outcome_code_unchanged`, and `Runner.run_code_unchanged` for code preservation.
+For memory preservation, use `Frame.continue_memory_unchanged_of_pure`, `Frame.outcome_memory_unchanged_of_pure`, or `Runner.run_memory_unchanged_of_pure` with the stated pure-step or pure-trace premise.
+The `Frame.mload_success_output`, `Frame.mstore_success_output`, and `Frame.mstore8_success_output` theorems derive output facts from an observed successful step.
 
 The exception result retains the input frame for diagnostics only.
 `Frame.settle` projects zero remaining gas for every exception.
