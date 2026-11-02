@@ -96,6 +96,52 @@ theorem inputCopyCost_rounding (old destination length : Nat) :
     simp [inputCopyCost, requiredWords]
   · simp [inputCopyCost, requiredWords, h]
 
+/-- A word count covers the bytes and has no unnecessary final word. -/
+def RoundedHashWords (length words : Nat) : Prop :=
+  length ≤ 32 * words ∧ (words = 0 ∨ 32 * (words - 1) < length)
+
+/-- The source's `ceil32(size) / 32` has the least covering word count. -/
+theorem keccak_words_spec (length : Nat) :
+    RoundedHashWords length ((length + 31) / 32) := by
+  unfold RoundedHashWords
+  constructor
+  · omega
+  · by_cases h : (length + 31) / 32 = 0
+    · exact Or.inl h
+    · right; omega
+
+/-- The covering bounds determine the rounded count. -/
+theorem keccak_words_unique (length a b : Nat)
+    (ha : RoundedHashWords length a) (hb : RoundedHashWords length b) : a = b := by
+  unfold RoundedHashWords at ha hb
+  omega
+
+/-- Cancun `keccak.py`, `keccak`: base, source word count, and expansion. -/
+theorem keccakCost_spec (old offset length cost : Nat) :
+    keccakCost old offset length = cost ↔
+      ∃ words, RoundedHashWords length words ∧
+        cost = 30 + 6 * words + rangeCost old offset length := by
+  constructor
+  · intro h
+    exact ⟨_, keccak_words_spec length, h.symm⟩
+  · rintro ⟨words, hw, rfl⟩
+    have same := keccak_words_unique length _ _ (keccak_words_spec length) hw
+    simp only [keccakCost, same]
+
+/-- Empty input costs only the base, even at the largest offset. -/
+theorem keccakCost_zero (old offset : Nat) : keccakCost old offset 0 = 30 := by
+  simp [keccakCost, rangeCost_zero]
+
+/-- Expansion cannot shrink and the charge pays the exact memory cost difference. -/
+theorem keccakCost_expansion (old offset length : Nat) :
+    old ≤ max old (requiredWords offset length) ∧
+    memoryCost old + keccakCost old offset length =
+      memoryCost (max old (requiredWords offset length)) +
+        30 + 6 * ((length + 31) / 32) := by
+  have h := expansion_contract old (requiredWords offset length)
+  simp only [keccakCost, rangeCost]
+  omega
+
 /-- An empty copy pays only its base charge, regardless of either offset. -/
 theorem mcopyCost_zero (old destination source : Nat) :
     mcopyCost old destination source 0 = 3 := by

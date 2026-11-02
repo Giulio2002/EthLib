@@ -437,5 +437,34 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The 256-byte dispatch regression covers 109 supported instructions, 39 assigned but unsupported instructions, 107 unassigned bytes, and INVALID.
+The 256-byte dispatch regression covers 110 supported instructions, 38 assigned but unsupported instructions, 107 unassigned bytes, and INVALID.
 These counts describe this restricted frame, not the full Cancun EVM.
+
+## KECCAK256 execution (09d)
+
+KECCAK256 pops the offset and length before checking gas.
+It charges for rounded input words and memory expansion before reading memory.
+An empty input does not expand memory, even at the maximum offset.
+The digest is pushed as a big-endian word.
+The raw sparse store is unchanged for every outcome.
+`PureMemoryStep` excludes KECCAK256 because its allocation can expand.
+Callers constructing that predicate must prove the additional exclusion.
+
+The execution contracts prove the result relative to the shared `keccak256` primitive.
+The independent bit-coordinate specification is `Cryptography.Hash.KeccakBits`.
+`Kernel.keccak256_eq` replaces the permutation inside the same lane sponge.
+It does not by itself establish agreement with the independent bit sponge.
+`KeccakBits.keccak256_eq` proves that agreement for every byte input.
+`Frame.independentSpongeLink_keccakBits` supplies the concrete link.
+`Frame.keccak_step_actual_bits` derives the bit sponge digest from actual execution.
+
+The bit model follows FIPS 202 section 3 and section 4, Algorithm 8.
+It uses pad10*1 and Keccak[512] from sections 5.1 and 5.2.
+The proof relates the permutation, padding bits, blocks, absorption and output bytes.
+It applies to every byte input and every lane state used during absorption.
+Packing and unpacking are inverse for arbitrary bit states and lane states.
+The step and permutation correspondences therefore cover arbitrary bit states.
+Iota and round correspondences use the 24 source round indices.
+Known-answer regressions do not establish these universal equalities by themselves.
+The pinned source review is agent inspection, not human approval or a Python-to-Lean proof.
+The full Cancun EVM remains outside this proved instruction subset.

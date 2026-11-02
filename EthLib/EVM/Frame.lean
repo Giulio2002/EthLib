@@ -15,6 +15,7 @@ public import EthLib.EVM.Word.Comparisons
 public import EthLib.EVM.Word.Bitwise
 public import EthLib.EVM.Word.Shifts
 public import EthLib.EVM.Word.ByteSignExtend
+public import EthLib.Cryptography.Hash.Keccak
 
 /-!
 # Cancun frame subset
@@ -67,6 +68,28 @@ def charge (s : State) (cost : Nat) (k : Nat → Outcome) : Outcome :=
   match Gas.charge s.gas cost with
   | .error _ => .exception s .outOfGas
   | .ok gas => k gas
+
+/-- Interpret the 32 digest bytes as a big-endian word. -/
+def digestWord (digest : Vector UInt8 32) : Word :=
+  BitVec.ofNat 256 (EthLib.Precompiles.Modexp.bytesToNat digest.toArray.toList)
+
+/-- Cancun `instructions/keccak.py`, `keccak`, at revision
+`fd9298410ec7218838c8348f69c1eb633f1797dc`.
+The gas check precedes the memory read and the hash. -/
+def keccak (s : State) : Outcome :=
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (offset, stack) =>
+    match Stack.pop stack with
+    | .error e => failStack s e
+    | .ok (length, stack) =>
+      charge s (Gas.keccakCost s.memory.words offset.toNat length.toNat) fun gas =>
+        let bytes : ByteArray := ⟨(Memory.readRange s.memory.store offset.toNat length.toNat).toArray⟩
+        let digest := EthLib.Cryptography.Hash.Keccak.keccak256 bytes
+        match Stack.push stack (digestWord digest) with
+        | .error e => failStack s e
+        | .ok stack =>
+          .continue { s with stack, gas, pc := s.pc + 1, memory := Memory.Allocation.expand s.memory offset.toNat length.toNat, memoryValid := Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid }
 
 /-- Total conversion for frame observations.
 
@@ -174,6 +197,7 @@ def step (s : State) : Outcome :=
     | some .calldatacopy => inputCopy s s.context.data
     | some .codecopy => inputCopy s s.code
     | some .returndatacopy => returnDataCopy s
+    | some .keccak => keccak s
     -- Cancun `environment.py`, `calldatasize` and `codesize`: charge before push.
     | some .calldatasize => observe s (fun _ => s.context.data.size)
     | some .codesize => observe s (fun _ => s.code.size)

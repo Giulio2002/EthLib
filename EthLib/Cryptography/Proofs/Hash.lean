@@ -3,6 +3,14 @@ module
 public import EthLib.Cryptography.Proofs.Hash.Crc32c
 public import EthLib.Cryptography.Proofs.Hash.Blake2b
 public import EthLib.Cryptography.Proofs.Hash.Keccak
+public import EthLib.Cryptography.Proofs.Hash.KeccakBits
+public import EthLib.Cryptography.Proofs.Hash.KeccakBitsPermutation
+public import EthLib.Cryptography.Proofs.Hash.KeccakBitsSponge
+public import EthLib.Cryptography.Proofs.Hash.KeccakBitsSqueeze
+public import EthLib.Cryptography.Proofs.Hash.KeccakBitsBlocks
+public import EthLib.Cryptography.Proofs.Hash.KeccakBitsRefinement
+public import EthLib.Cryptography.Proofs.Hash.KeccakBitsRepresentation
+public import EthLib.Cryptography.Proofs.Hash.KeccakBitsHelpers
 public import EthLib.Cryptography.Proofs.Hash.KeccakKernel
 public import EthLib.Cryptography.Proofs.Hash.Keccak256
 public import EthLib.Cryptography.Proofs.Hash.Sha256

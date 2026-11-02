@@ -2124,6 +2124,72 @@ theorem step_returnDataCopy (s : State) (x y z : Word) (xs : List Word)
   simp only [step, dite_eq_left bounds, decoded]
   exact returnDataCopy_helper_result s x y z xs items
 
+/-- Two operands leave room for the digest on the bounded stack. -/
+theorem keccak_helper_result (s : State) (x y : Word) (xs : List Word)
+    (items : s.stack.val = x :: y :: xs) :
+    keccak s =
+      if Gas.keccakCost s.memory.words x.toNat y.toNat ≤ s.gas then
+        .continue { s with
+          stack := ⟨digestWord (EthLib.Cryptography.Hash.Keccak.keccak256
+            ⟨(Memory.readRange s.memory.store x.toNat y.toNat).toArray⟩) :: xs,
+              by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+          pc := s.pc + 1
+          gas := s.gas - Gas.keccakCost s.memory.words x.toNat y.toNat
+          memory := Memory.Allocation.expand s.memory x.toNat y.toNat
+          memoryValid := Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid }
+      else .exception s .outOfGas := by
+  let first : Stack := ⟨y :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  let digest := digestWord (EthLib.Cryptography.Hash.Keccak.keccak256
+    ⟨(Memory.readRange s.memory.store x.toNat y.toNat).toArray⟩)
+  let pushed : Stack := ⟨digest :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have push : rest.push digest = .ok pushed :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  dsimp [digest] at push
+  by_cases gas : Gas.keccakCost s.memory.words x.toNat y.toNat ≤ s.gas <;>
+    simp [keccak, p1, p2, charge, Gas.charge, gas, push, pushed, digest]
+
+/-- Missing operands are detected before gas is charged. -/
+theorem keccak_helper_empty (s : State) (short : s.stack.val.length < 2) :
+    keccak s = .exception s .stackUnderflow := by
+  cases items : s.stack.val with
+  | nil =>
+    have p : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr items
+    simp [keccak, p, failStack]
+  | cons x xs =>
+    cases xs with
+    | nil =>
+      let first : Stack := Stack.empty
+      have p : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+      have q : first.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+      simp [keccak, p, q, failStack]
+    | cons y ys => simp [items] at short; omega
+
+/-- The successful helper result determines every frame field from the input. -/
+theorem keccak_helper_actual (s t : State) (x y : Word) (xs : List Word)
+    (items : s.stack.val = x :: y :: xs) (run : keccak s = .continue t) :
+    Gas.keccakCost s.memory.words x.toNat y.toNat ≤ s.gas ∧
+    AdvancesMemory s t (Memory.Allocation.expand s.memory x.toNat y.toNat)
+      (s.pc + 1) (s.gas - Gas.keccakCost s.memory.words x.toNat y.toNat)
+      (digestWord (EthLib.Cryptography.Hash.Keccak.keccak256
+        ⟨(Memory.readRange s.memory.store x.toNat y.toNat).toArray⟩) :: xs) := by
+  rw [keccak_helper_result s x y xs items] at run
+  by_cases gas : Gas.keccakCost s.memory.words x.toNat y.toNat ≤ s.gas
+  · simp only [ite_eq_left gas, Outcome.continue.injEq] at run
+    subst t
+    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  · simp [gas] at run
+
+/-- Expansion performed by a successful hash preserves every raw store byte. -/
+theorem keccak_helper_store (s t : State) (x y : Word) (xs : List Word)
+    (items : s.stack.val = x :: y :: xs) (run : keccak s = .continue t) :
+    t.memory.store = s.memory.store := by
+  have fields := (keccak_helper_actual s t x y xs items run).2
+  rw [fields.2.1]
+  rfl
+
 /-- Every relational rule is accepted by the executable step. -/
 theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out := by
   cases h with
@@ -2131,6 +2197,24 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | stop at_ => exact step_stop _ at_
   | invalid at_ => rcases at_ with h | h; exact step_unassigned _ h; exact step_invalid _ h
   | unsupported op at_ unsupported => exact step_unsupported _ op at_ unsupported
+  | keccakEmpty at_ empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    exact keccak_helper_empty _ empty
+  | keccakGas x y xs at_ items gas =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    rw [keccak_helper_result _ x y xs items]
+    simp [Nat.not_le.mpr gas]
+  | keccak t x y xs at_ items gas fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    rw [keccak_helper_result _ x y xs items]
+    simp only [ite_eq_left gas]
+    apply congrArg Outcome.continue
+    symm
+    apply advancesMemory_eq
+    exact fields
   | calldataloadEmpty at_ empty => exact step_calldataload_empty _ at_ empty
   | calldataloadGas x xs at_ items gas => exact step_calldataload_gas _ x xs at_ items gas
   | calldataload t x xs at_ items gas fields => exact step_calldataload _ t x xs at_ items gas fields
@@ -2756,6 +2840,18 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
                 let t : State := { s with stack, pc := s.pc + 1, gas := s.gas - Gas.inputCopyCost s.memory.words x.toNat z.toNat, memory := Memory.Allocation.write s.memory x.toNat (CallData.readRange (InputSource.bytes .code s) y.toNat z.toNat), memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
                 exact ⟨_, .inputCopy s t .code x y z zs at_ items gas (by simp [AdvancesMemory, t, stack])⟩
               · exact ⟨_, .inputCopyGas s .code x y z zs at_ items (Nat.lt_of_not_ge gas)⟩
+      | keccak =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .keccakEmpty s at_ (by simp [items])⟩
+        | cons x xs =>
+          cases xs with
+          | nil => exact ⟨_, .keccakEmpty s at_ (by simp [items])⟩
+          | cons y ys =>
+            by_cases gas : Gas.keccakCost s.memory.words x.toNat y.toNat ≤ s.gas
+            · let stack : Stack := ⟨digestWord (EthLib.Cryptography.Hash.Keccak.keccak256 ⟨(Memory.readRange s.memory.store x.toNat y.toNat).toArray⟩) :: ys, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+              let t : State := { s with stack, pc := s.pc + 1, gas := s.gas - Gas.keccakCost s.memory.words x.toNat y.toNat, memory := Memory.Allocation.expand s.memory x.toNat y.toNat, memoryValid := Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid }
+              exact ⟨_, .keccak s t x y ys at_ items gas (by simp [AdvancesMemory, t, stack])⟩
+            · exact ⟨_, .keccakGas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
       | mcopy =>
         cases items : s.stack.val with
         | nil => exact ⟨_, .mcopyEmpty s at_ (by simp [items])⟩
@@ -2949,7 +3045,7 @@ theorem load_then_calldatasize_actual (s t u : State) (x : Word) (xs : List Word
 /-- A frame whose current instruction is outside the memory access subset. -/
 def PureMemoryStep (s : State) : Prop :=
   ¬ At s (some .mload) ∧ ¬ At s (some .mstore) ∧ ¬ At s (some .mstore8) ∧ ¬ At s (some .mcopy) ∧
-  ¬ At s (some .calldatacopy) ∧ ¬ At s (some .codecopy) ∧ ¬ At s (some .returndatacopy)
+  ¬ At s (some .calldatacopy) ∧ ¬ At s (some .codecopy) ∧ ¬ At s (some .returndatacopy) ∧ ¬ At s (some .keccak)
 
 /-- A pure instruction preserves memory for every outcome. -/
 theorem outcome_memory_unchanged_of_pure {s : State} {out : Outcome}

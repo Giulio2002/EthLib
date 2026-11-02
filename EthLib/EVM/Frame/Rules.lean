@@ -21,7 +21,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -108,6 +108,20 @@ inductive Rule : State → Outcome → Prop where
   | stop (s) : At s (some .stop) → Rule s (.stop { s with pc := s.pc + 1 })
   | invalid (s) : At s none ∨ At s (some .invalid) → Rule s (.exception s .invalidOpcode)
   | unsupported (s op) : At s (some op) → Unsupported op → Rule s (.unsupported s op)
+  | keccakEmpty (s) : At s (some .keccak) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | keccakGas (s offset length xs) : At s (some .keccak) →
+      s.stack.val = offset :: length :: xs →
+      s.gas < Gas.keccakCost s.memory.words offset.toNat length.toNat →
+      Rule s (.exception s .outOfGas)
+  | keccak (s t offset length xs) : At s (some .keccak) →
+      s.stack.val = offset :: length :: xs →
+      Gas.keccakCost s.memory.words offset.toNat length.toNat ≤ s.gas →
+      AdvancesMemory s t (Memory.Allocation.expand s.memory offset.toNat length.toNat)
+        (s.pc + 1) (s.gas - Gas.keccakCost s.memory.words offset.toNat length.toNat)
+        (digestWord (EthLib.Cryptography.Hash.Keccak.keccak256
+          ⟨(Memory.readRange s.memory.store offset.toNat length.toNat).toArray⟩) :: xs) →
+      Rule s (.continue t)
   | calldataloadEmpty (s) : At s (some .calldataload) → s.stack.val = [] →
       Rule s (.exception s .stackUnderflow)
   | calldataloadGas (s x xs) : At s (some .calldataload) → s.stack.val = x :: xs →
