@@ -107,3 +107,64 @@ example : (writeThenDestroy.map fun s => (getAccountOptional s first, getStorage
     throw (IO.userError "world operation check failed")
 
 end WorldOrdinary
+
+namespace WorldOrdinary
+
+/-- A balance write that cleans an empty account, then a nonce and code write. -/
+def balanceNonceCode : State :=
+  setCode (incrementNonce (setAccountBalance duplicateWorld second 0) second) second codeA
+
+#eval do
+  let result := balanceNonceCode
+  let hash := codeHash codeA
+  let checks := [
+    getAccountOptional result second == some (Account.mk 1 0 hash),
+    getStorage result second 2 == 0,
+    getAccountOptional result first == some rich,
+    getStorage result first 1 == 9,
+    getCode result hash == some codeA,
+    getCode result 7 == some codeA,
+    getAccountOptional (setAccountBalance duplicateWorld third 0) third == none,
+    getAccountOptional (incrementNonce duplicateWorld third) third == some (Account.mk 1 0 emptyCodeHash),
+    (getAccount (setAccountBalance duplicateWorld third 9) third).balance == 9,
+    (getAccount (incrementNonce ⟨[(first, ⟨2^256, 0, emptyCodeHash⟩)], [], []⟩ first) first).nonce == 2^256 + 1,
+    getCode (setCode duplicateWorld third ByteArray.empty) emptyCodeHash == some ByteArray.empty]
+  unless checks.all id do
+    throw (IO.userError "account mutation program failed")
+
+end WorldOrdinary
+
+namespace WorldOrdinary
+
+-- The first code entry shadows a duplicate before the write.
+def duplicateHashWorld : State :=
+  { duplicateWorld with codes := [(codeHash codeA, codeB), (codeHash codeA, codeB), (7, codeB)] }
+
+#eval do
+  let s := duplicateHashWorld
+  let t := setCode s third codeA
+  let emptyWrite := setCode s second ByteArray.empty
+  let program := balanceNonceCode
+  let expectedCodes := if codeHash codeA == emptyCodeHash then duplicateWorld.codes else
+    (codeHash codeA, codeA) :: duplicateWorld.codes.filter (fun p => p.1 != codeHash codeA)
+  let checks := [
+    getCode s (codeHash codeA) == some codeB,
+    getCode t (codeHash codeA) == some codeA,
+    t.codes == [(codeHash codeA, codeA), (7, codeB)],
+    getAccountOptional t third == some (Account.mk 0 0 (codeHash codeA)),
+    getAccountOptional t first == some rich,
+    getStorage t first 1 == 9,
+    emptyWrite.codes == s.codes,
+    getAccountOptional emptyWrite second == none,
+    getStorage emptyWrite second 2 == 0,
+    getAccountOptional program second == some (Account.mk 1 0 (codeHash codeA)),
+    getAccountOptional program first == some rich,
+    getStorage program second 2 == 0,
+    getStorage program first 1 == 9,
+    program.codes == expectedCodes,
+    (getAccount (setAccountBalance duplicateWorld first 0) first).balance == 0,
+    (getAccount (setAccountBalance duplicateWorld first 9) first).balance == 9]
+  unless checks.all id do
+    throw (IO.userError "account mutation coverage failed")
+
+end WorldOrdinary

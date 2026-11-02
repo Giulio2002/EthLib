@@ -1,6 +1,7 @@
 module
 
 public import EthLib.EVM.Environment
+public import EthLib.Cryptography.Hash.Keccak
 
 /-!
 # Pure account and storage state
@@ -107,5 +108,29 @@ This follows `state_tracker.modify_state` and is distinct from `setAccount`.
 def modifyState (s : State) (a : Address) (f : Account → Account) : State :=
   let updated := setAccount s a (some (f (getAccount s a)))
   if accountExistsAndIsEmpty updated a then destroyAccount updated a else updated
+
+/-- Amsterdam `state_tracker.set_account_balance` at the pinned revision. -/
+def setAccountBalance (s : State) (a : Address) (balance : Word) : State :=
+  modifyState s a (fun account => { account with balance })
+
+/-- Amsterdam `state_tracker.increment_nonce` at the pinned revision. -/
+def incrementNonce (s : State) (a : Address) : State :=
+  modifyState s a (fun account => { account with nonce := account.nonce + 1 })
+
+/-- Decode the Keccak-256 digest as the source's big-endian hash word. -/
+def codeHash (code : ByteArray) : Word :=
+  BitVec.ofNat 256 (EthLib.Precompiles.Modexp.bytesToNat
+    (EthLib.Cryptography.Hash.Keccak.keccak256 code).toArray.toList)
+
+/-- Amsterdam `state_tracker.set_code` at the pinned revision.
+
+The code store is updated before account cleanup.
+The source tests the hash, not the length of the code.
+-/
+def setCode (s : State) (a : Address) (code : ByteArray) : State :=
+  let hash := codeHash code
+  let updated := if hash == emptyCodeHash then s else
+    { s with codes := (hash, code) :: s.codes.filter (fun p => p.1 != hash) }
+  modifyState updated a (fun account => { account with codeHash := hash })
 
 end EthLib.EVM.World

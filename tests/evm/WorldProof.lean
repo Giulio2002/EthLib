@@ -168,3 +168,112 @@ example (s t : State) (a : Address) (k v : Word)
   exact ⟨by simp [writeThenDestroy, success], write_then_destroy s t a k v success⟩
 
 end WorldProof
+
+namespace WorldProof
+
+example (s : State) (a b : Address) (balance : Word) (code : ByteArray) (h : b ≠ a) :
+    let t := setCode (incrementNonce (setAccountBalance s a balance) a) a code
+    getAccountOptional t b = getAccountOptional s b ∧
+    (∀ k, getStorage t b k = getStorage s b k) ∧
+    (∀ hash, getCode t hash = if hash = emptyCodeHash then some ByteArray.empty
+      else if hash = codeHash code then some code else getCode s hash) :=
+  balance_nonce_code_off_target s a b balance code h
+
+example (s : State) (a : Address) (code : ByteArray) :
+    getCode (setCode s a code) (codeHash code) = some code ↔
+      codeHash code ≠ emptyCodeHash ∨ code = ByteArray.empty :=
+  setCode_getCode_written_iff s a code
+
+example (code : ByteArray) :
+    Word.ofBytesBE ⟨(EthLib.Cryptography.Hash.Keccak.keccak256 code).toArray⟩ =
+      .ok (codeHash code) ∧
+    Word.toBytesBE (codeHash code) =
+      ⟨(EthLib.Cryptography.Hash.Keccak.keccak256 code).toArray⟩ := codeHash_bytes code
+
+end WorldProof
+
+namespace WorldProof
+
+example (s : State) (a : Address) (balance : Word) (code : ByteArray) :
+    let x := { getAccount s a with balance }
+    let y := if x = emptyAccount then emptyAccount else x
+    let result := setCode (incrementNonce (setAccountBalance s a balance) a) a code
+    getAccountOptional result a = some { y with nonce := y.nonce + 1, codeHash := codeHash code } ∧
+    (∀ k, getStorage result a k = if x = emptyAccount then 0 else getStorage s a k) :=
+  balance_nonce_code_target_initial s a balance code
+
+end WorldProof
+
+namespace WorldProof
+
+-- Apply every observation in the balance and nonce contracts at arbitrary keys.
+example (s : State) (a b : Address) (k balance : Word) :
+    let x := { getAccount s a with balance }
+    getAccountOptional (setAccountBalance s a balance) b =
+      (if b = a then (if x = emptyAccount then none else some x) else getAccountOptional s b) ∧
+    getStorage (setAccountBalance s a balance) b k =
+      (if b = a ∧ x = emptyAccount then 0 else getStorage s b k) ∧
+    (setAccountBalance s a balance).codes = s.codes := by
+  exact ⟨(setAccountBalance_spec s a balance).1 b,
+    (setAccountBalance_spec s a balance).2.1 b k, (setAccountBalance_spec s a balance).2.2⟩
+
+example (s : State) (a b : Address) (k : Word) :
+    let x := { getAccount s a with nonce := (getAccount s a).nonce + 1 }
+    getAccountOptional (incrementNonce s a) b =
+      (if b = a then (if x = emptyAccount then none else some x) else getAccountOptional s b) ∧
+    getStorage (incrementNonce s a) b k =
+      (if b = a ∧ x = emptyAccount then 0 else getStorage s b k) ∧
+    (incrementNonce s a).codes = s.codes := by
+  exact ⟨(incrementNonce_spec s a).1 b, (incrementNonce_spec s a).2.1 b k,
+    (incrementNonce_spec s a).2.2⟩
+
+example (s : State) (a b : Address) (k hash : Word) (code : ByteArray) :
+    let x := { getAccount s a with codeHash := codeHash code }
+    getAccountOptional (setCode s a code) b =
+      (if b = a then (if x = emptyAccount then none else some x) else getAccountOptional s b) ∧
+    getStorage (setCode s a code) b k =
+      (if b = a ∧ x = emptyAccount then 0 else getStorage s b k) ∧
+    (setCode s a code).codes = (if codeHash code == emptyCodeHash then s.codes else
+      (codeHash code, code) :: s.codes.filter (fun p => p.1 != codeHash code)) ∧
+    getCode (setCode s a code) hash =
+      (if hash = emptyCodeHash then some ByteArray.empty else
+        if hash = codeHash code then some code else getCode s hash) := by
+  have spec := setCode_spec s a code
+  exact ⟨spec.1 b, spec.2.1 b k, spec.2.2, setCode_getCode s a code hash⟩
+
+-- This branch is conditional on hash equality and does not infer code equality.
+example (s : State) (a : Address) (code : ByteArray) (h : codeHash code = emptyCodeHash) :
+    (setCode s a code).codes = s.codes ∧
+    (getCode (setCode s a code) (codeHash code) = some code ↔ code = ByteArray.empty) := by
+  constructor
+  · simpa [h] using (setCode_spec s a code).2.2
+  · simpa [h] using setCode_getCode_written_iff s a code
+
+example (code : ByteArray) :
+    codeHash code = BitVec.ofNat 256 (EthLib.Precompiles.Modexp.bytesToNat
+      (EthLib.Cryptography.Hash.KeccakBits.keccak256 code).toArray.toList) ∧
+    (codeHash code).toNat = EthLib.Precompiles.Modexp.bytesToNat
+      (EthLib.Cryptography.Hash.Keccak.keccak256 code).toArray.toList :=
+  ⟨codeHash_refinement code, codeHash_value code⟩
+
+example (s : State) (a : Address) (balance : Word) (code : ByteArray) :
+    let t := setCode (incrementNonce (setAccountBalance s a balance) a) a code
+    t.codes = if codeHash code == emptyCodeHash then s.codes else
+      (codeHash code, code) :: s.codes.filter (fun p => p.1 != codeHash code) :=
+  (balance_nonce_code_target s a balance code).2.2
+
+end WorldProof
+
+namespace WorldProof
+
+example (s : State) (a : Address) (code : ByteArray)
+    (success : getCode (setCode s a code) (codeHash code) = some code) :
+    codeHash code ≠ emptyCodeHash ∨ code = ByteArray.empty :=
+  (setCode_getCode_written_iff s a code).mp success
+
+example (s : State) (a : Address) (code : ByteArray)
+    (condition : codeHash code ≠ emptyCodeHash ∨ code = ByteArray.empty) :
+    getCode (setCode s a code) (codeHash code) = some code :=
+  (setCode_getCode_written_iff s a code).mpr condition
+
+end WorldProof

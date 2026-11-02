@@ -33,7 +33,7 @@ These rules do not assert that arbitrary pairs `(A,S)` are valid blockchain stat
 `state_tracker.modify_state` starts with the defaulting account lookup, applies its update, and sets the account.
 If the resulting account is empty, it destroys both account and storage.
 `set_account_balance`, `increment_nonce`, and `set_code` use this rule.
-`set_code` hashes bytes and records nonempty code in the separate code store.
+`set_code` hashes bytes and records them when the hash differs from the empty-code hash.
 `set_storage` asserts presence and does not create an account.
 `state_mpt.set_storage` deletes zero entries, while the tracker can record a zero write before applying the block diff.
 Transaction-original storage, snapshots, access tracking, transfers, and host refinement remain outside this model.
@@ -61,7 +61,20 @@ It adds the new entry only when its value is nonzero.
 It always returns empty bytes for the empty-code hash.
 For other absent hashes it returns `none`, an explicit extension of the provider interface.
 The caller must ensure that bytes in the supplied store match their hashes.
-Hashing code and updating the code store are reserved for a later child.
+`codeHash` hashes bytes with Keccak-256 and decodes the digest as a big-endian word.
+`setCode` inserts code when its hash differs from the empty-code hash, before account cleanup.
+The code store accepts arbitrary entries, including duplicate hashes.
+A new entry shadows and removes all earlier entries at that hash.
+The hash comparison does not establish that the supplied bytes are empty.
+`setCode_spec` describes account and storage observations and the exact resulting code list.
+`setCode_getCode` describes each code query, including a write at an existing hash.
+`setCode_getCode_written_iff` gives the exact condition for reading back the supplied bytes.
+`codeHash_bytes` proves that the checked word decoder accepts the 32 digest bytes and that encoding the result returns them.
+`codeHash_value` gives their big-endian numeric value.
+`codeHash_refinement` connects the hash to the independently defined whole bit sponge.
+The composed program contracts track cleanup at each step and preserve observations at other addresses.
+`balance_nonce_code_target_initial` gives the final target account and storage directly from the initial state.
+The ordinary and proof consumers exercise the public operations and their observation contracts.
 
 `EthLib.EVM.Proofs.World` states pointwise update and destruction contracts.
 It proves account presence and emptiness characterizations and checked storage error and success cases.
@@ -72,3 +85,33 @@ The composed `write_then_destroy` theorem covers a storage write followed by acc
 The ordinary and proof consumers are `tests/evm/WorldOrdinary.lean` and `tests/evm/WorldProof.lean`.
 
 Transaction-original storage, transfers, snapshots, host refinement, and frame execution are outside this child.
+
+## Migration and scope
+
+The new operations extend the pure `World` API.
+Callers can use `setAccountBalance`, `incrementNonce`, and `setCode` directly.
+The code store remains separate from account hashes.
+Existing `ObservationallyEqual` still requires literal equality of code lists.
+These results describe pure observations and do not model tracker reads, access logs, journals, or transaction effects.
+They do not establish host refinement or the complete Amsterdam transition.
+
+## Source and consumer matrix
+
+The source revision and source-file SHA-256 values above identify the input to this model.
+The functions below refer to `forks/amsterdam/state_tracker.py` at that revision.
+
+| Pure operation | Source function | Contract | Consumer |
+| --- | --- | --- | --- |
+| `setAccountBalance` | `set_account_balance` | `setAccountBalance_spec` | `WorldProof`, `WorldOrdinary` |
+| `incrementNonce` | `increment_nonce` | `incrementNonce_spec` | `WorldProof`, `WorldOrdinary` |
+| `setCode` | `set_code` | `setCode_spec`, `setCode_getCode`, `setCode_getCode_written_iff` | `WorldProof`, `WorldOrdinary` |
+| `codeHash` | `set_code`, `keccak256` | `codeHash_refinement`, `codeHash_bytes`, `codeHash_value` | `WorldProof`, `WorldOrdinary` |
+
+The three mutations are total, so error and error-converse clauses do not apply to them.
+The checked storage operation retains success, error, converse, and preservation consumers in `WorldProof`.
+The program contracts are `balance_nonce_code_target`, `balance_nonce_code_target_initial`, and `balance_nonce_code_off_target`.
+The ordinary program uses the same operation order and checks the target, other address, storage, and code list.
+An equal hash does not imply equal code bytes.
+The conditional empty-hash proof applies without assuming that the supplied code is empty.
+The ordinary duplicate-hash store checks that a new value replaces the old observations.
+The model does not claim transaction tracker or host refinement.

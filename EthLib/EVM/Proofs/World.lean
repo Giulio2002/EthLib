@@ -2,6 +2,8 @@ module
 
 public import EthLib.EVM.World
 import Mathlib.Tactic
+public import EthLib.Cryptography.Proofs.Hash.KeccakBitsRefinement
+public import EthLib.EVM.Proofs.Word
 
 /-! Contracts for the pure account and storage state. -/
 
@@ -393,5 +395,194 @@ theorem setStorage_commute (s t u v w : State) (a b : Address) (k j x y : Word)
   · intro c i
     rw [h₂.2.1 c i, h₄.2.1 c i, h₁.2.1 c i, h₃.2.1 c i]
     split_ifs <;> simp_all [Prod.ext_iff]
+
+/-- Balance replacement follows the account cleanup contract. -/
+theorem setAccountBalance_spec (s : State) (a : Address) (balance : Word) :
+    (∀ b, getAccountOptional (setAccountBalance s a balance) b =
+      if b = a then (if { getAccount s a with balance } = emptyAccount then none
+        else some { getAccount s a with balance }) else getAccountOptional s b) ∧
+    (∀ b k, getStorage (setAccountBalance s a balance) b k =
+      if b = a ∧ { getAccount s a with balance } = emptyAccount then 0 else getStorage s b k) ∧
+    (setAccountBalance s a balance).codes = s.codes :=
+  modifyState_spec s a _
+
+/-- Nonce increment follows the account cleanup contract. -/
+theorem incrementNonce_spec (s : State) (a : Address) :
+    (∀ b, getAccountOptional (incrementNonce s a) b =
+      if b = a then (if { getAccount s a with nonce := (getAccount s a).nonce + 1 } = emptyAccount
+        then none else some { getAccount s a with nonce := (getAccount s a).nonce + 1 })
+      else getAccountOptional s b) ∧
+    (∀ b k, getStorage (incrementNonce s a) b k =
+      if b = a ∧ { getAccount s a with nonce := (getAccount s a).nonce + 1 } = emptyAccount
+      then 0 else getStorage s b k) ∧
+    (incrementNonce s a).codes = s.codes :=
+  modifyState_spec s a _
+
+/-- The code hash uses the independently refined whole sponge. -/
+theorem codeHash_refinement (code : ByteArray) :
+    codeHash code = BitVec.ofNat 256 (EthLib.Precompiles.Modexp.bytesToNat
+      (EthLib.Cryptography.Hash.KeccakBits.keccak256 code).toArray.toList) := by
+  unfold codeHash
+  rw [EthLib.Cryptography.Hash.KeccakBits.keccak256_eq]
+
+/-- The digest decodes to the hash word and round-trips byte for byte. -/
+theorem codeHash_bytes (code : ByteArray) :
+    let bytes : ByteArray := ⟨(EthLib.Cryptography.Hash.Keccak.keccak256 code).toArray⟩
+    Word.ofBytesBE bytes = .ok (codeHash code) ∧
+    Word.toBytesBE (codeHash code) = bytes := by
+  have h : Word.ofBytesBE ⟨(EthLib.Cryptography.Hash.Keccak.keccak256 code).toArray⟩ =
+      .ok (codeHash code) := by
+    have size : (⟨(EthLib.Cryptography.Hash.Keccak.keccak256 code).toArray⟩ : ByteArray).size = 32 :=
+      (EthLib.Cryptography.Hash.Keccak.keccak256 code).size_toArray
+    simp [Word.ofBytesBE, codeHash, size]
+  exact ⟨h, EthLib.EVM.Proofs.Word.toBytesBE_ofBytesBE _ _ h⟩
+
+/-- Account and storage observations and the exact code list after a code write. -/
+theorem setCode_spec (s : State) (a : Address) (code : ByteArray) :
+    let hash := codeHash code
+    let stored := if hash == emptyCodeHash then s.codes else
+      (hash, code) :: s.codes.filter (fun p => p.1 != hash)
+    (∀ b, getAccountOptional (setCode s a code) b =
+      if b = a then (if { getAccount s a with codeHash := hash } = emptyAccount then none
+        else some { getAccount s a with codeHash := hash }) else getAccountOptional s b) ∧
+    (∀ b k, getStorage (setCode s a code) b k =
+      if b = a ∧ { getAccount s a with codeHash := hash } = emptyAccount
+      then 0 else getStorage s b k) ∧
+    (setCode s a code).codes = stored := by
+  dsimp only
+  unfold setCode
+  dsimp only
+  split
+  · exact modifyState_spec s a _
+  · have h := modifyState_spec { s with codes :=
+        (codeHash code, code) :: s.codes.filter (fun p => p.1 != codeHash code) } a
+        (fun account => { account with codeHash := codeHash code })
+    dsimp only [getAccount, getAccountOptional, getStorage] at h ⊢
+    exact h
+
+/-- Every code query after insertion, including an arbitrary preexisting store. -/
+theorem setCode_getCode (s : State) (a : Address) (code : ByteArray) (hash : Word) :
+    getCode (setCode s a code) hash =
+      if hash = emptyCodeHash then some ByteArray.empty
+      else if hash = codeHash code then some code else getCode s hash := by
+  have h := (setCode_spec s a code).2.2
+  unfold getCode
+  rw [h]
+  by_cases he : hash = emptyCodeHash
+  · simp [he]
+  · by_cases hc : codeHash code = emptyCodeHash
+    · simp [he, hc]
+    · by_cases hh : hash = codeHash code
+      · simp [hc, hh]
+      · have hb : (hash == codeHash code) = false := beq_eq_false_iff_ne.mpr hh
+        simp [he, hc, hh, List.lookup_cons, lookup_filter_ne _ _ _ hh, hb]
+
+/-- The getter returns the written bytes exactly under these conditions. -/
+theorem setCode_getCode_written_iff (s : State) (a : Address) (code : ByteArray) :
+    getCode (setCode s a code) (codeHash code) = some code ↔
+      codeHash code ≠ emptyCodeHash ∨ code = ByteArray.empty := by
+  rw [setCode_getCode]
+  by_cases h : codeHash code = emptyCodeHash <;> simp [h, eq_comm]
+
+/-- The digest word has the exact big-endian numeric value of all 32 bytes. -/
+theorem codeHash_value (code : ByteArray) :
+    (codeHash code).toNat = EthLib.Precompiles.Modexp.bytesToNat
+      (EthLib.Cryptography.Hash.Keccak.keccak256 code).toArray.toList := by
+  exact ((EthLib.EVM.Proofs.Word.ofBytesBE_ok_iff _ _).mp (codeHash_bytes code).1).2
+
+/-- A balance, nonce and code program preserves every other address. -/
+theorem balance_nonce_code_off_target (s : State) (a b : Address) (balance : Word)
+    (code : ByteArray) (h : b ≠ a) :
+    let result := setCode (incrementNonce (setAccountBalance s a balance) a) a code
+    getAccountOptional result b = getAccountOptional s b ∧
+    (∀ k, getStorage result b k = getStorage s b k) ∧
+    (∀ hash, getCode result hash =
+      if hash = emptyCodeHash then some ByteArray.empty
+      else if hash = codeHash code then some code else getCode s hash) := by
+  dsimp only
+  have hb := setAccountBalance_spec s a balance
+  have hn := incrementNonce_spec (setAccountBalance s a balance) a
+  have hc := setCode_spec (incrementNonce (setAccountBalance s a balance) a) a code
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hc.1 b, hn.1 b, hb.1 b]
+    simp [h]
+  · intro k
+    rw [hc.2.1 b k, hn.2.1 b k, hb.2.1 b k]
+    simp [h]
+  · intro hash
+    rw [setCode_getCode]
+    have codes : (incrementNonce (setAccountBalance s a balance) a).codes = s.codes :=
+      hn.2.2.trans hb.2.2
+    simp only [getCode, codes]
+
+/-- The program's target account and storage include cleanup at every step. -/
+theorem balance_nonce_code_target (s : State) (a : Address) (balance : Word)
+    (code : ByteArray) :
+    let first := setAccountBalance s a balance
+    let second := incrementNonce first a
+    let result := setCode second a code
+    let x := { getAccount s a with balance }
+    let y := { getAccount first a with nonce := (getAccount first a).nonce + 1 }
+    let z := { getAccount second a with codeHash := codeHash code }
+    getAccountOptional result a = (if z = emptyAccount then none else some z) ∧
+    (∀ k, getStorage result a k =
+      if z = emptyAccount ∨ y = emptyAccount ∨ x = emptyAccount then 0 else getStorage s a k) ∧
+    result.codes = if codeHash code == emptyCodeHash then s.codes else
+      (codeHash code, code) :: s.codes.filter (fun p => p.1 != codeHash code) := by
+  dsimp only
+  have hb := setAccountBalance_spec s a balance
+  have hn := incrementNonce_spec (setAccountBalance s a balance) a
+  have hc := setCode_spec (incrementNonce (setAccountBalance s a balance) a) a code
+  refine ⟨?_, ?_, ?_⟩
+  · simpa using hc.1 a
+  · intro k
+    rw [hc.2.1 a k, hn.2.1 a k, hb.2.1 a k]
+    simp only [true_and]
+    split_ifs <;> simp_all
+  · rw [hc.2.2, hn.2.2, hb.2.2]
+
+private theorem balance_get (s : State) (a : Address) (balance : Word) :
+    getAccount (setAccountBalance s a balance) a =
+      if { getAccount s a with balance } = emptyAccount then emptyAccount
+      else { getAccount s a with balance } := by
+  change (getAccountOptional (setAccountBalance s a balance) a).getD emptyAccount = _
+  rw [(setAccountBalance_spec s a balance).1 a]
+  simp only [↓reduceIte]
+  split <;> rfl
+
+private theorem nonce_get (s : State) (a : Address) :
+    getAccount (incrementNonce s a) a =
+      { getAccount s a with nonce := (getAccount s a).nonce + 1 } := by
+  change (getAccountOptional (incrementNonce s a) a).getD emptyAccount = _
+  rw [(incrementNonce_spec s a).1 a]
+  have ne : { getAccount s a with nonce := (getAccount s a).nonce + 1 } ≠ emptyAccount := by
+    intro eq
+    have n := congrArg Account.nonce eq
+    simp [emptyAccount] at n
+  simp [ne]
+
+/-- The composed target is expressed only in terms of the initial account. -/
+theorem balance_nonce_code_target_initial (s : State) (a : Address) (balance : Word) (code : ByteArray) :
+    let x := { getAccount s a with balance }
+    let y := if x = emptyAccount then emptyAccount else x
+    let result := setCode (incrementNonce (setAccountBalance s a balance) a) a code
+    getAccountOptional result a = some { y with nonce := y.nonce + 1, codeHash := codeHash code } ∧
+    (∀ k, getStorage result a k = if x = emptyAccount then 0 else getStorage s a k) := by
+  dsimp only
+  have hn := nonce_get (setAccountBalance s a balance) a
+  have hb := balance_get s a balance
+  have hx := balance_nonce_code_target s a balance code
+  dsimp only at hx
+  rw [hn, hb] at hx
+  have ne (x : Account) : { x with nonce := x.nonce + 1, codeHash := codeHash code } ≠ emptyAccount := by
+    intro eq
+    have n := congrArg Account.nonce eq
+    simp [emptyAccount] at n
+  have ne2 (x : Account) : { x with nonce := x.nonce + 1 } ≠ emptyAccount := by
+    intro eq
+    have n := congrArg Account.nonce eq
+    simp [emptyAccount] at n
+  simp only [ne, ne2, ↓reduceIte, false_or] at hx
+  exact ⟨hx.1, hx.2.1⟩
 
 end EthLib.EVM.World
