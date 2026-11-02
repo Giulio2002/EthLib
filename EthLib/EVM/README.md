@@ -437,7 +437,7 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The 256-byte dispatch regression covers 124 supported instructions, 24 assigned but unsupported instructions, 107 unassigned bytes, and INVALID.
+The 256-byte dispatch regression covers 125 supported instructions, 23 assigned but unsupported instructions, 107 unassigned bytes, and INVALID.
 These counts describe this restricted frame, not the full Cancun EVM.
 
 ## KECCAK256 execution (09d)
@@ -544,7 +544,29 @@ The seven instructions charge two gas before pushing the selected field.
 `Frame.block_observation_actual` derives the stack and context from actual success.
 `Runner.BlockEnvironmentProgram.run` covers arbitrary accepted context and memory.
 The context supplies metadata and does not validate a block.
-BLOCKHASH remains outside this slice.
+
+`Environment.Context.blockHashes` holds previous block hashes in increasing number order.
+Every context constructor supplies this list explicitly.
+Each word is the big-endian decoding of one 32-byte hash.
+Cancun `fork.py`, `get_last_256_block_hashes`, defines the ordering.
+Cancun `vm/instructions/block.py`, `block_hash`, pops before charging 20 gas.
+The query uses the full 256-bit value and natural-number arithmetic.
+A current, future, or more than 256 blocks old query returns zero.
+An in-window query selects the element at `length - (number - query)`.
+
+`HistoryMatches` states both window coverage and agreement with a supplied chain.
+It permits the leading genesis-parent hash that the fork may supply.
+The relation does not validate headers or establish chain ancestry.
+`blockHash_source_agreement` uses those hypotheses to identify the selected chain word.
+A shorter list can make the source raise an indexing error.
+The Lean helper explicitly extends that case with zero.
+The context number remains restricted to the U256-representable source subset.
+`step_blockHash_actual` derives all output fields from an actual successful step.
+`step_blockHash_codec` connects that output to fixed-width source bytes.
+`Runner.BlockHashProgram.run` composes two lookups for arbitrary contexts.
+Its bounded preservation contracts retain context, return data and memory.
+The independent frame rules and `step_iff_rule` cover the total extension.
+
 
 `Environment.Context.blobVersionedHashes` supplies the transaction's decoded hashes.
 Each word represents exactly one 32-byte big-endian versioned hash.

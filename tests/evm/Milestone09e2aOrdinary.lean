@@ -4,7 +4,7 @@ open EthLib.EVM
 
 private def metadata : Environment.Context :=
   ⟨1, 2, 3, 4, 5, ⟨2^160 - 1, by decide⟩, BitVec.ofNat 256 (2^256 - 1),
-    13, BitVec.ofNat 256 (2^255), 17, ⟨2^64 - 1, by decide⟩, 23, 0, []⟩
+    13, BitVec.ofNat 256 (2^255), 17, ⟨2^64 - 1, by decide⟩, 23, 0, [], []⟩
 
 private def input : Frame.State :=
   ⟨⟨#[0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x48, 0x00]⟩, 0,

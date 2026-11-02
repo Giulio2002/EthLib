@@ -163,6 +163,19 @@ def blobHash (s : State) : Outcome :=
       | .error e => failStack s e
       | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
 
+/-- Cancun `block.py`, `block_hash`, pops before charging 20 gas.
+
+The history argument uses the total extension described by `Environment.blockHash`.
+-/
+def blockHash (s : State) (history : Environment.BlockHistory) : Outcome :=
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (index, stack) =>
+    charge s 20 fun gas =>
+      match Stack.push stack (Environment.blockHash history s.context.environment.number index) with
+      | .error e => failStack s e
+      | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+
 /-- Execute one instruction or stop at the end of code. -/
 def step (s : State) : Outcome :=
   if h : s.pc < s.code.size then
@@ -200,6 +213,7 @@ def step (s : State) : Outcome :=
     -- Cancun `control_flow.py`, `jumpdest`: charge before advancing.
     | some .jumpdest =>
       charge s 1 fun gas => .continue { s with gas, pc := s.pc + 1 }
+    | some .blockhash => blockHash s s.context.environment.blockHashes
     | some .blobhash => blobHash s
     -- Cancun `environment.py`, `calldataload`: pop before charging.
     | some .calldataload =>
