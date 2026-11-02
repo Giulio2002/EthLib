@@ -20,6 +20,8 @@ public import EthLib.EVM.Proofs.CallData
 public import EthLib.EVM.Proofs.JumpDest
 public import EthLib.EVM.Proofs.Stack
 public import EthLib.EVM.Proofs.Frame
+public import EthLib.EVM.Proofs.Keccak
+public import EthLib.EVM.Proofs.KeccakBits
 public import EthLib.EVM.Proofs.FrameArithmetic
 public import EthLib.EVM.Proofs.FrameComparison
 public import EthLib.EVM.Proofs.Frame.Reference
@@ -30,6 +32,7 @@ public import EthLib.EVM.Proofs.Runner.Mixed
 public import EthLib.EVM.Proofs.Runner.Memory
 public import EthLib.EVM.Proofs.Runner.CallData
 public import EthLib.EVM.Proofs.Runner.MixedCopy
+public import EthLib.EVM.Proofs.Runner.CopyKeccak
 public import EthLib.EVM.Proofs.ReturnData
 
 /-!

@@ -27,9 +27,9 @@ example : match Runner.run 1 (initial ⟨#[]⟩ 0) with
     | .stopped s => (s.stack.val.map BitVec.toNat, s.pc)
     | _ => ([], 0)
 
--- An assigned instruction outside the slice is tooling unsupported.
+-- KECCAK checks its operands before gas.
 example : match Runner.run 1 (initial ⟨#[0x20]⟩ 0) with
-    | .unsupported _ .keccak => True
+    | .exception _ .stackUnderflow => True
     | _ => False := by cbv
 
 -- An unassigned instruction is exceptional.
@@ -139,7 +139,7 @@ example : match Runner.run 5 (initial ⟨#[0x00]⟩ 9) with
 example : match Runner.run 1 (initial ⟨#[0xfe]⟩ 9) with
     | .exception s e => s.gas = 9 ∧ Runner.settle (.exception s e) = some (.exceptional 0 e)
     | _ => False := by cbv
-example : Runner.settle (Runner.run 1 (initial ⟨#[0x20]⟩ 9)) = none := by cbv
+example : Runner.settle (Runner.run 1 (initial ⟨#[0x20]⟩ 9)) = some (.exceptional 0 .stackUnderflow) := by cbv
 example : Runner.settle (Runner.run 0 (initial ⟨#[0x00]⟩ 9)) = none := by cbv
 
 -- The first step exhausts, and resuming executes STOP.

@@ -60,6 +60,10 @@ Only the destination range expands memory.
 def inputCopyCost (old destination length : Nat) : Nat :=
   3 + 3 * ((length + 31) / 32) + rangeCost old destination length
 
+/-- Cancun `instructions/keccak.py`, `keccak`, and `gas.py`, `GasCosts`. -/
+def keccakCost (old offset length : Nat) : Nat :=
+  30 + 6 * ((length + 31) / 32) + rangeCost old offset length
+
 /-- Charge before expanding the logical allocation. -/
 def chargeExpand (gas : Nat) (s : State) (offset length : Nat) : Except Error (Nat × State) :=
   match charge gas (rangeCost s.words offset length) with
