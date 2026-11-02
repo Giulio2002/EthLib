@@ -24,6 +24,7 @@ public import EthLib.EVM.Proofs.FrameComparison
 public import EthLib.EVM.Proofs.Frame.Reference
 public import EthLib.EVM.Proofs.Runner
 public import EthLib.EVM.Proofs.Runner.StraightLine
+public import EthLib.EVM.Proofs.Runner.Mixed
 
 /-!
 # `EthLib.EVM.Proofs`

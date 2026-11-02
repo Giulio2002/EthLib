@@ -31,7 +31,7 @@ Boundary examples supplement these universal statements.
 They do not establish the contract by themselves.
 
 The machine-checked claim is refinement to this Lean mathematical model.
-Correspondence between that model and the cited paper is a human reading of the source.
+Correspondence between that model and the cited paper is a manual reading of the source.
 The contract covers representation, checked natural construction and addition.
 The sections below cover further word result contracts.
 It does not cover all inherited BitVec operations, an interpreter, gas, stack effects or other instructions.
@@ -56,7 +56,7 @@ It is not the logical memory size.
 The kernel checks that empty reads zero, a write changes exactly its address, and support remains finite.
 It checks overwrite, write-back and commutation for distinct addresses as equality of total observed byte functions.
 These equalities do not assert equality of write histories.
-The source interpretation is a human reading; the proofs establish refinement to the stated Lean abstraction.
+The source interpretation is a manual reading; the proofs establish refinement to the stated Lean abstraction.
 ## Unsigned division and remainder
 
 The first argument is the first-popped numerator.
@@ -93,7 +93,7 @@ The signed minimum divided by -1 returns the signed minimum word.
 The kernel checks refinement for every pair of words, including zero divisors and overflow.
 The proofs also establish signed range and representation round trips, the remainder sign and magnitude, and the quotient and remainder identity outside the overflow case.
 The machine-checked result is refinement to this Lean model.
-Correspondence between the model and the cited sources is a human interpretation.
+Correspondence between the model and the cited sources is a manual interpretation.
 These helpers do not execute instructions or model the stack, gas, or an interpreter.
 They make no claim about compiled runtime correctness or security.
 
@@ -109,7 +109,7 @@ Each helper returns 1 when its condition holds and 0 otherwise.
 `Word.eqResult` and `Word.iszeroResult` test equality and zero.
 The separate proof module establishes exact equations, result bounds, predicate equivalences, and ordering identities for all operands.
 The kernel checks refinement to these Lean mathematical predicates.
-Correspondence with the cited sources is a human interpretation.
+Correspondence with the cited sources is a manual interpretation.
 The helpers do not model instruction execution, stack effects, gas, or an interpreter.
 
 # Shift results
@@ -126,7 +126,7 @@ For smaller counts, SAR divides the signed value and rounds down.
 
 The kernel checks the piecewise equations, signed quotient range, sign preservation and zero-shift identities for all words.
 Boundary examples supplement those contracts.
-The correspondence between the Lean equations and the sources is a human interpretation.
+The correspondence between the Lean equations and the sources is a manual interpretation.
 These helpers give word results only and do not model opcode execution, gas or stack effects.
 
 ## BYTE and SIGNEXTEND results
@@ -150,7 +150,7 @@ It also proves index 31 and larger are identities, idempotence, and agreement wi
 Boundary examples supplement these universal results.
 
 The kernel checks refinement to the Lean reference functions.
-Their correspondence to the pinned sources is a human reading of those sources.
+Their correspondence to the pinned sources is a manual reading of those sources.
 These contracts concern result helpers only.
 They do not cover byte codecs, instruction execution, gas, stack effects or compiled runtime correctness.
 
@@ -169,7 +169,7 @@ commutativity, identities and invariance under reducing the operands first.
 The exact equations have no residual reduction modulo `2^256`.
 Boundary examples include carries and high product bits.
 
-The source-to-model correspondence is a human interpretation of these sources.
+The source-to-model correspondence is a manual interpretation of these sources.
 The kernel checks refinement of the word results to that model.
 These helpers make no claim about opcode execution, gas, stack or runtime behavior.
 
@@ -180,7 +180,7 @@ The operation computes the power modulo `2^256`.
 The Yellow Paper Appendix H.2 gives the same result.
 `Word.exp` uses the MODEXP square-and-multiply algorithm with the entire word exponent.
 Its proof establishes the natural result, bounded reference refinement, corner cases and the 256-bit step bound.
-The correspondence between the sources and this model is a human interpretation.
+The correspondence between the sources and this model is a manual interpretation.
 The frame contracts below cover the instruction as well as this result helper.
 
 ## Subtraction, multiplication and bitwise results
@@ -242,7 +242,8 @@ Cancun adds BLOBHASH, BLOBBASEFEE, TLOAD, TSTORE and MCOPY to the Shanghai table
 
 The proof module independently lists byte and constructor pairs from those sources.
 It proves equality with the decoder for every byte and both encoding round trips.
-The kernel checks the proof; the source transcription is a human review.
+The kernel checks the proof against the transcribed table.
+Agent source inspection is not human approval or a proof of equivalence to Python.
 
 `PushImmediate` reads the length from a PUSH constructor.
 It pads missing bytes on the right and interprets the result as a big-endian word.
@@ -315,7 +316,8 @@ It does not assert a final stack or model world-state rollback.
 The independent `Frame.Rule` relation states the instruction cases using stack lists and gas conditions.
 The kernel checks `step_iff_rule` for all frames and outcomes.
 Runner terminal trace adequacy uses this relation and sufficient fuel.
-The source transcription is a manual inspection of the cited Python, not an automatically checked equivalence to it.
+An agent inspected the source transcription against the cited Python.
+That inspection is not human approval or an automatically checked equivalence.
 
 `Runner.StraightLine.push_push_add_stop` proves the example for any two immediate bytes.
 It assumes at most 1022 initial stack entries and gas `9 + g`.
@@ -332,3 +334,13 @@ The rules appear in `vm/instructions/arithmetic.py`, `exp`, and `vm/gas.py`, `Ga
 The proof characterizes the byte count using powers of two and proves it is unique.
 It also bounds the byte count by 32 and the cost by 1610.
 The EXP frame rule charges this cost after both stack checks.
+
+The milestone 08 instruction subset has source-shaped rules for each supported opcode.
+The kernel checks those rules against the executable step for every frame.
+The bounded runner composes the rules without treating fuel as protocol gas.
+`Runner.Mixed.add_iszero_pc_gas` proves a program with arithmetic, comparison and observations.
+Its GAS result reduces modulo 2^256 for every natural gas reserve.
+The result is exact when that reserve is below 2^256.
+
+The integration audit covers this restricted subset and its stated source-domain bounds.
+An agent inspected the pinned sources; that inspection is not human approval or a Python-to-Lean proof.
