@@ -1549,6 +1549,49 @@ theorem step_observation (s t : State) (o : Observation)
   cases o <;> simp_all [Observation.opcode, Observation.value, step, observe, charge,
     Gas.charge, observationWord]
 
+/-- A successful observation puts the observed word on the resulting stack. -/
+theorem step_observation_stack (s t : State) (o : Observation)
+    (h : At s (some o.opcode)) (run : step s = .continue t) :
+    t.stack.val = observationWord (o.value s) :: s.stack.val := by
+  -- A continuing step cannot be the out-of-gas case.
+  have gas : 2 ≤ s.gas := by
+    by_cases hg : 2 ≤ s.gas
+    · exact hg
+    have bad := step_observation_gas s o h (by omega)
+    rw [run] at bad
+    cases bad
+  -- The stack bound makes lack of room exactly the overflow case.
+  have room : s.stack.val.length < 1024 := by
+    by_cases hr : s.stack.val.length < 1024
+    · exact hr
+    have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+    have bad := step_observation_full s o h gas full
+    rw [run] at bad
+    cases bad
+  -- Build the unique successful target and compare the two outcomes.
+  let st : Stack := ⟨observationWord (o.value s) :: s.stack.val, by simp; omega⟩
+  let target : State := { s with stack := st, pc := s.pc + 1, gas := s.gas - 2 }
+  have fields : Advances s target (s.pc + 1) (s.gas - 2)
+      (BitVec.ofNat 256 (o.value s) :: s.stack.val) := by
+    simp [Advances, target, st, observationWord]
+  have ok := step_observation s target o h gas room fields
+  rw [run] at ok
+  have eq : t = target := Outcome.continue.inj ok
+  rw [eq]
+
+/-- The resulting stack head is the observation modulo the word modulus. -/
+theorem step_observation_stack_mod (s t : State) (o : Observation)
+    (h : At s (some o.opcode)) (run : step s = .continue t) :
+    ∃ w, t.stack.val = w :: s.stack.val ∧ w.toNat = o.value s % Word.modulus := by
+  exact ⟨observationWord (o.value s), step_observation_stack s t o h run, observationWord_toNat _⟩
+
+/-- In the source U256 domain, the resulting stack head is exact. -/
+theorem step_observation_stack_exact (s t : State) (o : Observation)
+    (h : At s (some o.opcode)) (run : step s = .continue t)
+    (bound : o.value s < Word.modulus) :
+    ∃ w, t.stack.val = w :: s.stack.val ∧ w.toNat = o.value s := by
+  exact ⟨observationWord (o.value s), step_observation_stack s t o h run, observationWord_exact _ bound⟩
+
 /-- An assigned opcode outside this slice yields the tooling result. -/
 theorem step_unsupported (s : State) (op : Opcode) (h : At s (some op))
     (unsupported : Unsupported op) : step s = .unsupported s op := by
