@@ -268,3 +268,32 @@ The correspondence between that Lean relation and the source is a human source r
 The combined opcode decoder, PUSH immediate reader and jump destination scanner pass their library, proof and standalone test gates.
 This completes the scoped decoding milestone, not EVM execution or EELS differential validation.
 The decoder and scanner do not model frames, gas, stack effects or instruction execution.
+
+# Restricted frame execution
+
+The frame runner supports STOP, PUSH0 through PUSH32, POP, ADD, DUP1 through DUP16, and SWAP1 through SWAP16.
+Other assigned Cancun opcodes return a distinct unsupported tooling result.
+Unassigned bytes and INVALID cause exceptional halts.
+Fuel exhaustion is a tooling result and is not an EVM exception.
+The frame holds code, a natural program counter, a bounded stack, gas, and valid allocated memory.
+It does not model world state, calls, output, or rollback.
+
+The source is Cancun execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`.
+`vm/instructions/control_flow.py`, `stop`, increments the program counter.
+For `PUSH1 2; PUSH1 3; ADD; STOP` starting at zero, the final program counter is six.
+The STOP byte is at position five.
+This corrects any example that treats the STOP position as the final counter.
+Reaching the end of code without executing STOP leaves the counter unchanged.
+
+The exception result retains the input frame for diagnostics only.
+`Frame.settle` projects zero remaining gas for every exception.
+It does not assert a final stack or model world-state rollback.
+The independent `Frame.Rule` relation states the instruction cases using stack lists and gas conditions.
+The kernel checks `step_iff_rule` for all frames and outcomes.
+Runner terminal trace adequacy uses this relation and sufficient fuel.
+The source transcription is a human reading of the cited Python, not an automatically checked equivalence to it.
+
+`Runner.StraightLine.push_push_add_stop` proves the example for any two immediate bytes.
+It assumes at most 1022 initial stack entries and gas `9 + g`.
+The result leaves the modular sum above the original stack, retains gas `g`, and stops at counter six.
+`Runner.StraightLine.two_plus_three` specializes it to an empty stack and gas nine.
