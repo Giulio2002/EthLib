@@ -17,6 +17,14 @@ namespace EthLib.EVM.CallData
 structure Context where
   data : ByteArray
 
+/-- Read exactly `length` bytes from a buffer, padding past its end with zeros.
+
+Cancun `vm/memory.py`, `buffer_read` uses natural addition for the end.
+The caller must authorize the requested length before constructing this list.
+-/
+def readRange (data : ByteArray) (offset length : Nat) : List UInt8 :=
+  (List.range length).map (fun i => PushImmediate.byteAt data (offset + i))
+
 /-- Read 32 bytes from the full word offset, padding on the right with zeros. -/
 def bytes (ctx : Context) (offset : Word) : List UInt8 :=
   (List.range 32).map (fun i => PushImmediate.byteAt ctx.data (offset.toNat + i))
