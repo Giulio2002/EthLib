@@ -194,6 +194,85 @@ theorem mstore8_success_output (s t : State) (x y : Word) (xs : List Word)
   obtain ⟨gas, fields⟩ := mstore8_success_fields s t x y xs at_ items run
   exact mstore8_output s t x y xs at_ items gas fields
 
+/-- A successful MCOPY determines its gas and every updated field. -/
+theorem mcopy_success_fields (s t : State) (x y z : Word) (xs : List Word)
+    (at_ : At s (some .mcopy)) (items : s.stack.val = x :: y :: z :: xs)
+    (run : step s = .continue t) :
+    Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat ≤ s.gas ∧
+      AdvancesMemory s t (Memory.Allocation.copy s.memory x.toNat y.toNat z.toNat)
+        (s.pc + 1) (s.gas - Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat) xs := by
+  have gas : Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat ≤ s.gas := by
+    by_contra low
+    have failure := step_mcopy_gas s x y z xs at_ items (Nat.lt_of_not_ge low)
+    rw [run] at failure
+    cases failure
+  let stack : Stack := ⟨xs, by
+    have bound := s.stack.property
+    rw [items] at bound
+    simp at bound ⊢
+    omega⟩
+  let target : State := { s with stack, pc := s.pc + 1, gas := s.gas - Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat, memory := Memory.Allocation.copy s.memory x.toNat y.toNat z.toNat, memoryValid := Memory.Allocation.copy_valid_for_frame _ _ _ _ s.memoryValid }
+  have fields : AdvancesMemory s target (Memory.Allocation.copy s.memory x.toNat y.toNat z.toNat)
+      (s.pc + 1) (s.gas - Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat) xs := by
+    simp [AdvancesMemory, target, stack]
+  have success := step_mcopy s target x y z xs at_ items gas fields
+  rw [run] at success
+  have eq : t = target := Outcome.continue.inj success
+  subst t
+  exact ⟨gas, fields⟩
+
+/-- A continuing MCOPY exposes the input snapshot at every destination byte. -/
+theorem mcopy_success_output (s t : State) (x y z : Word) (xs : List Word)
+    (at_ : At s (some .mcopy)) (items : s.stack.val = x :: y :: z :: xs)
+    (run : step s = .continue t) :
+    t.code = s.code ∧ t.pc = s.pc + 1 ∧
+    t.gas = s.gas - Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat ∧
+    t.stack.val = xs ∧
+    t.memory.words = max (max s.memory.words (Memory.Allocation.requiredWords y.toNat z.toNat))
+      (Memory.Allocation.requiredWords x.toNat z.toNat) ∧
+    (∀ i, i < z.toNat → readByte t.memory.store (x.toNat + i) =
+      readByte s.memory.store (y.toNat + i)) ∧
+    (∀ a, ¬ (x.toNat ≤ a ∧ a < x.toNat + z.toNat) →
+      readByte t.memory.store a = readByte s.memory.store a) := by
+  obtain ⟨_, code, mem, pc, gas, stack⟩ := mcopy_success_fields s t x y z xs at_ items run
+  refine ⟨code, pc, gas, stack, ?_, ?_, ?_⟩
+  · rw [mem]; rfl
+  · intro i hi
+    rw [mem, Memory.Allocation.copy_observe]
+    simp [show x.toNat ≤ x.toNat + i ∧ x.toNat + i < x.toNat + z.toNat by omega]
+  · intro a outside
+    rw [mem, Memory.Allocation.copy_observe]
+    simp [outside]
+
+/-- The forward rule yields the exact snapshot observations. -/
+theorem mcopy_output (s t : State) (x y z : Word) (xs : List Word)
+    (at_ : At s (some .mcopy)) (items : s.stack.val = x :: y :: z :: xs)
+    (gas : Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat ≤ s.gas)
+    (fields : AdvancesMemory s t (Memory.Allocation.copy s.memory x.toNat y.toNat z.toNat)
+      (s.pc + 1) (s.gas - Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat) xs) :
+    step s = .continue t ∧
+    (∀ i, i < z.toNat → readByte t.memory.store (x.toNat + i) =
+      readByte s.memory.store (y.toNat + i)) ∧
+    (∀ a, ¬ (x.toNat ≤ a ∧ a < x.toNat + z.toNat) →
+      readByte t.memory.store a = readByte s.memory.store a) := by
+  have run := step_mcopy s t x y z xs at_ items gas fields
+  exact ⟨run, (mcopy_success_output s t x y z xs at_ items run).2.2.2.2.2⟩
+
+/-- Sufficient gas executes a copy of arbitrary snapshot contents. -/
+theorem mcopy_program (s : State) (x y z : Word) (xs : List Word)
+    (at_ : At s (some .mcopy)) (items : s.stack.val = x :: y :: z :: xs)
+    (gas : Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat ≤ s.gas) :
+    ∃ t, step s = .continue t ∧
+      (∀ i, i < z.toNat → readByte t.memory.store (x.toNat + i) =
+        readByte s.memory.store (y.toNat + i)) := by
+  let stack : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  let t : State := { s with stack, pc := s.pc + 1, gas := s.gas - Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat, memory := Memory.Allocation.copy s.memory x.toNat y.toNat z.toNat, memoryValid := Memory.Allocation.copy_valid_for_frame _ _ _ _ s.memoryValid }
+  have fields : AdvancesMemory s t (Memory.Allocation.copy s.memory x.toNat y.toNat z.toNat)
+      (s.pc + 1) (s.gas - Gas.mcopyCost s.memory.words x.toNat y.toNat z.toNat) xs := by
+    simp [AdvancesMemory, t, stack]
+  have run := step_mcopy s t x y z xs at_ items gas fields
+  exact ⟨t, run, (mcopy_success_output s t x y z xs at_ items run).2.2.2.2.2.1⟩
+
 /-- Every continuing frame retains valid, aligned memory without shrinking it. -/
 theorem continue_memory_invariants {s t : State} (run : step s = .continue t) :
     Memory.Allocation.Valid t.memory ∧ Memory.Allocation.byteSize t.memory % 32 = 0 ∧
@@ -202,6 +281,6 @@ theorem continue_memory_invariants {s t : State} (run : step s = .continue t) :
   have rule := (step_iff_rule s _).mp run
   cases rule <;> simp_all [Advances, AdvancesMemory, Memory.Allocation.loadWord,
     Memory.Allocation.read, Memory.Allocation.storeWord, Memory.Allocation.storeByte,
-    Memory.Allocation.write, Memory.Allocation.expand]
+    Memory.Allocation.write, Memory.Allocation.expand, Memory.Allocation.copy]
 
 end EthLib.EVM.Frame

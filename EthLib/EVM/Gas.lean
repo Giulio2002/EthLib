@@ -45,6 +45,14 @@ def rangeCost (old offset length : Nat) : Nat :=
 def pairCost (old a n b m : Nat) : Nat :=
   expansionCost old (max (requiredWords a n) (requiredWords b m))
 
+/-- Cancun `instructions/memory.py`, `mcopy`, and `gas.py`, `GasCosts`.
+
+The copy charge rounds the length up to whole words.
+Expansion covers both source and destination in one charge.
+-/
+def mcopyCost (old destination source length : Nat) : Nat :=
+  3 + 3 * ((length + 31) / 32) + pairCost old source length destination length
+
 /-- Charge before expanding the logical allocation. -/
 def chargeExpand (gas : Nat) (s : State) (offset length : Nat) : Except Error (Nat × State) :=
   match charge gas (rangeCost s.words offset length) with

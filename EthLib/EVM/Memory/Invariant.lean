@@ -58,4 +58,32 @@ theorem write_valid_for_frame (s : State) (offset : Nat) (data : List UInt8) (h 
     rw [range_outside _ _ _ _ (by omega)]
     exact h a old
 
+/-- Snapshot copying preserves the zero-outside invariant. -/
+theorem copy_valid_for_frame (s : State) (destination source length : Nat) (h : Valid s) :
+    Valid (copy s destination source length) := by
+  cases length with
+  | zero => simpa [copy, copyRange, expand, requiredWords] using h
+  | succ n =>
+    intro a ha
+    change max (max s.words (requiredWords source (n + 1)))
+      (requiredWords destination (n + 1)) * 32 ≤ a at ha
+    change readByte (writeRange s.store destination (readRange s.store source (n + 1))) a = 0
+    have len : (readRange s.store source (n + 1)).length = n + 1 := by
+      have lengths (offset count : Nat) : (readRange s.store offset count).length = count := by
+        induction count generalizing offset with
+        | zero => rfl
+        | succ k ih => simp [readRange, ih]
+      exact lengths source (n + 1)
+    have cover : destination + (n + 1) ≤ requiredWords destination (n + 1) * 32 := by
+      simp only [requiredWords, Nat.succ_ne_zero, ite_false]
+      omega
+    have bound := Nat.le_max_right (max s.words (requiredWords source (n + 1)))
+      (requiredWords destination (n + 1))
+    rw [range_outside _ _ _ _ (by rw [len]; omega)]
+    apply h
+    have := Nat.le_max_left s.words (requiredWords source (n + 1))
+    have := Nat.le_max_left (max s.words (requiredWords source (n + 1)))
+      (requiredWords destination (n + 1))
+    omega
+
 end EthLib.EVM.Memory.Allocation

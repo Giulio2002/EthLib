@@ -17,6 +17,14 @@ example : memoryCost 23 = 70 := by decide
 example : expansionCost 23 23 = 0 := by decide
 example : rangeCost 0 (2^256 - 1) 0 = 0 := by decide
 example : pairCost 0 0 32 64 32 = 9 := by decide
+-- MCOPY pays three base gas, three per rounded word, and expansion gas.
+example : mcopyCost 0 (2^256 - 1) (2^256 - 1) 0 = 3 := by decide
+example : mcopyCost 0 0 0 1 = 9 := by decide
+example : mcopyCost 0 0 0 31 = 9 := by decide
+example : mcopyCost 0 0 0 32 = 9 := by decide
+example : mcopyCost 0 0 0 33 = 15 := by decide
+example : mcopyCost 0 64 0 1 = 15 := by decide
+example : mcopyCost 0 0 64 1 = 15 := by decide
 -- This calculates only the cost, without allocating the range.
 example : rangeCost 0 (2^256) 1 > 2^256 := by decide
 

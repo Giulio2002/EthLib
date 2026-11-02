@@ -122,6 +122,19 @@ def step (s : State) : Outcome :=
     | some .pc => observe s (fun _ => s.pc)
     | some .msize => observe s (fun _ => Memory.Allocation.byteSize s.memory)
     | some .gas => observe s id
+    -- Cancun `memory.py`, `mcopy`: pop all operands and charge before copying.
+    | some .mcopy =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (destination, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (source, stack) =>
+          match Stack.pop stack with
+          | .error e => failStack s e
+          | .ok (length, stack) =>
+            charge s (Gas.mcopyCost s.memory.words destination.toNat source.toNat length.toNat) fun gas =>
+              .continue { s with stack, gas, pc := s.pc + 1, memory := Memory.Allocation.copy s.memory destination.toNat source.toNat length.toNat, memoryValid := Memory.Allocation.copy_valid_for_frame _ _ _ _ s.memoryValid }
     -- Cancun `memory.py`, `mload`: pop, charge, expand, then read.
     | some .mload =>
       match Stack.pop s.stack with
