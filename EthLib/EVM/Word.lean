@@ -33,6 +33,12 @@ namespace Word
 /-- The arithmetic modulus from Yellow Paper Appendix H.2. -/
 def modulus : Nat := 2 ^ 256
 
+/-- Count leading zeros as in Osaka execution-specs revision
+`fd9298410ec7218838c8348f69c1eb633f1797dc`,
+`vm/instructions/bitwise.py`, `count_leading_zeros`. -/
+def countLeadingZeros (x : Word) : Word :=
+  BitVec.ofNat 256 (if x.toNat = 0 then 256 else 255 - Nat.log2 x.toNat)
+
 /-- An input that cannot be represented as an unsigned EVM word. -/
 inductive InputError where
   /-- The natural number is at least `2^256`. -/

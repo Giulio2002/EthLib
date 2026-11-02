@@ -11,7 +11,7 @@ namespace EthLib.EVM.Proofs.Opcode
 
 open EthLib.EVM
 
-/-- Encoding and decoding preserve each Cancun opcode. -/
+/-- Encoding and decoding preserve each target-subset opcode. -/
 theorem decode_encode (op : Opcode) : Opcode.decode (Opcode.encode op) = some op := by
   cases op <;> try rfl
   all_goals rename_i n; fin_cases n <;> rfl
@@ -49,10 +49,11 @@ theorem decode_eq_some_iff (b : UInt8) (op : Opcode) :
     rw [← h]
     exact decode_encode op
 
-/-- Independently enumerated Cancun byte and opcode pairs.
+/-- Independently enumerated Cancun byte and opcode pairs plus Osaka CLZ.
 
 The Cancun EELS `Ops` enum supplies the dispatched pairs.
 Yellow Paper Appendix H.2 supplies the designated INVALID byte.
+Osaka execution-specs `vm.instructions.Ops` supplies CLZ.
 -/
 def reference : List (UInt8 × Opcode) := [
   (0x00, .stop),
@@ -81,6 +82,7 @@ def reference : List (UInt8 × Opcode) := [
   (0x1b, .shl),
   (0x1c, .shr),
   (0x1d, .sar),
+  (0x1e, .clz),
   (0x20, .keccak),
   (0x30, .address),
   (0x31, .balance),
@@ -204,6 +206,17 @@ def reference : List (UInt8 × Opcode) := [
   (0xfd, .revert),
   (0xfe, .invalid),
   (0xff, .selfdestruct)]
+
+/-- The historical Cancun table excludes the later CLZ assignment. -/
+def cancunReference : List (UInt8 × Opcode) := reference.filter (fun pair => pair.1 != 0x1e)
+
+set_option maxHeartbeats 4000000 in
+/-- The historical classifier agrees with every entry and gap in the Cancun table. -/
+theorem decodeCancun_reference (b : UInt8) : Opcode.decodeCancun b = cancunReference.lookup b := by
+  have check (n : Fin 256) :
+      Opcode.decodeCancun (UInt8.ofNat n.val) = cancunReference.lookup (UInt8.ofNat n.val) := by
+    fin_cases n <;> decide
+  simpa only [UInt8.ofNat_toNat] using check ⟨b.toNat, UInt8.toNat_lt b⟩
 
 set_option maxHeartbeats 4000000 in
 /-- The decoder agrees with every entry and every gap in the source table. -/

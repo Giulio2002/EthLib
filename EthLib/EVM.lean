@@ -32,8 +32,8 @@ public import EthLib.EVM.Runner
 Division and remainder include signed and unsigned results.
 Arithmetic includes modular addition and exponentiation results.
 Bounded stack helpers.
-The frame runner implements a restricted Cancun instruction subset.
+The frame runner implements a restricted Cancun-based subset plus Osaka CLZ.
 It does not implement fork selection or whole-EVM execution.
-Cancun opcode decoding includes PUSH immediates and jump destination scanning.
+The historical Cancun decoder and augmented decoder include PUSH immediates.
 The existing precompile modules retain their paths and ownership.
 -/

@@ -11,6 +11,7 @@ public import EthLib.EVM.Proofs.Memory.Allocation
 public import EthLib.EVM.Proofs.Word.DivMod
 public import EthLib.EVM.Proofs.Word.SignedDivMod
 public import EthLib.EVM.Proofs.Word.Comparisons
+public import EthLib.EVM.Proofs.Word.CountLeadingZeros
 public import EthLib.EVM.Proofs.Word.Bitwise
 public import EthLib.EVM.Proofs.Word.Shifts
 public import EthLib.EVM.Proofs.Word.ByteSignExtend
@@ -22,6 +23,7 @@ public import EthLib.EVM.Proofs.CallData
 public import EthLib.EVM.Proofs.JumpDest
 public import EthLib.EVM.Proofs.Stack
 public import EthLib.EVM.Proofs.Frame
+public import EthLib.EVM.Proofs.Frame.CountLeadingZeros
 public import EthLib.EVM.Proofs.Frame.Environment
 public import EthLib.EVM.Proofs.Frame.BlobFee
 public import EthLib.EVM.Proofs.Keccak
@@ -33,6 +35,7 @@ public import EthLib.EVM.Proofs.Frame.Memory
 public import EthLib.EVM.Proofs.Runner
 public import EthLib.EVM.Proofs.Runner.StraightLine
 public import EthLib.EVM.Proofs.Runner.Mixed
+public import EthLib.EVM.Proofs.Runner.CountLeadingZeros
 public import EthLib.EVM.Proofs.Runner.Environment
 public import EthLib.EVM.Proofs.Runner.BlockEnvironment
 public import EthLib.EVM.Proofs.Runner.Memory

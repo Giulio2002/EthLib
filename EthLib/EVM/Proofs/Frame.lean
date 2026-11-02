@@ -1114,6 +1114,37 @@ theorem step_iszero (s t : State) (x : Word) (xs : List Word)
   simp only [step, dite_eq_left bounds, decoded, pop, charge, Gas.charge, ite_eq_left gas, push]
   rw [update]
 
+/-- CLZ checks its operand before gas. -/
+theorem step_clz_empty (s : State) (h : At s (some .clz)) (empty : s.stack.val = []) :
+    step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr empty
+  simp [step, bounds, decoded, clz, pop, failStack]
+
+/-- CLZ checks gas after popping its operand. -/
+theorem step_clz_gas (s : State) (x : Word) (xs : List Word)
+    (h : At s (some .clz)) (items : s.stack.val = x :: xs) (gas : s.gas < 5) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  simp [step, bounds, decoded, clz, pop, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- CLZ replaces its operand with the result. -/
+theorem step_clz (s t : State) (x : Word) (xs : List Word)
+    (h : At s (some .clz)) (items : s.stack.val = x :: xs) (gas : 5 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 5) (Word.countLeadingZeros x :: xs)) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  let final : Stack := ⟨Word.countLeadingZeros x :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have push : rest.push (Word.countLeadingZeros x) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 5) final fields
+  simp only [step, dite_eq_left bounds, decoded, clz, pop, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
 /-- NOT checks its operand before gas. -/
 theorem step_not_empty (s : State) (h : At s (some .not)) (empty : s.stack.val = []) :
     step s = .exception s .stackUnderflow := by
@@ -2433,6 +2464,9 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | iszeroEmpty at_ short => exact step_iszero_empty _ at_ short
   | iszeroGas x xs at_ items gas => exact step_iszero_gas _ x xs at_ items gas
   | iszero t x xs at_ items gas fields => exact step_iszero _ t x xs at_ items gas fields
+  | clzEmpty at_ short => exact step_clz_empty _ at_ short
+  | clzGas x xs at_ items gas => exact step_clz_gas _ x xs at_ items gas
+  | clz t x xs at_ items gas fields => exact step_clz _ t x xs at_ items gas fields
   | notEmpty at_ short => exact step_not_empty _ at_ short
   | notGas x xs at_ items gas => exact step_not_gas _ x xs at_ items gas
   | not t x xs at_ items gas fields => exact step_not _ t x xs at_ items gas fields
@@ -3034,6 +3068,15 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
             let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
             exact ⟨_, .iszero s t x xs at_ items gas (by simp [Advances, t, stack])⟩
           · exact ⟨_, .iszeroGas s x xs at_ items (Nat.lt_of_not_ge gas)⟩
+      | clz =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .clzEmpty s at_ items⟩
+        | cons x xs =>
+          by_cases gas : 5 ≤ s.gas
+          · let stack : Stack := ⟨Word.countLeadingZeros x :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 5 }
+            exact ⟨_, .clz s t x xs at_ items gas (by simp [Advances, t, stack])⟩
+          · exact ⟨_, .clzGas s x xs at_ items (Nat.lt_of_not_ge gas)⟩
       | not =>
         cases items : s.stack.val with
         | nil => exact ⟨_, .notEmpty s at_ items⟩

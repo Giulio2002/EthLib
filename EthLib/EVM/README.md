@@ -232,9 +232,10 @@ is the prefix value multiplied by `256^(32-k)`.
 Disjoint word and byte stores commute as byte observations and allocated word counts.
 Their sparse write histories need not be equal.
 
-# Cancun opcode decoding
+# Opcode decoding
 
-`Opcode` represents the assigned Cancun opcode bytes.
+`Opcode` represents the assigned Cancun bytes plus Osaka CLZ.
+`Opcode.decodeCancun` retains the historical Cancun classification.
 PUSH lengths and DUP, SWAP and LOG indices are bounded in the type.
 DUP and SWAP indices start at zero, so index zero denotes DUP1 or SWAP1.
 `INVALID` is a designated instruction at `0xfe`.
@@ -242,7 +243,8 @@ The decoder returns `none` for unassigned bytes.
 Classification does not mean instruction execution is implemented.
 
 The source is execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`.
-The Cancun `vm.instructions.Ops` enum and `op_implementation` give the byte assignments.
+The Cancun `vm.instructions.Ops` enum and `op_implementation` give the historical byte assignments.
+Osaka `vm.instructions.Ops` assigns CLZ to `0x1e`.
 The Shanghai Yellow Paper revision `efc5f9a1f356cba376c978eedb63cb0363c2aa85`, Appendix H.2, names `INVALID`.
 The EELS enum omits that byte from its dispatch.
 Cancun adds BLOBHASH, BLOBBASEFEE, TLOAD, TSTORE and MCOPY to the Shanghai table.
@@ -437,8 +439,9 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The 256-byte dispatch regression covers 125 supported instructions, 23 assigned but unsupported instructions, 107 unassigned bytes, and INVALID.
-These counts describe this restricted frame, not the full Cancun EVM.
+The 256-byte dispatch regression covers 126 supported instructions, 23 assigned but unsupported instructions, 106 unassigned bytes, and INVALID.
+The historical Cancun subset had 125 supported instructions and 107 unassigned bytes.
+These counts describe this restricted frame and do not cover all Amsterdam opcodes.
 
 ## KECCAK256 execution (09d)
 
@@ -643,6 +646,7 @@ The premises do not validate the supplied chain or transaction.
 
 The pinned Amsterdam source snapshot and migration map are in
 `artifacts/09e2-integration/amsterdam-source-manifest.json`.
+The [blob fee migration guide](AmsterdamBlobFeeMigration.md) describes the configured schedule interface.
 `artifacts/09e2-integration/source-and-dispatch-audit.md` records the historical source boundary.
 The blob fee observation accepts the current block's configured update fraction.
 The named Cancun and Amsterdam schedules use 3338477 and 11684671 respectively.
@@ -657,3 +661,16 @@ For fees at least `2^256`, the frame uses a modulo extension of the source conve
 The excess gas transition, reserve price rule and block validity remain outside this slice.
 The rest of Amsterdam opcode and gas semantics and fixture validation remain open.
 The frame is not a complete Amsterdam EVM.
+
+## CLZ execution
+
+Osaka and Amsterdam execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc` define CLZ in `vm/instructions/bitwise.py`, `count_leading_zeros`.
+It pops one word, charges five gas, pushes the count, and advances the PC by one.
+The pop happens before the gas check.
+The result is 256 for zero and otherwise identifies the power-of-two interval containing the input.
+`Word.countLeadingZeros_spec` states this interval independently of the implementation.
+`Frame.clz_helper_iff` and `Frame.clz_step_iff` describe all outcomes with that specification.
+`Runner.CountLeadingZeros.run` composes ADD, CLZ, PC and STOP over arbitrary accepted contexts and memory.
+The decoder is the Cancun table augmented with CLZ.
+Amsterdam SLOTNUM, DUPN, SWAPN and EXCHANGE remain outside this target subset.
+The frame does not implement full Amsterdam execution.

@@ -1,10 +1,10 @@
 module
 
 /-!
-# Cancun opcode bytes
+# Opcode bytes for the implemented target subset
 
 The source is execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`,
-Cancun `vm.instructions.Ops` and `op_implementation`.
+Cancun `vm.instructions.Ops` and `op_implementation`, with CLZ from Osaka.
 The designated INVALID byte is named by the Shanghai Yellow Paper Appendix H.2.
 Decoding an opcode does not implement its execution.
 -/
@@ -13,7 +13,7 @@ Decoding an opcode does not implement its execution.
 
 namespace EthLib.EVM
 
-/-- The assigned Cancun opcode bytes, including the designated INVALID byte. -/
+/-- Cancun opcode bytes plus Osaka CLZ, including the designated INVALID byte. -/
 inductive Opcode where
   | stop
   | add
@@ -41,6 +41,7 @@ inductive Opcode where
   | shl
   | shr
   | sar
+  | clz
   | keccak
   | address
   | balance
@@ -135,6 +136,7 @@ def decode (byte : UInt8) : Option Opcode :=
   | 0x1b => some .shl
   | 0x1c => some .shr
   | 0x1d => some .sar
+  | 0x1e => some .clz
   | 0x20 => some .keccak
   | 0x30 => some .address
   | 0x31 => some .balance
@@ -260,6 +262,10 @@ def decode (byte : UInt8) : Option Opcode :=
   | 0xa4 => some (.log ⟨4, by decide⟩)
   | _ => none
 
+/-- The historical Cancun classifier does not assign CLZ. -/
+def decodeCancun (byte : UInt8) : Option Opcode :=
+  if byte = 0x1e then none else decode byte
+
 /-- Encode each opcode as its unique byte. -/
 def encode : Opcode → UInt8
   | .stop => 0x00
@@ -288,6 +294,7 @@ def encode : Opcode → UInt8
   | .shl => 0x1b
   | .shr => 0x1c
   | .sar => 0x1d
+  | .clz => 0x1e
   | .keccak => 0x20
   | .address => 0x30
   | .balance => 0x31

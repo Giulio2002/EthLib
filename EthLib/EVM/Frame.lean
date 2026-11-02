@@ -18,12 +18,13 @@ public import EthLib.EVM.Word.ByteSignExtend
 public import EthLib.Cryptography.Hash.Keccak
 
 /-!
-# Cancun frame subset
+# Frame instruction subset
 
 The instruction rules come from Cancun execution-specs revision
 `fd9298410ec7218838c8348f69c1eb633f1797dc`, `vm/interpreter.py`,
 `vm/instructions/stack.py`, `arithmetic.py`, `comparison.py`, `bitwise.py`,
 `control_flow.py`, `memory.py`, `block.py`, `environment.py`, and `vm/gas.py`.
+The blob fee observation uses the supplied schedule, which can differ from Cancun.
 An exception retains the input frame only as diagnostic context.
 Its gas is zero at the message boundary; its stack is not a protocol final state.
 Unsupported instructions are a tooling result and do not execute.
@@ -173,6 +174,16 @@ def blockHash (s : State) (history : Environment.BlockHistory) : Outcome :=
   | .ok (index, stack) =>
     charge s 20 fun gas =>
       match Stack.push stack (Environment.blockHash history s.context.environment.number index) with
+      | .error e => failStack s e
+      | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+
+/-- Osaka `bitwise.py`, `count_leading_zeros`, pops before charging five gas. -/
+def clz (s : State) : Outcome :=
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (a, stack) =>
+    charge s 5 fun gas =>
+      match Stack.push stack (Word.countLeadingZeros a) with
       | .error e => failStack s e
       | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
 
@@ -588,6 +599,7 @@ def step (s : State) : Outcome :=
           match Stack.push stack (Word.iszeroResult a) with
           | .error e => failStack s e
           | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    | some .clz => clz s
     -- Cancun `bitwise.py`, `bitwise_not`: pop the operand before charging gas.
     | some .not =>
       match Stack.pop s.stack with
