@@ -1,6 +1,7 @@
 module
 
 public import EthLib.EVM.CallData
+public import EthLib.EVM.ReturnData
 public import EthLib.EVM.Stack
 public import EthLib.EVM.PushImmediate
 public import EthLib.EVM.JumpDest
@@ -39,10 +40,11 @@ structure State where
   memory : Memory.Allocation.State
   memoryValid : Memory.Allocation.Valid memory
   context : CallData.Context
+  returnData : ByteArray
 
 /-- Exceptional halts distinguished by their first failing check. -/
 inductive Exception where
-  | invalidOpcode | invalidJumpDestination | outOfGas | stackUnderflow | stackOverflow
+  | invalidOpcode | invalidJumpDestination | outOfGas | stackUnderflow | stackOverflow | outOfBoundsRead
   deriving DecidableEq, Repr
 
 /-- Frame outcomes include a typed revert for future semantics.
@@ -102,6 +104,26 @@ def inputCopy (s : State) (data : ByteArray) : Outcome :=
           let bytes := CallData.readRange data source.toNat length.toNat
           .continue { s with stack, gas, pc := s.pc + 1, memory := Memory.Allocation.write s.memory destination.toNat bytes, memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
 
+/-- Copy checked return data after charging for destination expansion.
+
+Cancun `environment.py`, `returndatacopy`, checks bounds after gas.
+-/
+def returnDataCopy (s : State) : Outcome :=
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (destination, stack) =>
+    match Stack.pop stack with
+    | .error e => failStack s e
+    | .ok (source, stack) =>
+      match Stack.pop stack with
+      | .error e => failStack s e
+      | .ok (length, stack) =>
+        charge s (Gas.inputCopyCost s.memory.words destination.toNat length.toNat) fun gas =>
+          match ReturnData.read s.returnData source.toNat length.toNat with
+          | .error _ => .exception s .outOfBoundsRead
+          | .ok bytes =>
+            .continue { s with stack, gas, pc := s.pc + 1, memory := Memory.Allocation.write s.memory destination.toNat bytes, memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
+
 /-- Execute one instruction or stop at the end of code. -/
 def step (s : State) : Outcome :=
   if h : s.pc < s.code.size then
@@ -151,9 +173,11 @@ def step (s : State) : Outcome :=
     -- Cancun `environment.py`: copy from the selected immutable source.
     | some .calldatacopy => inputCopy s s.context.data
     | some .codecopy => inputCopy s s.code
+    | some .returndatacopy => returnDataCopy s
     -- Cancun `environment.py`, `calldatasize` and `codesize`: charge before push.
     | some .calldatasize => observe s (fun _ => s.context.data.size)
     | some .codesize => observe s (fun _ => s.code.size)
+    | some .returndatasize => observe s (fun _ => s.returnData.size)
     | some .pc => observe s (fun _ => s.pc)
     | some .msize => observe s (fun _ => Memory.Allocation.byteSize s.memory)
     | some .gas => observe s id

@@ -29,6 +29,7 @@ public import EthLib.EVM.Proofs.Runner.StraightLine
 public import EthLib.EVM.Proofs.Runner.Mixed
 public import EthLib.EVM.Proofs.Runner.Memory
 public import EthLib.EVM.Proofs.Runner.CallData
+public import EthLib.EVM.Proofs.ReturnData
 
 /-!
 # `EthLib.EVM.Proofs`

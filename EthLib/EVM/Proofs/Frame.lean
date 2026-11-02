@@ -128,7 +128,7 @@ theorem step_swap_empty (s : State) (i : Fin 16) (h : At s (some (.swap i)))
 theorem advances_eq (s t : State) (pc gas : Nat) (stack : Stack)
     (h : Advances s t pc gas stack.val) :
     t = { s with pc, gas, stack } := by
-  rcases h with ⟨code, memory, pcEq, gasEq, stackEq, contextEq⟩
+  rcases h with ⟨code, memory, pcEq, gasEq, stackEq, contextEq, returnDataEq⟩
   have stackEq' : t.stack = stack := Subtype.ext stackEq
   cases s
   cases t
@@ -1858,6 +1858,45 @@ theorem step_mcopy (s t : State) (x y z : Word) (xs : List Word)
   simp only [step, dite_eq_left bounds, decoded, p1, p2, p3, charge, Gas.charge, ite_eq_left gas]
   rw [update]
 
+/-- Return-data copying checks all operands before charging gas. -/
+theorem returnDataCopy_helper_empty (s : State)
+    (short : s.stack.val.length < 3) : returnDataCopy s = .exception s .stackUnderflow := by
+  cases items : s.stack.val with
+  | nil =>
+    have p : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr items
+    simp [returnDataCopy, p, failStack]
+  | cons x xs =>
+    cases xs with
+    | nil =>
+      let first : Stack := Stack.empty
+      have p : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+      have q : first.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+      simp [returnDataCopy, p, q, failStack]
+    | cons y ys =>
+      cases ys with
+      | nil =>
+        let first : Stack := ⟨[y], by simp⟩
+        let second : Stack := Stack.empty
+        have p : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+        have q : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+        have r : second.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+        simp [returnDataCopy, p, q, r, failStack]
+      | cons z zs => simp [items] at short; omega
+
+/-- Return-data copying fails before reading when gas is insufficient. -/
+theorem returnDataCopy_helper_gas (s : State) (x y z : Word) (xs : List Word)
+    (items : s.stack.val = x :: y :: z :: xs)
+    (gas : s.gas < Gas.inputCopyCost s.memory.words x.toNat z.toNat) :
+    returnDataCopy s = .exception s .outOfGas := by
+  let first : Stack := ⟨y :: z :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let second : Stack := ⟨z :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let third : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have p3 : second.pop = .ok (z, third) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  simp [returnDataCopy, p1, p2, p3, charge, Gas.charge, Nat.not_le.mpr gas]
+
+
 /-- Dispatch selects the corresponding immutable source. -/
 theorem step_inputCopy_dispatch (s : State) (source : InputSource)
     (h : At s (some source.opcode)) : step s = inputCopy s (source.bytes s) := by
@@ -1944,6 +1983,147 @@ theorem step_inputCopy (s t : State) (source : InputSource) (x y z : Word) (xs :
   rw [step_inputCopy_dispatch s source h]
   exact inputCopy_helper_success s t (source.bytes s) x y z xs items gas fields
 
+/-- The checked return-data copy follows its operand, gas and bounds checks. -/
+theorem returnDataCopy_helper_result (s : State) (x y z : Word) (xs : List Word)
+    (items : s.stack.val = x :: y :: z :: xs) :
+    returnDataCopy s =
+      if Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas then
+        if y.toNat + z.toNat ≤ s.returnData.size then
+          .continue { s with stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩, pc := s.pc + 1, gas := s.gas - Gas.inputCopyCost s.memory.words x.toNat z.toNat, memory := Memory.Allocation.write s.memory x.toNat ((s.returnData.data.toList.drop y.toNat).take z.toNat), memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
+        else .exception s .outOfBoundsRead
+      else .exception s .outOfGas := by
+  let first : Stack := ⟨y :: z :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let second : Stack := ⟨z :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let third : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have p3 : second.pop = .ok (z, third) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  simp only [returnDataCopy, p1, p2, p3, charge, Gas.charge, ReturnData.read]
+  by_cases hg : Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas <;> by_cases hb : y.toNat + z.toNat ≤ s.returnData.size <;> simp [hg, hb, third]
+
+/-- A charged copy rejects an out-of-bounds source range. -/
+theorem returnDataCopy_helper_bounds (s : State) (x y z : Word) (xs : List Word)
+    (items : s.stack.val = x :: y :: z :: xs)
+    (gas : Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas)
+    (bounds : s.returnData.size < y.toNat + z.toNat) :
+    returnDataCopy s = .exception s .outOfBoundsRead := by
+  rw [returnDataCopy_helper_result s x y z xs items]
+  simp [gas, Nat.not_le.mpr bounds]
+
+/-- A valid and affordable copy produces exactly the stated frame fields. -/
+theorem returnDataCopy_helper_success (s t : State) (x y z : Word) (xs : List Word)
+    (items : s.stack.val = x :: y :: z :: xs)
+    (gas : Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas)
+    (bounds : y.toNat + z.toNat ≤ s.returnData.size)
+    (fields : AdvancesMemory s t (Memory.Allocation.write s.memory x.toNat
+      ((s.returnData.data.toList.drop y.toNat).take z.toNat))
+      (s.pc + 1) (s.gas - Gas.inputCopyCost s.memory.words x.toNat z.toNat) xs) :
+    returnDataCopy s = .continue t := by
+  rw [returnDataCopy_helper_result s x y z xs items]
+  simp only [ite_eq_left gas, ite_eq_left bounds]
+  have update := advancesMemory_eq s t _ (Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid)
+    (s.pc + 1) (s.gas - Gas.inputCopyCost s.memory.words x.toNat z.toNat)
+    ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩ fields
+  rw [update]
+
+/-- A continuing helper call determines affordability, bounds and every frame field. -/
+theorem returnDataCopy_helper_actual (s t : State) (x y z : Word) (xs : List Word)
+    (items : s.stack.val = x :: y :: z :: xs) (run : returnDataCopy s = .continue t) :
+    Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas ∧
+    y.toNat + z.toNat ≤ s.returnData.size ∧
+    AdvancesMemory s t (Memory.Allocation.write s.memory x.toNat
+      ((s.returnData.data.toList.drop y.toNat).take z.toNat))
+      (s.pc + 1) (s.gas - Gas.inputCopyCost s.memory.words x.toNat z.toNat) xs := by
+  rw [returnDataCopy_helper_result s x y z xs items] at run
+  by_cases gas : Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas
+  · by_cases bounds : y.toNat + z.toNat ≤ s.returnData.size
+    · simp only [ite_eq_left gas, ite_eq_left bounds] at run
+      cases run
+      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    · simp [gas, bounds] at run
+  · simp [gas] at run
+
+/-- Complete source-oriented outcomes of the public return-data copy helper. -/
+inductive ReturnDataCopyRule : State → Outcome → Prop where
+  | underflow (s) : s.stack.val.length < 3 → ReturnDataCopyRule s (.exception s .stackUnderflow)
+  | gas (s x y z xs) : s.stack.val = x :: y :: z :: xs →
+      s.gas < Gas.inputCopyCost s.memory.words x.toNat z.toNat →
+      ReturnDataCopyRule s (.exception s .outOfGas)
+  | bounds (s x y z xs) : s.stack.val = x :: y :: z :: xs →
+      Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas →
+      s.returnData.size < y.toNat + z.toNat → ReturnDataCopyRule s (.exception s .outOfBoundsRead)
+  | success (s t x y z xs) : s.stack.val = x :: y :: z :: xs →
+      Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas →
+      y.toNat + z.toNat ≤ s.returnData.size →
+      AdvancesMemory s t (Memory.Allocation.write s.memory x.toNat
+        ((s.returnData.data.toList.drop y.toNat).take z.toNat))
+        (s.pc + 1) (s.gas - Gas.inputCopyCost s.memory.words x.toNat z.toNat) xs →
+      ReturnDataCopyRule s (.continue t)
+
+/-- Every helper rule is executed by the public helper. -/
+theorem returnDataCopy_helper_rule_sound {s : State} {out : Outcome}
+    (rule : ReturnDataCopyRule s out) : returnDataCopy s = out := by
+  cases rule with
+  | underflow short => exact returnDataCopy_helper_empty _ short
+  | gas x y z xs items gas => exact returnDataCopy_helper_gas _ x y z xs items gas
+  | bounds x y z xs items gas bounds => exact returnDataCopy_helper_bounds _ x y z xs items gas bounds
+  | success t x y z xs items gas bounds fields =>
+    exact returnDataCopy_helper_success _ t x y z xs items gas bounds fields
+
+/-- Every input frame has one of the helper's four outcomes. -/
+theorem returnDataCopy_helper_rule_total (s : State) : ∃ out, ReturnDataCopyRule s out := by
+  cases items : s.stack.val with
+  | nil => exact ⟨_, .underflow s (by simp [items])⟩
+  | cons x ys =>
+    cases ys with
+    | nil => exact ⟨_, .underflow s (by simp [items])⟩
+    | cons y zs =>
+      cases zs with
+      | nil => exact ⟨_, .underflow s (by simp [items])⟩
+      | cons z xs =>
+        by_cases gas : Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas
+        · by_cases bounds : y.toNat + z.toNat ≤ s.returnData.size
+          · let stack : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+            let t : State := { s with stack, pc := s.pc + 1, gas := s.gas - Gas.inputCopyCost s.memory.words x.toNat z.toNat, memory := Memory.Allocation.write s.memory x.toNat ((s.returnData.data.toList.drop y.toNat).take z.toNat), memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
+            exact ⟨_, .success s t x y z xs items gas bounds (by simp [AdvancesMemory, t, stack])⟩
+          · exact ⟨_, .bounds s x y z xs items gas (Nat.lt_of_not_ge bounds)⟩
+        · exact ⟨_, .gas s x y z xs items (Nat.lt_of_not_ge gas)⟩
+
+/-- The helper executes exactly the four rules, for every input frame and outcome. -/
+theorem returnDataCopy_helper_iff_rule (s : State) (out : Outcome) :
+    returnDataCopy s = out ↔ ReturnDataCopyRule s out := by
+  constructor
+  · intro run
+    obtain ⟨result, rule⟩ := returnDataCopy_helper_rule_total s
+    have same := returnDataCopy_helper_rule_sound rule
+    rw [run] at same
+    cases same
+    exact rule
+  · exact returnDataCopy_helper_rule_sound
+
+/-- Every helper bounds exception comes from an affordable, out-of-bounds copy. -/
+theorem returnDataCopy_helper_bounds_actual {s input : State}
+    (run : returnDataCopy s = .exception input .outOfBoundsRead) :
+    input = s ∧ ∃ x y z xs, s.stack.val = x :: y :: z :: xs ∧
+      Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas ∧
+      s.returnData.size < y.toNat + z.toNat := by
+  have rule := (returnDataCopy_helper_iff_rule s _).mp run
+  cases rule with
+  | bounds x y z xs items gas bounds => exact ⟨rfl, x, y, z, xs, items, gas, bounds⟩
+
+/-- The checked return-data copy follows its operand, gas and bounds checks. -/
+theorem step_returnDataCopy (s : State) (x y z : Word) (xs : List Word)
+    (at_ : At s (some .returndatacopy)) (items : s.stack.val = x :: y :: z :: xs) :
+    step s =
+      if Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas then
+        if y.toNat + z.toNat ≤ s.returnData.size then
+          .continue { s with stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩, pc := s.pc + 1, gas := s.gas - Gas.inputCopyCost s.memory.words x.toNat z.toNat, memory := Memory.Allocation.write s.memory x.toNat ((s.returnData.data.toList.drop y.toNat).take z.toNat), memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
+        else .exception s .outOfBoundsRead
+      else .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := at_
+  simp only [step, dite_eq_left bounds, decoded]
+  exact returnDataCopy_helper_result s x y z xs items
+
 /-- Every relational rule is accepted by the executable step. -/
 theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out := by
   cases h with
@@ -1954,6 +2134,23 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | calldataloadEmpty at_ empty => exact step_calldataload_empty _ at_ empty
   | calldataloadGas x xs at_ items gas => exact step_calldataload_gas _ x xs at_ items gas
   | calldataload t x xs at_ items gas fields => exact step_calldataload _ t x xs at_ items gas fields
+  | returnDataCopyEmpty at_ empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    exact returnDataCopy_helper_empty _ empty
+  | returnDataCopyGas x y z xs at_ items gas =>
+    rw [step_returnDataCopy _ x y z xs at_ items]
+    simp [Nat.not_le.mpr gas]
+  | returnDataCopyBounds x y z xs at_ items gas bounds =>
+    rw [step_returnDataCopy _ x y z xs at_ items]
+    simp [gas, Nat.not_le.mpr bounds]
+  | returnDataCopy t x y z xs at_ items gas bounds fields =>
+    rw [step_returnDataCopy _ x y z xs at_ items]
+    simp only [ite_eq_left gas, ite_eq_left bounds]
+    have update := advancesMemory_eq _ t _ (Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid)
+      (s.pc + 1) (s.gas - Gas.inputCopyCost s.memory.words x.toNat z.toNat)
+      ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩ fields
+    rw [update]
   | inputCopyEmpty source at_ empty => exact step_inputCopy_empty _ source at_ empty
   | inputCopyGas source x y z xs at_ items gas => exact step_inputCopy_gas _ source x y z xs at_ items gas
   | inputCopy t source x y z xs at_ items gas fields => exact step_inputCopy _ t source x y z xs at_ items gas fields
@@ -2095,6 +2292,17 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
         · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
       | codesize =>
         let o := Observation.codesize
+        have atO : At s (some o.opcode) := at_
+        by_cases gas : 2 ≤ s.gas
+        · by_cases room : s.stack.val.length < 1024
+          · let stack : Stack := ⟨BitVec.ofNat 256 (o.value s) :: s.stack.val, by simp; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
+            exact ⟨_, .observation s t o atO gas room (by simp [Advances, t, stack])⟩
+          · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+            exact ⟨_, .observationFull s o atO gas full⟩
+        · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
+      | returndatasize =>
+        let o := Observation.returndatasize
         have atO : At s (some o.opcode) := at_
         by_cases gas : 2 ≤ s.gas
         · by_cases room : s.stack.val.length < 1024
@@ -2597,6 +2805,23 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
               let t : State := { s with stack, pc := s.pc + 1, gas := s.gas - (3 + Gas.rangeCost s.memory.words x.toNat 1), memory := Memory.Allocation.storeByte s.memory x.toNat y, memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
               exact ⟨_, .mstore8 s t x y ys at_ items gas (by simp [AdvancesMemory, t, stack])⟩
             · exact ⟨_, .mstore8Gas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
+      | returndatacopy =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .returnDataCopyEmpty s at_ (by simp [items])⟩
+        | cons x ys =>
+          cases ys with
+          | nil => exact ⟨_, .returnDataCopyEmpty s at_ (by simp [items])⟩
+          | cons y zs =>
+            cases zs with
+            | nil => exact ⟨_, .returnDataCopyEmpty s at_ (by simp [items])⟩
+            | cons z rest =>
+              by_cases gas : Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas
+              · by_cases bounds : y.toNat + z.toNat ≤ s.returnData.size
+                · let stack : Stack := ⟨rest, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+                  let t : State := { s with stack, pc := s.pc + 1, gas := s.gas - Gas.inputCopyCost s.memory.words x.toNat z.toNat, memory := Memory.Allocation.write s.memory x.toNat ((s.returnData.data.toList.drop y.toNat).take z.toNat), memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
+                  exact ⟨_, .returnDataCopy s t x y z rest at_ items gas bounds (by simp [AdvancesMemory, t, stack])⟩
+                · exact ⟨_, .returnDataCopyBounds s x y z rest at_ items gas (Nat.lt_of_not_ge bounds)⟩
+              · exact ⟨_, .returnDataCopyGas s x y z rest at_ items (Nat.lt_of_not_ge gas)⟩
       | _ => exact ⟨_, .unsupported s _ at_ (by trivial)⟩
   · exact ⟨_, .endCode s (Nat.le_of_not_gt bounds)⟩
 
@@ -2644,6 +2869,46 @@ theorem continue_context_unchanged {s t : State} (h : step s = .continue t) :
     t.context = s.context :=
   outcome_context_unchanged ((step_iff_rule s _).mp h)
 
+/-- Every outcome retains the frame's return-data buffer. -/
+theorem outcome_returnData_unchanged {s : State} {out : Outcome} (h : Rule s out) :
+    out.frame.returnData = s.returnData := by
+  cases h <;> simp_all [Outcome.frame, Advances, AdvancesMemory]
+
+/-- Every continuing step retains the return-data buffer. -/
+theorem continue_returnData_unchanged {s t : State} (h : step s = .continue t) :
+    t.returnData = s.returnData :=
+  outcome_returnData_unchanged ((step_iff_rule s _).mp h)
+
+/-- A successful return-data copy determines its gas, bound and updated fields. -/
+theorem returnDataCopy_actual (s t : State) (x y z : Word) (xs : List Word)
+    (at_ : At s (some .returndatacopy)) (items : s.stack.val = x :: y :: z :: xs)
+    (run : step s = .continue t) :
+    Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas ∧
+    y.toNat + z.toNat ≤ s.returnData.size ∧
+    AdvancesMemory s t (Memory.Allocation.write s.memory x.toNat
+      ((s.returnData.data.toList.drop y.toNat).take z.toNat))
+      (s.pc + 1) (s.gas - Gas.inputCopyCost s.memory.words x.toNat z.toNat) xs := by
+  rw [step_returnDataCopy s x y z xs at_ items] at run
+  by_cases gas : Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas
+  · by_cases bounds : y.toNat + z.toNat ≤ s.returnData.size
+    · simp only [ite_eq_left gas, ite_eq_left bounds] at run
+      cases run
+      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    · simp [gas, bounds] at run
+  · simp [gas] at run
+
+/-- A bounds exception can only arise from a charged return-data copy. -/
+theorem returnDataCopy_bounds_exception {s input : State}
+    (run : step s = .exception input .outOfBoundsRead) :
+    input = s ∧ ∃ x y z xs, At s (some .returndatacopy) ∧
+      s.stack.val = x :: y :: z :: xs ∧
+      Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas ∧
+      s.returnData.size < y.toNat + z.toNat := by
+  have rule := (step_iff_rule s _).mp run
+  cases rule with
+  | returnDataCopyBounds x y z xs at_ items gas bound =>
+    exact ⟨rfl, x, y, z, xs, at_, items, gas, bound⟩
+
 /-- A successful load determines its gas, stack, and all unchanged fields. -/
 theorem calldataload_actual (s t : State) (x : Word) (xs : List Word)
     (at_ : At s (some .calldataload)) (items : s.stack.val = x :: xs)
@@ -2676,7 +2941,7 @@ theorem load_then_calldatasize_actual (s t u : State) (x : Word) (xs : List Word
       u.context = s.context := by
   have load := (calldataload_actual s t x xs loadAt items loadRun).2
   have size := step_observation_stack t u .calldatasize sizeAt sizeRun
-  have context : t.context = s.context := load.2.2.2.2.2
+  have context : t.context = s.context := load.2.2.2.2.2.1
   have context2 : u.context = t.context := continue_context_unchanged sizeRun
   exact ⟨load.2.2.2.2.1, context, by simpa [Observation.value, context] using size,
     context2.trans context⟩
@@ -2684,7 +2949,7 @@ theorem load_then_calldatasize_actual (s t u : State) (x : Word) (xs : List Word
 /-- A frame whose current instruction is outside the memory access subset. -/
 def PureMemoryStep (s : State) : Prop :=
   ¬ At s (some .mload) ∧ ¬ At s (some .mstore) ∧ ¬ At s (some .mstore8) ∧ ¬ At s (some .mcopy) ∧
-  ¬ At s (some .calldatacopy) ∧ ¬ At s (some .codecopy)
+  ¬ At s (some .calldatacopy) ∧ ¬ At s (some .codecopy) ∧ ¬ At s (some .returndatacopy)
 
 /-- A pure instruction preserves memory for every outcome. -/
 theorem outcome_memory_unchanged_of_pure {s : State} {out : Outcome}

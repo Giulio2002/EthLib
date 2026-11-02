@@ -21,17 +21,17 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
 def Advances (s t : State) (pc gas : Nat) (xs : List Word) : Prop :=
-  t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context
+  t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData
 
 /-- Exact fields after a memory instruction. -/
 def AdvancesMemory (s t : State) (memory : Memory.Allocation.State)
     (pc gas : Nat) (xs : List Word) : Prop :=
-  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context
+  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData
 
 /-- A successful MCOPY with observed pops determines the resulting frame. -/
 theorem mcopy_actual_fields (s t : State) (destination source length : Word)
@@ -48,7 +48,7 @@ theorem mcopy_actual_fields (s t : State) (destination source length : Word)
   · simp only [step, dite_eq_left bounds, decoded, p1, p2, p3, charge, Gas.charge,
       ite_eq_left gas] at run
     cases run
-    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   · simp [step, bounds, decoded, p1, p2, p3, charge, Gas.charge, gas] at run
 
 /-- Cancun `runtime.py`: the source byte length at an instruction boundary. -/
@@ -68,13 +68,13 @@ def ValidJumpDest (code : ByteArray) (pc : Nat) : Prop :=
 
 /-- The natural observation selected by an introspection opcode. -/
 inductive Observation where
-  | pc | msize | gas | calldatasize | codesize
+  | pc | msize | gas | calldatasize | codesize | returndatasize
   deriving DecidableEq
 
 /-- Opcode corresponding to an observation. -/
 def Observation.opcode : Observation → Opcode
   | .pc => .pc | .msize => .msize | .gas => .gas
-  | .calldatasize => .calldatasize | .codesize => .codesize
+  | .calldatasize => .calldatasize | .codesize => .codesize | .returndatasize => .returndatasize
 
 /-- Value observed after the instruction has paid its gas cost. -/
 def Observation.value (o : Observation) (s : State) : Nat :=
@@ -84,6 +84,7 @@ def Observation.value (o : Observation) (s : State) : Nat :=
   | .gas => s.gas - 2
   | .calldatasize => s.context.data.size
   | .codesize => s.code.size
+  | .returndatasize => s.returnData.size
 
 /-- Immutable source selected by an input copy instruction. -/
 inductive InputSource where
@@ -114,6 +115,24 @@ inductive Rule : State → Outcome → Prop where
   | calldataload (s t x xs) : At s (some .calldataload) → s.stack.val = x :: xs →
       3 ≤ s.gas → Advances s t (s.pc + 1) (s.gas - 3)
         (CallData.load s.context x :: xs) → Rule s (.continue t)
+  | returnDataCopyEmpty (s) : At s (some .returndatacopy) →
+      s.stack.val.length < 3 → Rule s (.exception s .stackUnderflow)
+  | returnDataCopyGas (s) (destination offset length xs) :
+      At s (some .returndatacopy) → s.stack.val = destination :: offset :: length :: xs →
+      s.gas < Gas.inputCopyCost s.memory.words destination.toNat length.toNat →
+      Rule s (.exception s .outOfGas)
+  | returnDataCopyBounds (s) (destination offset length xs) :
+      At s (some .returndatacopy) → s.stack.val = destination :: offset :: length :: xs →
+      Gas.inputCopyCost s.memory.words destination.toNat length.toNat ≤ s.gas →
+      s.returnData.size < offset.toNat + length.toNat → Rule s (.exception s .outOfBoundsRead)
+  | returnDataCopy (s t) (destination offset length xs) :
+      At s (some .returndatacopy) → s.stack.val = destination :: offset :: length :: xs →
+      Gas.inputCopyCost s.memory.words destination.toNat length.toNat ≤ s.gas →
+      offset.toNat + length.toNat ≤ s.returnData.size →
+      AdvancesMemory s t (Memory.Allocation.write s.memory destination.toNat
+        ((s.returnData.data.toList.drop offset.toNat).take length.toNat))
+        (s.pc + 1) (s.gas - Gas.inputCopyCost s.memory.words destination.toNat length.toNat) xs →
+      Rule s (.continue t)
   | inputCopyEmpty (s) (source : InputSource) : At s (some source.opcode) →
       s.stack.val.length < 3 → Rule s (.exception s .stackUnderflow)
   | inputCopyGas (s) (source : InputSource) (destination offset length xs) :

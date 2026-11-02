@@ -8,7 +8,7 @@ private def data : ByteArray := ⟨#[0x12, 0x34, 0x56]⟩
 private def frame (op : UInt8) (gas : Nat) (xs : List Word) (bound : xs.length ≤ 1024)
     (input : ByteArray) : Frame.State :=
   ⟨⟨#[op]⟩, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty,
-    Memory.Allocation.empty_valid, ⟨input⟩⟩
+    Memory.Allocation.empty_valid, ⟨input⟩, ByteArray.empty⟩
 
 private def head (op : UInt8) (gas : Nat) (xs : List Word) (bound : xs.length ≤ 1024)
     (input : ByteArray) : Option Nat :=
@@ -47,7 +47,7 @@ example (s t : Frame.State) (x : Word) (xs : List Word)
     t.context = s.context ∧ t.memory = s.memory ∧
       t.stack.val = CallData.load s.context x :: xs := by
   have h := (Frame.calldataload_actual s t x xs at_ items run).2
-  exact ⟨h.2.2.2.2.2, h.2.1, h.2.2.2.2.1⟩
+  exact ⟨h.2.2.2.2.2.1, h.2.1, h.2.2.2.2.1⟩
 
 example (fuel : Nat) (s : Frame.State) : (Runner.run fuel s).frame.context = s.context :=
   Runner.run_context_unchanged fuel s
