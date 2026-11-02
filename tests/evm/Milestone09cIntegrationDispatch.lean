@@ -6,7 +6,7 @@ open EthLib.EVM
 
 -- This range list is independent of the decoder and matches the supported slice.
 private def supported (n : Nat) : Bool :=
-  n ≤ 0x0b || (0x10 ≤ n && n ≤ 0x1d) || n == 0x20 || (0x35 ≤ n && n ≤ 0x39) || n == 0x3d || n == 0x3e || n == 0x50 || n == 0x51 || n == 0x52 || n == 0x53 ||
+  n ≤ 0x0b || (0x10 ≤ n && n ≤ 0x1d) || n == 0x20 || (n == 0x30 || (0x32 ≤ n && n ≤ 0x3a)) || n == 0x3d || n == 0x3e || n == 0x50 || n == 0x51 || n == 0x52 || n == 0x53 ||
   (0x56 ≤ n && n ≤ 0x5b) || n == 0x5e || (0x5f ≤ n && n ≤ 0x9f)
 
 private instance (op : Opcode) : Decidable (Frame.Unsupported op) := by
@@ -14,7 +14,7 @@ private instance (op : Opcode) : Decidable (Frame.Unsupported op) := by
 
 private def state (b : UInt8) : Frame.State :=
   ⟨⟨#[b]⟩, 0, ⟨[2, 1, 3], by decide⟩, 10000,
-    Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty⟩, ByteArray.empty⟩
+    Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0⟩⟩, ByteArray.empty⟩
 
 -- Check the independent reference, classification predicate and executable dispatch.
 private def check (n : Nat) : Bool := Id.run do
@@ -39,7 +39,7 @@ private def check (n : Nat) : Bool := Id.run do
   (List.range 256).all check)
 
 -- Count the actual decoder and step classifications across unique bytes.
-/-- info: (110, 38, 107, 1) -/
+/-- info: (115, 33, 107, 1) -/
 #guard_msgs in
 #eval Id.run do
   let mut supportedCount := 0
@@ -57,3 +57,17 @@ private def check (n : Nat) : Bool := Id.run do
       else
         supportedCount := supportedCount + 1
   return (supportedCount, unsupportedCount, unassignedCount, invalidCount)
+
+-- Count the outcomes produced by executable dispatch.
+/-- info: (115, 33, 108) -/
+#guard_msgs in
+#eval Id.run do
+  let mut executed := 0
+  let mut unsupported := 0
+  let mut invalid := 0
+  for n in List.range 256 do
+    match Frame.step (state (UInt8.ofNat n)) with
+    | .exception _ .invalidOpcode => invalid := invalid + 1
+    | .unsupported _ _ => unsupported := unsupported + 1
+    | _ => executed := executed + 1
+  return (executed, unsupported, invalid)

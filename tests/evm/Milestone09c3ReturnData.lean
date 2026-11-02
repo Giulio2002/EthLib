@@ -6,7 +6,7 @@ open EthLib.EVM
 private def frame (code data ret : ByteArray) (gas : Nat) (xs : List Word)
     (bound : xs.length ≤ 1024) : Frame.State :=
   ⟨code, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty,
-    Memory.Allocation.empty_valid, ⟨data⟩, ret⟩
+    Memory.Allocation.empty_valid, ⟨data, ⟨0, 0, 0, 0, 0⟩⟩, ret⟩
 
 private def copy (ret : ByteArray) (gas : Nat) (xs : List Word)
     (bound : xs.length ≤ 1024) : Frame.Outcome :=
@@ -102,7 +102,7 @@ example (s : Frame.State) (x y : Word) (xs : List Word)
 #eval let memory := Memory.Allocation.write Memory.Allocation.empty 0 [9, 9, 9, 9, 9]
   let s : Frame.State := ⟨⟨#[0x3e]⟩, 0, ⟨[1, 3, 1], by decide⟩, 6,
     memory, Memory.Allocation.write_valid_for_frame _ _ _ Memory.Allocation.empty_valid,
-    ⟨⟨#[99]⟩⟩, ⟨#[1, 2, 3]⟩⟩
+    ⟨⟨#[99]⟩, ⟨0, 0, 0, 0, 0⟩⟩, ⟨#[1, 2, 3]⟩⟩
   match Frame.step s with
   | .exception input .outOfBoundsRead =>
     (input.memory == s.memory, input.returnData == s.returnData,
@@ -116,7 +116,7 @@ example (s : Frame.State) (x y : Word) (xs : List Word)
 #eval let memory := Memory.Allocation.write Memory.Allocation.empty 0 [9, 9, 9, 9, 9]
   let s : Frame.State := ⟨⟨#[0x3e]⟩, 0, ⟨[1, 1, 2], by decide⟩, 6,
     memory, Memory.Allocation.write_valid_for_frame _ _ _ Memory.Allocation.empty_valid,
-    ⟨⟨#[99]⟩⟩, ⟨#[1, 2, 3]⟩⟩
+    ⟨⟨#[99]⟩, ⟨0, 0, 0, 0, 0⟩⟩, ⟨#[1, 2, 3]⟩⟩
   match Frame.step s with
   | .continue t => ((Memory.readRange t.memory.store 0 5).map UInt8.toNat,
       t.code == s.code && t.context.data == s.context.data && t.returnData == s.returnData)

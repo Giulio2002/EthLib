@@ -2363,6 +2363,61 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
       cases op with
       | stop => exact ⟨_, .stop s at_⟩
       | invalid => exact ⟨_, .invalid s (Or.inr at_)⟩
+      | address =>
+        let o := Observation.address
+        have atO : At s (some o.opcode) := at_
+        by_cases gas : 2 ≤ s.gas
+        · by_cases room : s.stack.val.length < 1024
+          · let stack : Stack := ⟨BitVec.ofNat 256 (o.value s) :: s.stack.val, by simp; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
+            exact ⟨_, .observation s t o atO gas room (by simp [Advances, t, stack])⟩
+          · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+            exact ⟨_, .observationFull s o atO gas full⟩
+        · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
+      | origin =>
+        let o := Observation.origin
+        have atO : At s (some o.opcode) := at_
+        by_cases gas : 2 ≤ s.gas
+        · by_cases room : s.stack.val.length < 1024
+          · let stack : Stack := ⟨BitVec.ofNat 256 (o.value s) :: s.stack.val, by simp; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
+            exact ⟨_, .observation s t o atO gas room (by simp [Advances, t, stack])⟩
+          · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+            exact ⟨_, .observationFull s o atO gas full⟩
+        · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
+      | caller =>
+        let o := Observation.caller
+        have atO : At s (some o.opcode) := at_
+        by_cases gas : 2 ≤ s.gas
+        · by_cases room : s.stack.val.length < 1024
+          · let stack : Stack := ⟨BitVec.ofNat 256 (o.value s) :: s.stack.val, by simp; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
+            exact ⟨_, .observation s t o atO gas room (by simp [Advances, t, stack])⟩
+          · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+            exact ⟨_, .observationFull s o atO gas full⟩
+        · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
+      | callvalue =>
+        let o := Observation.callvalue
+        have atO : At s (some o.opcode) := at_
+        by_cases gas : 2 ≤ s.gas
+        · by_cases room : s.stack.val.length < 1024
+          · let stack : Stack := ⟨BitVec.ofNat 256 (o.value s) :: s.stack.val, by simp; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
+            exact ⟨_, .observation s t o atO gas room (by simp [Advances, t, stack])⟩
+          · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+            exact ⟨_, .observationFull s o atO gas full⟩
+        · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
+      | gasprice =>
+        let o := Observation.gasprice
+        have atO : At s (some o.opcode) := at_
+        by_cases gas : 2 ≤ s.gas
+        · by_cases room : s.stack.val.length < 1024
+          · let stack : Stack := ⟨BitVec.ofNat 256 (o.value s) :: s.stack.val, by simp; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
+            exact ⟨_, .observation s t o atO gas room (by simp [Advances, t, stack])⟩
+          · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+            exact ⟨_, .observationFull s o atO gas full⟩
+        · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
       | calldatasize =>
         let o := Observation.calldatasize
         have atO : At s (some o.opcode) := at_

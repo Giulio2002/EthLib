@@ -199,6 +199,12 @@ def step (s : State) : Outcome :=
     | some .returndatacopy => returnDataCopy s
     | some .keccak => keccak s
     -- Cancun `environment.py`, `calldatasize` and `codesize`: charge before push.
+    -- Cancun `environment.py`: charge before pushing supplied metadata.
+    | some .address => observe s (fun _ => s.context.environment.currentTarget.val)
+    | some .origin => observe s (fun _ => s.context.environment.origin.val)
+    | some .caller => observe s (fun _ => s.context.environment.caller.val)
+    | some .callvalue => observe s (fun _ => s.context.environment.value.toNat)
+    | some .gasprice => observe s (fun _ => s.context.environment.gasPrice.toNat)
     | some .calldatasize => observe s (fun _ => s.context.data.size)
     | some .codesize => observe s (fun _ => s.code.size)
     | some .returndatasize => observe s (fun _ => s.returnData.size)
