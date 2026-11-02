@@ -1,5 +1,6 @@
 module
 public import EthLib.EVM.Proofs.Memory.WordAccess
+public import EthLib.EVM.Proofs.Gas
 
 public import EthLib.EVM.Proofs.Word
 public import EthLib.EVM.Proofs.Memory
