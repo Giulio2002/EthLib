@@ -56,5 +56,30 @@ def pop (s : Stack) : Except StackError (Word × Stack) :=
   | [] => .error .underflow
   | x :: xs => .ok (x, ⟨xs, by have := s.property; simp only [h, List.length_cons] at this; omega⟩)
 
+/-- Duplicate the indexed entry, where zero denotes DUP1.
+
+The checks follow Cancun `vm/instructions/stack.py`, `dup_n`, and
+`vm/stack.py`, `push`, at execution-specs commit
+`fd9298410ec7218838c8348f69c1eb633f1797dc`.
+-/
+def dup (s : Stack) (i : Fin 16) : Except StackError Stack :=
+  if h : i.val < s.val.length then
+    if room : s.val.length < 1024 then
+      .ok ⟨s.val[i.val] :: s.val, by simp only [List.length_cons]; omega⟩
+    else .error .overflow
+  else .error .underflow
+
+/-- Exchange the top with the indexed entry, where zero denotes SWAP1.
+
+The source is Cancun `vm/instructions/stack.py`, `swap_n`, at
+execution-specs commit `fd9298410ec7218838c8348f69c1eb633f1797dc`.
+-/
+def swap (s : Stack) (i : Fin 16) : Except StackError Stack :=
+  if h : i.val + 1 < s.val.length then
+    let top := s.val[0]'(by omega)
+    let other := s.val[i.val + 1]
+    .ok ⟨(s.val.set 0 other).set (i.val + 1) top, by simpa using s.property⟩
+  else .error .underflow
+
 end Stack
 end EthLib.EVM
