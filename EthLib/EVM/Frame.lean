@@ -23,7 +23,7 @@ public import EthLib.Cryptography.Hash.Keccak
 The instruction rules come from Cancun execution-specs revision
 `fd9298410ec7218838c8348f69c1eb633f1797dc`, `vm/interpreter.py`,
 `vm/instructions/stack.py`, `arithmetic.py`, `comparison.py`, `bitwise.py`,
-`control_flow.py`, `memory.py`, and `vm/gas.py`.
+`control_flow.py`, `memory.py`, `block.py`, `environment.py`, and `vm/gas.py`.
 An exception retains the input frame only as diagnostic context.
 Its gas is zero at the message boundary; its stack is not a protocol final state.
 Unsupported instructions are a tooling result and do not execute.
@@ -101,6 +101,8 @@ def observationWord (n : Nat) : Word := BitVec.ofNat 256 n
 
 Cancun `control_flow.py`, `pc` and `gas_left`, and `memory.py`, `msize`,
 charge before calling `stack.py`, `push`.
+Cancun `block.py`, `coinbase`, `timestamp`, `number`, `prev_randao`,
+`gas_limit`, `chain_id`, and `environment.py`, `base_fee`, do the same.
 `gas.py` gives each instruction the cost `BASE`, or two gas.
 -/
 def observe (s : State) (value : Nat → Nat) : Outcome :=
@@ -205,6 +207,13 @@ def step (s : State) : Outcome :=
     | some .caller => observe s (fun _ => s.context.environment.caller.val)
     | some .callvalue => observe s (fun _ => s.context.environment.value.toNat)
     | some .gasprice => observe s (fun _ => s.context.environment.gasPrice.toNat)
+    | some .coinbase => observe s (fun _ => s.context.environment.coinbase.val)
+    | some .timestamp => observe s (fun _ => s.context.environment.timestamp.toNat)
+    | some .number => observe s (fun _ => s.context.environment.number.toNat)
+    | some .prevrandao => observe s (fun _ => s.context.environment.prevRandao.toNat)
+    | some .gaslimit => observe s (fun _ => s.context.environment.gasLimit.toNat)
+    | some .chainid => observe s (fun _ => s.context.environment.chainId.val)
+    | some .basefee => observe s (fun _ => s.context.environment.baseFee.toNat)
     | some .calldatasize => observe s (fun _ => s.context.data.size)
     | some .codesize => observe s (fun _ => s.code.size)
     | some .returndatasize => observe s (fun _ => s.returnData.size)

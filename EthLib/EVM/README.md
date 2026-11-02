@@ -437,7 +437,7 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The 256-byte dispatch regression covers 115 supported instructions, 33 assigned but unsupported instructions, 107 unassigned bytes, and INVALID.
+The 256-byte dispatch regression covers 122 supported instructions, 26 assigned but unsupported instructions, 107 unassigned bytes, and INVALID.
 These counts describe this restricted frame, not the full Cancun EVM.
 
 ## KECCAK256 execution (09d)
@@ -525,3 +525,23 @@ The inherited `step_observation_gas`, `step_observation_full`,
 The inherited `run_context_unchanged` preserves the environment for every
 bounded result.
 `Runner.EnvironmentProgram.run` specifies the combined five-opcode run.
+
+## 09e2a block environment
+
+`Environment.Context` also requires seven block and chain fields.
+Every constructor supplies them explicitly.
+Coinbase uses the existing 160-bit address type.
+Chain ID uses `Fin (2^64)` and is zero extended to a word.
+Timestamp and PREVRANDAO are words.
+Number, gas limit and base fee accept the U256-representable source values.
+The Cancun source converts those three `Uint` values to U256.
+The context does not represent larger source values for those conversions.
+PREVRANDAO is the big-endian decoded value of the supplied 32 bytes.
+`Frame.prevRandao_codec` relates accepted bytes and their word representation.
+
+The seven instructions charge two gas before pushing the selected field.
+`Frame.block_observation_values` connects each selection to its field.
+`Frame.block_observation_actual` derives the stack and context from actual success.
+`Runner.BlockEnvironmentProgram.run` covers arbitrary accepted context and memory.
+The context supplies metadata and does not validate a block or calculate fees.
+BLOCKHASH and blob queries remain outside this slice.

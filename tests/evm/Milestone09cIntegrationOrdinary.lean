@@ -10,7 +10,7 @@ open EthLib.EVM
   let data : ByteArray := ⟨#[0x12, 0x34]⟩
   let ret : ByteArray := ⟨Array.replicate 32 0xab⟩
   let s : Frame.State := ⟨code, 0, ⟨[0, 0, 32, 32, 0, 32, 0, 32], by decide⟩,
-    100, Memory.Allocation.empty, (by intro a _h; rfl), ⟨data, ⟨0, 0, 0, 0, 0⟩⟩, ret⟩
+    100, Memory.Allocation.empty, (by intro a _h; rfl), ⟨data, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩⟩, ret⟩
   let good := match Runner.run 5 s with
     | .exhausted t => (Memory.readRange t.memory.store 0 32 == [0x12, 0x34] ++ List.replicate 30 0 &&
         Memory.readRange t.memory.store 32 32 == List.replicate 32 0xab &&
