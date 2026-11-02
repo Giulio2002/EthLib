@@ -28,8 +28,8 @@ example : match Runner.run 1 (initial ⟨#[]⟩ 0) with
     | _ => ([], 0)
 
 -- An assigned instruction outside the slice is tooling unsupported.
-example : match Runner.run 1 (initial ⟨#[0x10]⟩ 0) with
-    | .unsupported _ .lt => True
+example : match Runner.run 1 (initial ⟨#[0x1a]⟩ 0) with
+    | .unsupported _ .byte => True
     | _ => False := by cbv
 
 -- An unassigned instruction is exceptional.
@@ -139,7 +139,7 @@ example : match Runner.run 5 (initial ⟨#[0x00]⟩ 9) with
 example : match Runner.run 1 (initial ⟨#[0xfe]⟩ 9) with
     | .exception s e => s.gas = 9 ∧ Runner.settle (.exception s e) = some (.exceptional 0 e)
     | _ => False := by cbv
-example : Runner.settle (Runner.run 1 (initial ⟨#[0x10]⟩ 9)) = none := by cbv
+example : Runner.settle (Runner.run 1 (initial ⟨#[0x1a]⟩ 9)) = none := by cbv
 example : Runner.settle (Runner.run 0 (initial ⟨#[0x00]⟩ 9)) = none := by cbv
 
 -- The first step exhausts, and resuming executes STOP.
@@ -217,5 +217,68 @@ example : match EthLib.EVM.Runner.run 1 (initial ⟨#[0xfd]⟩ 10) with
 /-- info: ([10], 0, 9) -/
 #guard_msgs in
 #eval match Runner.run 6 (initial ⟨#[0x60, 2, 0x60, 4, 0x60, 9, 0x03, 0x02, 0x00]⟩ 17) with
+  | .stopped s => (s.stack.val.map BitVec.toNat, s.gas, s.pc)
+  | _ => ([], 0, 0)
+
+-- Signed and unsigned ordering differ when the high bit is set.
+/-- info: [0, 1, 1, 0] -/
+#guard_msgs in
+#eval ([0x10, 0x11, 0x12, 0x13] : List UInt8).map fun op =>
+  ((Runner.run 1 (withStack ⟨#[op]⟩ 3 [Word.ofSigned (-1), 1] (by decide))).frame.stack.val.head!).toNat
+
+-- Equality, zero tests and first-popped operand order.
+/-- info: [1, 0, 1, 0, 1, 0] -/
+#guard_msgs in
+#eval ([(0x14, 7, 7), (0x14, 7, 8), (0x15, 0, 0), (0x15, 7, 0),
+    (0x10, 2, 9), (0x10, 9, 2)] : List (UInt8 × Word × Word)).map fun (op, x, y) =>
+  ((Runner.run 1 (withStack ⟨#[op]⟩ 3 [x, y] (by simp))).frame.stack.val.head!).toNat
+
+-- Overlapping and disjoint bits, plus complement across the full word.
+/-- info: [8, 14, 6, 0, 15, 15, 115792089237316195423570985008687907853269984665640564039457584007913129639935] -/
+#guard_msgs in
+#eval ([(0x16, 12, 10), (0x17, 12, 10), (0x18, 12, 10),
+    (0x16, 12, 3), (0x17, 12, 3), (0x18, 12, 3)] : List (UInt8 × Word × Word)).map
+    (fun (op, x, y) => ((Runner.run 1 (withStack ⟨#[op]⟩ 3 [x, y] (by simp))).frame.stack.val.head!).toNat) ++
+    [((Runner.run 1 (withStack ⟨#[0x19]⟩ 3 [0] (by decide))).frame.stack.val.head!).toNat]
+
+-- All ten instructions report underflow before out of gas.
+/-- info: true -/
+#guard_msgs in
+#eval ([0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19] : List UInt8).all fun op =>
+  match Runner.run 1 (initial ⟨#[op]⟩ 0) with
+  | .exception _ .stackUnderflow => true
+  | _ => false
+
+-- Binary instructions also reject a single operand before gas.
+/-- info: true -/
+#guard_msgs in
+#eval ([0x10, 0x11, 0x12, 0x13, 0x14, 0x16, 0x17, 0x18] : List UInt8).all fun op =>
+  match Runner.run 1 (withStack ⟨#[op]⟩ 0 [9] (by decide)) with
+  | .exception _ .stackUnderflow => true
+  | _ => false
+
+-- Exact gas succeeds, one-short fails, and code and memory are preserved.
+/-- info: true -/
+#guard_msgs in
+#eval ([0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19] : List UInt8).all fun op =>
+  (match Runner.run 1 (withStack ⟨#[op]⟩ 3 [9, 4] (by decide)) with
+    | .exhausted s => s.gas == 0 && s.pc == 1 && s.code == ⟨#[op]⟩ &&
+        decide (s.memory = Memory.Allocation.empty)
+    | _ => false) &&
+  (match Runner.run 1 (withStack ⟨#[op]⟩ 2 [9, 4] (by decide)) with
+    | .exception _ .outOfGas => true
+    | _ => false)
+
+-- A unary operation succeeds even on a full stack.
+/-- info: true -/
+#guard_msgs in
+#eval match Runner.run 1 (withStack ⟨#[0x15]⟩ 3 (List.replicate 1024 0) (by decide)) with
+  | .exhausted s => s.stack.val.length == 1024 && s.stack.val.head! == 1
+  | _ => false
+
+-- The first pushed operand is below the second for LT, then ISZERO inverts it.
+/-- info: ([1], 0, 7) -/
+#guard_msgs in
+#eval match Runner.run 5 (initial ⟨#[0x60, 2, 0x60, 9, 0x10, 0x15, 0x00]⟩ 12) with
   | .stopped s => (s.stack.val.map BitVec.toNat, s.gas, s.pc)
   | _ => ([], 0, 0)

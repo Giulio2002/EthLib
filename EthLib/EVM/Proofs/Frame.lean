@@ -243,6 +243,428 @@ theorem step_add (s t : State) (x y : Word) (xs : List Word)
   simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas, push]
   rw [update]
 
+/-- LT checks both operands before gas. -/
+theorem step_lt_empty (s : State) (h : At s (some .lt))
+    (short : s.stack.val.length < 2) : step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  cases items : s.stack.val with
+  | nil =>
+    have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr items
+    simp [step, bounds, decoded, pop, failStack]
+  | cons x xs =>
+    cases xs with
+    | nil =>
+      let stack : Stack := Stack.empty
+      have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+      have pop2 : stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+      simp [step, bounds, decoded, pop, pop2, failStack]
+    | cons y ys => simp [items] at short; omega
+
+/-- LT with two operands checks gas before computing the result. -/
+theorem step_lt_gas (s : State) (x y : Word) (xs : List Word)
+    (h : At s (some .lt)) (items : s.stack.val = x :: y :: xs) (gas : s.gas < 3) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  simp [step, bounds, decoded, p1, p2, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- A successful LT replaces the first two entries by the result. -/
+theorem step_lt (s t : State) (x y : Word) (xs : List Word)
+    (h : At s (some .lt)) (items : s.stack.val = x :: y :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.ltResult x y :: xs)) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  let final : Stack := ⟨Word.ltResult x y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have push : second.push (Word.ltResult x y) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 3) final fields
+  simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
+/-- GT checks both operands before gas. -/
+theorem step_gt_empty (s : State) (h : At s (some .gt))
+    (short : s.stack.val.length < 2) : step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  cases items : s.stack.val with
+  | nil =>
+    have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr items
+    simp [step, bounds, decoded, pop, failStack]
+  | cons x xs =>
+    cases xs with
+    | nil =>
+      let stack : Stack := Stack.empty
+      have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+      have pop2 : stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+      simp [step, bounds, decoded, pop, pop2, failStack]
+    | cons y ys => simp [items] at short; omega
+
+/-- GT with two operands checks gas before computing the result. -/
+theorem step_gt_gas (s : State) (x y : Word) (xs : List Word)
+    (h : At s (some .gt)) (items : s.stack.val = x :: y :: xs) (gas : s.gas < 3) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  simp [step, bounds, decoded, p1, p2, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- A successful GT replaces the first two entries by the result. -/
+theorem step_gt (s t : State) (x y : Word) (xs : List Word)
+    (h : At s (some .gt)) (items : s.stack.val = x :: y :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.gtResult x y :: xs)) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  let final : Stack := ⟨Word.gtResult x y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have push : second.push (Word.gtResult x y) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 3) final fields
+  simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
+/-- SLT checks both operands before gas. -/
+theorem step_slt_empty (s : State) (h : At s (some .slt))
+    (short : s.stack.val.length < 2) : step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  cases items : s.stack.val with
+  | nil =>
+    have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr items
+    simp [step, bounds, decoded, pop, failStack]
+  | cons x xs =>
+    cases xs with
+    | nil =>
+      let stack : Stack := Stack.empty
+      have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+      have pop2 : stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+      simp [step, bounds, decoded, pop, pop2, failStack]
+    | cons y ys => simp [items] at short; omega
+
+/-- SLT with two operands checks gas before computing the result. -/
+theorem step_slt_gas (s : State) (x y : Word) (xs : List Word)
+    (h : At s (some .slt)) (items : s.stack.val = x :: y :: xs) (gas : s.gas < 3) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  simp [step, bounds, decoded, p1, p2, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- A successful SLT replaces the first two entries by the result. -/
+theorem step_slt (s t : State) (x y : Word) (xs : List Word)
+    (h : At s (some .slt)) (items : s.stack.val = x :: y :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.sltResult x y :: xs)) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  let final : Stack := ⟨Word.sltResult x y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have push : second.push (Word.sltResult x y) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 3) final fields
+  simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
+/-- SGT checks both operands before gas. -/
+theorem step_sgt_empty (s : State) (h : At s (some .sgt))
+    (short : s.stack.val.length < 2) : step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  cases items : s.stack.val with
+  | nil =>
+    have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr items
+    simp [step, bounds, decoded, pop, failStack]
+  | cons x xs =>
+    cases xs with
+    | nil =>
+      let stack : Stack := Stack.empty
+      have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+      have pop2 : stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+      simp [step, bounds, decoded, pop, pop2, failStack]
+    | cons y ys => simp [items] at short; omega
+
+/-- SGT with two operands checks gas before computing the result. -/
+theorem step_sgt_gas (s : State) (x y : Word) (xs : List Word)
+    (h : At s (some .sgt)) (items : s.stack.val = x :: y :: xs) (gas : s.gas < 3) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  simp [step, bounds, decoded, p1, p2, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- A successful SGT replaces the first two entries by the result. -/
+theorem step_sgt (s t : State) (x y : Word) (xs : List Word)
+    (h : At s (some .sgt)) (items : s.stack.val = x :: y :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.sgtResult x y :: xs)) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  let final : Stack := ⟨Word.sgtResult x y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have push : second.push (Word.sgtResult x y) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 3) final fields
+  simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
+/-- EQ checks both operands before gas. -/
+theorem step_eq_empty (s : State) (h : At s (some .eq))
+    (short : s.stack.val.length < 2) : step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  cases items : s.stack.val with
+  | nil =>
+    have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr items
+    simp [step, bounds, decoded, pop, failStack]
+  | cons x xs =>
+    cases xs with
+    | nil =>
+      let stack : Stack := Stack.empty
+      have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+      have pop2 : stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+      simp [step, bounds, decoded, pop, pop2, failStack]
+    | cons y ys => simp [items] at short; omega
+
+/-- EQ with two operands checks gas before computing the result. -/
+theorem step_eq_gas (s : State) (x y : Word) (xs : List Word)
+    (h : At s (some .eq)) (items : s.stack.val = x :: y :: xs) (gas : s.gas < 3) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  simp [step, bounds, decoded, p1, p2, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- A successful EQ replaces the first two entries by the result. -/
+theorem step_eq (s t : State) (x y : Word) (xs : List Word)
+    (h : At s (some .eq)) (items : s.stack.val = x :: y :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.eqResult x y :: xs)) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  let final : Stack := ⟨Word.eqResult x y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have push : second.push (Word.eqResult x y) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 3) final fields
+  simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
+/-- AND checks both operands before gas. -/
+theorem step_and_empty (s : State) (h : At s (some .and))
+    (short : s.stack.val.length < 2) : step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  cases items : s.stack.val with
+  | nil =>
+    have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr items
+    simp [step, bounds, decoded, pop, failStack]
+  | cons x xs =>
+    cases xs with
+    | nil =>
+      let stack : Stack := Stack.empty
+      have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+      have pop2 : stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+      simp [step, bounds, decoded, pop, pop2, failStack]
+    | cons y ys => simp [items] at short; omega
+
+/-- AND with two operands checks gas before computing the result. -/
+theorem step_and_gas (s : State) (x y : Word) (xs : List Word)
+    (h : At s (some .and)) (items : s.stack.val = x :: y :: xs) (gas : s.gas < 3) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  simp [step, bounds, decoded, p1, p2, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- A successful AND replaces the first two entries by the result. -/
+theorem step_and (s t : State) (x y : Word) (xs : List Word)
+    (h : At s (some .and)) (items : s.stack.val = x :: y :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.bitwiseAnd x y :: xs)) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  let final : Stack := ⟨Word.bitwiseAnd x y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have push : second.push (Word.bitwiseAnd x y) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 3) final fields
+  simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
+/-- OR checks both operands before gas. -/
+theorem step_or_empty (s : State) (h : At s (some .or))
+    (short : s.stack.val.length < 2) : step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  cases items : s.stack.val with
+  | nil =>
+    have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr items
+    simp [step, bounds, decoded, pop, failStack]
+  | cons x xs =>
+    cases xs with
+    | nil =>
+      let stack : Stack := Stack.empty
+      have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+      have pop2 : stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+      simp [step, bounds, decoded, pop, pop2, failStack]
+    | cons y ys => simp [items] at short; omega
+
+/-- OR with two operands checks gas before computing the result. -/
+theorem step_or_gas (s : State) (x y : Word) (xs : List Word)
+    (h : At s (some .or)) (items : s.stack.val = x :: y :: xs) (gas : s.gas < 3) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  simp [step, bounds, decoded, p1, p2, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- A successful OR replaces the first two entries by the result. -/
+theorem step_or (s t : State) (x y : Word) (xs : List Word)
+    (h : At s (some .or)) (items : s.stack.val = x :: y :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.bitwiseOr x y :: xs)) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  let final : Stack := ⟨Word.bitwiseOr x y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have push : second.push (Word.bitwiseOr x y) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 3) final fields
+  simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
+/-- XOR checks both operands before gas. -/
+theorem step_xor_empty (s : State) (h : At s (some .xor))
+    (short : s.stack.val.length < 2) : step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  cases items : s.stack.val with
+  | nil =>
+    have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr items
+    simp [step, bounds, decoded, pop, failStack]
+  | cons x xs =>
+    cases xs with
+    | nil =>
+      let stack : Stack := Stack.empty
+      have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+      have pop2 : stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+      simp [step, bounds, decoded, pop, pop2, failStack]
+    | cons y ys => simp [items] at short; omega
+
+/-- XOR with two operands checks gas before computing the result. -/
+theorem step_xor_gas (s : State) (x y : Word) (xs : List Word)
+    (h : At s (some .xor)) (items : s.stack.val = x :: y :: xs) (gas : s.gas < 3) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  simp [step, bounds, decoded, p1, p2, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- A successful XOR replaces the first two entries by the result. -/
+theorem step_xor (s t : State) (x y : Word) (xs : List Word)
+    (h : At s (some .xor)) (items : s.stack.val = x :: y :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.bitwiseXor x y :: xs)) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  let final : Stack := ⟨Word.bitwiseXor x y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have push : second.push (Word.bitwiseXor x y) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 3) final fields
+  simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
+/-- ISZERO checks its operand before gas. -/
+theorem step_iszero_empty (s : State) (h : At s (some .iszero)) (empty : s.stack.val = []) :
+    step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr empty
+  simp [step, bounds, decoded, pop, failStack]
+
+/-- ISZERO checks gas after popping its operand. -/
+theorem step_iszero_gas (s : State) (x : Word) (xs : List Word)
+    (h : At s (some .iszero)) (items : s.stack.val = x :: xs) (gas : s.gas < 3) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  simp [step, bounds, decoded, pop, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- ISZERO replaces its operand with the result. -/
+theorem step_iszero (s t : State) (x : Word) (xs : List Word)
+    (h : At s (some .iszero)) (items : s.stack.val = x :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.iszeroResult x :: xs)) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  let final : Stack := ⟨Word.iszeroResult x :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have push : rest.push (Word.iszeroResult x) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 3) final fields
+  simp only [step, dite_eq_left bounds, decoded, pop, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
+/-- NOT checks its operand before gas. -/
+theorem step_not_empty (s : State) (h : At s (some .not)) (empty : s.stack.val = []) :
+    step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr empty
+  simp [step, bounds, decoded, pop, failStack]
+
+/-- NOT checks gas after popping its operand. -/
+theorem step_not_gas (s : State) (x : Word) (xs : List Word)
+    (h : At s (some .not)) (items : s.stack.val = x :: xs) (gas : s.gas < 3) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  simp [step, bounds, decoded, pop, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- NOT replaces its operand with the result. -/
+theorem step_not (s t : State) (x : Word) (xs : List Word)
+    (h : At s (some .not)) (items : s.stack.val = x :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.bitwiseNot x :: xs)) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  let final : Stack := ⟨Word.bitwiseNot x :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have push : rest.push (Word.bitwiseNot x) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 3) final fields
+  simp only [step, dite_eq_left bounds, decoded, pop, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
 /-- MUL checks both operands before gas. -/
 theorem step_mul_empty (s : State) (h : At s (some .mul))
     (short : s.stack.val.length < 2) : step s = .exception s .stackUnderflow := by
@@ -553,6 +975,36 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | smodEmpty at_ short => exact step_smod_empty _ at_ short
   | smodGas x y xs at_ items gas => exact step_smod_gas _ x y xs at_ items gas
   | smod t x y xs at_ items gas fields => exact step_smod _ t x y xs at_ items gas fields
+  | ltEmpty at_ short => exact step_lt_empty _ at_ short
+  | ltGas x y xs at_ items gas => exact step_lt_gas _ x y xs at_ items gas
+  | lt t x y xs at_ items gas fields => exact step_lt _ t x y xs at_ items gas fields
+  | gtEmpty at_ short => exact step_gt_empty _ at_ short
+  | gtGas x y xs at_ items gas => exact step_gt_gas _ x y xs at_ items gas
+  | gt t x y xs at_ items gas fields => exact step_gt _ t x y xs at_ items gas fields
+  | sltEmpty at_ short => exact step_slt_empty _ at_ short
+  | sltGas x y xs at_ items gas => exact step_slt_gas _ x y xs at_ items gas
+  | slt t x y xs at_ items gas fields => exact step_slt _ t x y xs at_ items gas fields
+  | sgtEmpty at_ short => exact step_sgt_empty _ at_ short
+  | sgtGas x y xs at_ items gas => exact step_sgt_gas _ x y xs at_ items gas
+  | sgt t x y xs at_ items gas fields => exact step_sgt _ t x y xs at_ items gas fields
+  | eqEmpty at_ short => exact step_eq_empty _ at_ short
+  | eqGas x y xs at_ items gas => exact step_eq_gas _ x y xs at_ items gas
+  | eq t x y xs at_ items gas fields => exact step_eq _ t x y xs at_ items gas fields
+  | andEmpty at_ short => exact step_and_empty _ at_ short
+  | andGas x y xs at_ items gas => exact step_and_gas _ x y xs at_ items gas
+  | and t x y xs at_ items gas fields => exact step_and _ t x y xs at_ items gas fields
+  | orEmpty at_ short => exact step_or_empty _ at_ short
+  | orGas x y xs at_ items gas => exact step_or_gas _ x y xs at_ items gas
+  | or t x y xs at_ items gas fields => exact step_or _ t x y xs at_ items gas fields
+  | xorEmpty at_ short => exact step_xor_empty _ at_ short
+  | xorGas x y xs at_ items gas => exact step_xor_gas _ x y xs at_ items gas
+  | xor t x y xs at_ items gas fields => exact step_xor _ t x y xs at_ items gas fields
+  | iszeroEmpty at_ short => exact step_iszero_empty _ at_ short
+  | iszeroGas x xs at_ items gas => exact step_iszero_gas _ x xs at_ items gas
+  | iszero t x xs at_ items gas fields => exact step_iszero _ t x xs at_ items gas fields
+  | notEmpty at_ short => exact step_not_empty _ at_ short
+  | notGas x xs at_ items gas => exact step_not_gas _ x xs at_ items gas
+  | not t x xs at_ items gas fields => exact step_not _ t x xs at_ items gas fields
   | dupGas i at_ gas => exact step_dup_gas _ i at_ gas
   | dupEmpty i at_ gas empty => exact step_dup_empty _ i at_ gas empty
   | dupFull i at_ gas depth full => exact step_dup_full _ i at_ gas full
@@ -673,6 +1125,120 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
               let t := { s with stack, pc := s.pc + 1, gas := s.gas - 5 }
               exact ⟨_, .smod s t x y ys at_ items gas (by simp [Advances, t, stack])⟩
             · exact ⟨_, .smodGas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
+      | lt =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .ltEmpty s at_ (by simp [items])⟩
+        | cons x xs =>
+          cases xs with
+          | nil => exact ⟨_, .ltEmpty s at_ (by simp [items])⟩
+          | cons y ys =>
+            by_cases gas : 3 ≤ s.gas
+            · let stack : Stack := ⟨Word.ltResult x y :: ys, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+              let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
+              exact ⟨_, .lt s t x y ys at_ items gas (by simp [Advances, t, stack])⟩
+            · exact ⟨_, .ltGas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
+      | gt =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .gtEmpty s at_ (by simp [items])⟩
+        | cons x xs =>
+          cases xs with
+          | nil => exact ⟨_, .gtEmpty s at_ (by simp [items])⟩
+          | cons y ys =>
+            by_cases gas : 3 ≤ s.gas
+            · let stack : Stack := ⟨Word.gtResult x y :: ys, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+              let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
+              exact ⟨_, .gt s t x y ys at_ items gas (by simp [Advances, t, stack])⟩
+            · exact ⟨_, .gtGas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
+      | slt =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .sltEmpty s at_ (by simp [items])⟩
+        | cons x xs =>
+          cases xs with
+          | nil => exact ⟨_, .sltEmpty s at_ (by simp [items])⟩
+          | cons y ys =>
+            by_cases gas : 3 ≤ s.gas
+            · let stack : Stack := ⟨Word.sltResult x y :: ys, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+              let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
+              exact ⟨_, .slt s t x y ys at_ items gas (by simp [Advances, t, stack])⟩
+            · exact ⟨_, .sltGas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
+      | sgt =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .sgtEmpty s at_ (by simp [items])⟩
+        | cons x xs =>
+          cases xs with
+          | nil => exact ⟨_, .sgtEmpty s at_ (by simp [items])⟩
+          | cons y ys =>
+            by_cases gas : 3 ≤ s.gas
+            · let stack : Stack := ⟨Word.sgtResult x y :: ys, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+              let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
+              exact ⟨_, .sgt s t x y ys at_ items gas (by simp [Advances, t, stack])⟩
+            · exact ⟨_, .sgtGas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
+      | eq =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .eqEmpty s at_ (by simp [items])⟩
+        | cons x xs =>
+          cases xs with
+          | nil => exact ⟨_, .eqEmpty s at_ (by simp [items])⟩
+          | cons y ys =>
+            by_cases gas : 3 ≤ s.gas
+            · let stack : Stack := ⟨Word.eqResult x y :: ys, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+              let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
+              exact ⟨_, .eq s t x y ys at_ items gas (by simp [Advances, t, stack])⟩
+            · exact ⟨_, .eqGas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
+      | and =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .andEmpty s at_ (by simp [items])⟩
+        | cons x xs =>
+          cases xs with
+          | nil => exact ⟨_, .andEmpty s at_ (by simp [items])⟩
+          | cons y ys =>
+            by_cases gas : 3 ≤ s.gas
+            · let stack : Stack := ⟨Word.bitwiseAnd x y :: ys, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+              let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
+              exact ⟨_, .and s t x y ys at_ items gas (by simp [Advances, t, stack])⟩
+            · exact ⟨_, .andGas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
+      | or =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .orEmpty s at_ (by simp [items])⟩
+        | cons x xs =>
+          cases xs with
+          | nil => exact ⟨_, .orEmpty s at_ (by simp [items])⟩
+          | cons y ys =>
+            by_cases gas : 3 ≤ s.gas
+            · let stack : Stack := ⟨Word.bitwiseOr x y :: ys, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+              let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
+              exact ⟨_, .or s t x y ys at_ items gas (by simp [Advances, t, stack])⟩
+            · exact ⟨_, .orGas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
+      | xor =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .xorEmpty s at_ (by simp [items])⟩
+        | cons x xs =>
+          cases xs with
+          | nil => exact ⟨_, .xorEmpty s at_ (by simp [items])⟩
+          | cons y ys =>
+            by_cases gas : 3 ≤ s.gas
+            · let stack : Stack := ⟨Word.bitwiseXor x y :: ys, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+              let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
+              exact ⟨_, .xor s t x y ys at_ items gas (by simp [Advances, t, stack])⟩
+            · exact ⟨_, .xorGas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
+      | iszero =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .iszeroEmpty s at_ items⟩
+        | cons x xs =>
+          by_cases gas : 3 ≤ s.gas
+          · let stack : Stack := ⟨Word.iszeroResult x :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
+            exact ⟨_, .iszero s t x xs at_ items gas (by simp [Advances, t, stack])⟩
+          · exact ⟨_, .iszeroGas s x xs at_ items (Nat.lt_of_not_ge gas)⟩
+      | not =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .notEmpty s at_ items⟩
+        | cons x xs =>
+          by_cases gas : 3 ≤ s.gas
+          · let stack : Stack := ⟨Word.bitwiseNot x :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
+            exact ⟨_, .not s t x xs at_ items gas (by simp [Advances, t, stack])⟩
+          · exact ⟨_, .notGas s x xs at_ items (Nat.lt_of_not_ge gas)⟩
       | dup i =>
         by_cases gas : 3 ≤ s.gas
         · by_cases depth : i.val < s.stack.val.length
