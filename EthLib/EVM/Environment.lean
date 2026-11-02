@@ -44,5 +44,11 @@ structure Context where
   chainId : Fin (2 ^ 64)
   /-- The accepted U256 domain of Cancun `BlockEnvironment.base_fee_per_gas`. -/
   baseFee : Word
+  /-- Transaction versioned hashes, decoded from 32-byte big-endian values. -/
+  blobVersionedHashes : List Word
+
+/-- Cancun `environment.py`, `blob_hash`, indexes without narrowing the word. -/
+def blobHash (context : Context) (index : Word) : Word :=
+  (context.blobVersionedHashes[index.toNat]?).getD 0
 
 end EthLib.EVM.Environment

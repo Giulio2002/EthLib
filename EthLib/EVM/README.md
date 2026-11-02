@@ -440,7 +440,7 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The 256-byte dispatch regression covers 122 supported instructions, 26 assigned but unsupported instructions, 107 unassigned bytes, and INVALID.
+The 256-byte dispatch regression covers 123 supported instructions, 25 assigned but unsupported instructions, 107 unassigned bytes, and INVALID.
 These counts describe this restricted frame, not the full Cancun EVM.
 
 ## KECCAK256 execution (09d)
@@ -547,4 +547,19 @@ The seven instructions charge two gas before pushing the selected field.
 `Frame.block_observation_actual` derives the stack and context from actual success.
 `Runner.BlockEnvironmentProgram.run` covers arbitrary accepted context and memory.
 The context supplies metadata and does not validate a block or calculate fees.
-BLOCKHASH and blob queries remain outside this slice.
+BLOCKHASH and BLOBBASEFEE remain outside this slice.
+
+`Environment.Context.blobVersionedHashes` supplies the transaction's decoded hashes.
+Each word represents exactly one 32-byte big-endian versioned hash.
+Callers must decode those bytes with `Word.ofBytesBE` before constructing the context.
+The context does not validate sidecars or derive hashes from commitments.
+
+Cancun execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`,
+`vm/instructions/environment.py`, function `blob_hash`, pops the full index first.
+It charges three gas, selects the indexed hash or zero, and pushes the result.
+The helper uses the full word as a natural number, with no native-width conversion.
+The `blobHash_in_range`, `blobHash_out_of_range`, and `blobHash_codec` contracts
+state the lookup and byte encoding relations.
+
+The `Environment.Context` constructor takes one additional final field.
+Callers must pass the supplied transaction hashes, or `[]` when there are none.

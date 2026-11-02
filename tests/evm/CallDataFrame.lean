@@ -8,7 +8,7 @@ private def data : ByteArray := ⟨#[0x12, 0x34, 0x56]⟩
 private def frame (op : UInt8) (gas : Nat) (xs : List Word) (bound : xs.length ≤ 1024)
     (input : ByteArray) : Frame.State :=
   ⟨⟨#[op]⟩, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty,
-    Memory.Allocation.empty_valid, ⟨input, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩⟩, ByteArray.empty⟩
+    Memory.Allocation.empty_valid, ⟨input, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []⟩⟩, ByteArray.empty⟩
 
 private def head (op : UInt8) (gas : Nat) (xs : List Word) (bound : xs.length ≤ 1024)
     (input : ByteArray) : Option Nat :=

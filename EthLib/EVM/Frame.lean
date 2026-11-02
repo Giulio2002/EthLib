@@ -149,6 +149,16 @@ def returnDataCopy (s : State) : Outcome :=
           | .ok bytes =>
             .continue { s with stack, gas, pc := s.pc + 1, memory := Memory.Allocation.write s.memory destination.toNat bytes, memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
 
+/-- Cancun `environment.py`, `blob_hash`: pop, charge, look up, then push. -/
+def blobHash (s : State) : Outcome :=
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (index, stack) =>
+    charge s 3 fun gas =>
+      match Stack.push stack (Environment.blobHash s.context.environment index) with
+      | .error e => failStack s e
+      | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+
 /-- Execute one instruction or stop at the end of code. -/
 def step (s : State) : Outcome :=
   if h : s.pc < s.code.size then
@@ -186,6 +196,7 @@ def step (s : State) : Outcome :=
     -- Cancun `control_flow.py`, `jumpdest`: charge before advancing.
     | some .jumpdest =>
       charge s 1 fun gas => .continue { s with gas, pc := s.pc + 1 }
+    | some .blobhash => blobHash s
     -- Cancun `environment.py`, `calldataload`: pop before charging.
     | some .calldataload =>
       match Stack.pop s.stack with

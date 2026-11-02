@@ -35,6 +35,7 @@ public import EthLib.EVM.Proofs.Runner.Environment
 public import EthLib.EVM.Proofs.Runner.BlockEnvironment
 public import EthLib.EVM.Proofs.Runner.Memory
 public import EthLib.EVM.Proofs.Runner.CallData
+public import EthLib.EVM.Proofs.Runner.BlobHash
 public import EthLib.EVM.Proofs.Runner.MixedCopy
 public import EthLib.EVM.Proofs.Runner.CopyKeccak
 public import EthLib.EVM.Proofs.ReturnData

@@ -83,4 +83,72 @@ theorem observe_actual (s t : State) (value : Nat → Nat)
   have eq : t = target := Outcome.continue.inj ok
   exact ⟨gas, room, eq ▸ fields⟩
 
+/-- An empty stack fails before the gas check for every helper invocation. -/
+theorem blobHash_empty (s : State) (empty : s.stack.val = []) :
+    blobHash s = .exception s .stackUnderflow := by
+  have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr empty
+  simp [blobHash, pop, failStack]
+
+/-- A present index with insufficient gas fails before lookup. -/
+theorem blobHash_gas (s : State) (x : Word) (xs : List Word)
+    (items : s.stack.val = x :: xs) (gas : s.gas < 3) :
+    blobHash s = .exception s .outOfGas := by
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  simp [blobHash, pop, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- A successful lookup replaces the index and preserves all other frame fields. -/
+theorem blobHash_success (s t : State) (x : Word) (xs : List Word)
+    (items : s.stack.val = x :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3)
+      (Environment.blobHash s.context.environment x :: xs)) :
+    blobHash s = .continue t := by
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  let final : Stack := ⟨Environment.blobHash s.context.environment x :: xs,
+    by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have push : rest.push (Environment.blobHash s.context.environment x) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 3) final fields
+  simp only [blobHash, pop, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
+/-- Observed helper success determines its operand, gas, and every output field. -/
+theorem blobHash_actual (s t : State) (run : blobHash s = .continue t) :
+    ∃ x xs, s.stack.val = x :: xs ∧ 3 ≤ s.gas ∧
+      Advances s t (s.pc + 1) (s.gas - 3)
+        (Environment.blobHash s.context.environment x :: xs) := by
+  cases items : s.stack.val with
+  | nil =>
+    have bad := blobHash_empty s items
+    rw [run] at bad
+    cases bad
+  | cons x xs =>
+    have gas : 3 ≤ s.gas := by
+      by_cases h : 3 ≤ s.gas
+      · exact h
+      have bad := blobHash_gas s x xs items (by omega)
+      rw [run] at bad
+      cases bad
+    let stack : Stack := ⟨Environment.blobHash s.context.environment x :: xs,
+      by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+    let target : State := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
+    have fields : Advances s target (s.pc + 1) (s.gas - 3)
+        (Environment.blobHash s.context.environment x :: xs) := by simp [Advances, target, stack]
+    have ok := blobHash_success s target x xs items gas fields
+    rw [run] at ok
+    have eq : t = target := Outcome.continue.inj ok
+    exact ⟨x, xs, rfl, gas, eq ▸ fields⟩
+
+/-- An actual BLOBHASH instruction inherits the helper's full converse. -/
+theorem step_blobHash_actual (s t : State) (at_ : At s (some .blobhash))
+    (run : step s = .continue t) :
+    ∃ x xs, s.stack.val = x :: xs ∧ 3 ≤ s.gas ∧
+      Advances s t (s.pc + 1) (s.gas - 3)
+        (Environment.blobHash s.context.environment x :: xs) := by
+  obtain ⟨bounds, decoded⟩ := at_
+  have helper : blobHash s = .continue t := by
+    simpa [step, bounds, decoded] using run
+  exact blobHash_actual s t helper
+
 end EthLib.EVM.Frame
