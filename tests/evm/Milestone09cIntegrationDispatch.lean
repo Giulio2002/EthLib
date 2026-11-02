@@ -7,7 +7,7 @@ open EthLib.EVM
 -- This range list is independent of the decoder and matches the supported slice.
 private def supported (n : Nat) : Bool :=
   n ≤ 0x0b || (0x10 ≤ n && n ≤ 0x1e) || n == 0x20 || (n == 0x30 || (0x32 ≤ n && n ≤ 0x3a)) || n == 0x3d || n == 0x3e || (0x40 ≤ n && n ≤ 0x46) || n == 0x48 || n == 0x49 || n == 0x4a || n == 0x4b || n == 0x50 || n == 0x51 || n == 0x52 || n == 0x53 ||
-  (0x56 ≤ n && n ≤ 0x5b) || n == 0x5e || (0x5f ≤ n && n ≤ 0x9f)
+  (0x56 ≤ n && n ≤ 0x5b) || n == 0x5e || (0x5f ≤ n && n ≤ 0x9f) || (0xe6 ≤ n && n ≤ 0xe8)
 
 private instance (op : Opcode) : Decidable (Frame.Unsupported op) := by
   cases op <;> simp [Frame.Unsupported] <;> infer_instance
@@ -39,7 +39,7 @@ private def check (n : Nat) : Bool := Id.run do
   (List.range 256).all check)
 
 -- Count the actual decoder and step classifications across unique bytes.
-/-- info: (127, 23, 105, 1) -/
+/-- info: (130, 23, 102, 1) -/
 #guard_msgs in
 #eval Id.run do
   let mut supportedCount := 0
@@ -59,7 +59,7 @@ private def check (n : Nat) : Bool := Id.run do
   return (supportedCount, unsupportedCount, unassignedCount, invalidCount)
 
 -- Count the outcomes produced by executable dispatch.
-/-- info: (127, 23, 106) -/
+/-- info: (130, 23, 103) -/
 #guard_msgs in
 #eval Id.run do
   let mut executed := 0
@@ -110,3 +110,23 @@ private def check (n : Nat) : Bool := Id.run do
 example (byte : UInt8) :
     Opcode.decodeCancunClz byte = Proofs.Opcode.cancunClzReference.lookup byte :=
   Proofs.Opcode.decodeCancunClz_reference byte
+
+-- Both historical classifiers agree with their reference tables for every byte.
+/-- info: (true, true) -/
+#guard_msgs in
+#eval (
+  (List.range 256).all fun n =>
+    Opcode.decodeCancun (UInt8.ofNat n) ==
+      Proofs.Opcode.cancunReference.lookup (UInt8.ofNat n),
+  (List.range 256).all fun n =>
+    Opcode.decodeCancunClzSlotnum (UInt8.ofNat n) ==
+      Proofs.Opcode.cancunClzSlotnumReference.lookup (UInt8.ofNat n))
+
+example (byte : UInt8) :
+    Opcode.decodeCancun byte = Proofs.Opcode.cancunReference.lookup byte :=
+  Proofs.Opcode.decodeCancun_reference byte
+
+example (byte : UInt8) :
+    Opcode.decodeCancunClzSlotnum byte =
+      Proofs.Opcode.cancunClzSlotnumReference.lookup byte :=
+  Proofs.Opcode.decodeCancunClzSlotnum_reference byte

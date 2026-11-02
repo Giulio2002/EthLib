@@ -4,6 +4,7 @@ public import EthLib.EVM.CallData
 public import EthLib.EVM.ReturnData
 public import EthLib.EVM.Stack
 public import EthLib.EVM.PushImmediate
+public import EthLib.EVM.StackImmediate
 public import EthLib.EVM.JumpDest
 public import EthLib.EVM.Gas
 public import EthLib.EVM.Memory.Invariant
@@ -25,6 +26,7 @@ The instruction rules come from Cancun execution-specs revision
 `vm/instructions/stack.py`, `arithmetic.py`, `comparison.py`, `bitwise.py`,
 `control_flow.py`, `memory.py`, `block.py`, `environment.py`, and `vm/gas.py`.
 Amsterdam `vm/instructions/block.py`, `slot_number`, defines SLOTNUM at the same revision.
+Amsterdam `vm/instructions/stack.py` defines DUPN, SWAPN and EXCHANGE.
 The blob fee observation uses the supplied schedule, which can differ from Cancun.
 An exception retains the input frame only as diagnostic context.
 Its gas is zero at the message boundary; its stack is not a protocol final state.
@@ -47,7 +49,7 @@ structure State where
 
 /-- Exceptional halts distinguished by their first failing check. -/
 inductive Exception where
-  | invalidOpcode | invalidJumpDestination | outOfGas | stackUnderflow | stackOverflow | outOfBoundsRead
+  | invalidOpcode | invalidJumpDestination | outOfGas | stackUnderflow | stackOverflow | outOfBoundsRead | invalidParameter
   deriving DecidableEq, Repr
 
 /-- Frame outcomes include a typed revert for future semantics.
@@ -188,6 +190,40 @@ def clz (s : State) : Outcome :=
       | .error e => failStack s e
       | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
 
+/-- Amsterdam `vm/instructions/stack.py`, `dupn`.
+
+Gas is charged before reading and validating the immediate.
+The byte reader pads beyond the code with zero.
+-/
+def dupn (s : State) : Outcome :=
+  charge s 3 fun gas =>
+    match StackImmediate.decodeSingle (StackImmediate.byte s.code s.pc) with
+    | none => .exception s .invalidParameter
+    | some n =>
+      match s.stack.dupAt (n - 1) with
+      | .error e => failStack s e
+      | .ok stack => .continue { s with stack, gas, pc := s.pc + 2 }
+
+/-- Amsterdam `vm/instructions/stack.py`, `swapn`. -/
+def swapn (s : State) : Outcome :=
+  charge s 3 fun gas =>
+    match StackImmediate.decodeSingle (StackImmediate.byte s.code s.pc) with
+    | none => .exception s .invalidParameter
+    | some n =>
+      match s.stack.exchangeAt 0 n with
+      | .error e => failStack s e
+      | .ok stack => .continue { s with stack, gas, pc := s.pc + 2 }
+
+/-- Amsterdam `vm/instructions/stack.py`, `exchange`. -/
+def exchange (s : State) : Outcome :=
+  charge s 3 fun gas =>
+    match StackImmediate.decodePair (StackImmediate.byte s.code s.pc) with
+    | none => .exception s .invalidParameter
+    | some (n, m) =>
+      match s.stack.exchangeAt n m with
+      | .error e => failStack s e
+      | .ok stack => .continue { s with stack, gas, pc := s.pc + 2 }
+
 /-- Execute one instruction or stop at the end of code. -/
 def step (s : State) : Outcome :=
   if h : s.pc < s.code.size then
@@ -200,6 +236,9 @@ def step (s : State) : Outcome :=
         | .error e => failStack s e
         | .ok stack => .continue { s with stack, gas, pc := PushImmediate.nextPC s.pc n }
     -- Cancun `control_flow.py`, `jump`: pop, charge, then validate the full word.
+    | some .dupn => dupn s
+    | some .swapn => swapn s
+    | some .exchange => exchange s
     | some .jump =>
       match Stack.pop s.stack with
       | .error e => failStack s e

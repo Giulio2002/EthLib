@@ -233,9 +233,10 @@ Their sparse write histories need not be equal.
 
 # Opcode decoding
 
-`Opcode` represents the assigned Cancun bytes plus Osaka CLZ and Amsterdam SLOTNUM.
+`Opcode` represents the assigned Cancun bytes plus Osaka CLZ and selected Amsterdam opcodes.
 `Opcode.decodeCancun` retains the historical Cancun classification.
-`Opcode.decodeCancunClz` adds CLZ without SLOTNUM.
+`Opcode.decodeCancunClz` adds CLZ without SLOTNUM or EIP-8024.
+`Opcode.decodeCancunClzSlotnum` retains the preceding CLZ and SLOTNUM subset.
 PUSH lengths and DUP, SWAP and LOG indices are bounded in the type.
 DUP and SWAP indices start at zero, so index zero denotes DUP1 or SWAP1.
 `INVALID` is a designated instruction at `0xfe`.
@@ -245,6 +246,7 @@ Classification does not mean instruction execution is implemented.
 The source is execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`.
 The Cancun `vm.instructions.Ops` enum and `op_implementation` give the historical byte assignments.
 Osaka `vm.instructions.Ops` assigns CLZ to `0x1e`.
+Amsterdam `vm.instructions.Ops` assigns DUPN, SWAPN and EXCHANGE to `0xe6` through `0xe8`.
 The Shanghai Yellow Paper revision `efc5f9a1f356cba376c978eedb63cb0363c2aa85`, Appendix H.2, names `INVALID`.
 The EELS enum omits that byte from its dispatch.
 Cancun adds BLOBHASH, BLOBBASEFEE, TLOAD, TSTORE and MCOPY to the Shanghai table.
@@ -265,12 +267,14 @@ The opcode and PUSH modules implement no frames, gas, stack effects or instructi
 
 # Jump destination scan
 
-The scanner uses the Cancun `vm.runtime.get_valid_jump_destinations` rule at revision `fd9298410ec7218838c8348f69c1eb633f1797dc`.
+The scanner uses the Cancun and Amsterdam `vm.runtime.get_valid_jump_destinations` rule at revision `fd9298410ec7218838c8348f69c1eb633f1797dc`.
 The Shanghai Yellow Paper revision `efc5f9a1f356cba376c978eedb63cb0363c2aa85`, section 9.4.3, gives the same boundary rule.
 It scans the entire code and skips PUSH1 through PUSH32 data.
 PUSH0 has no data.
 The scan continues past all other bytes, including unassigned bytes.
 Its program counters use natural arithmetic.
+EIP-8024 keeps this scan unchanged.
+For example, `e6 5b` has a destination at byte 1, while `e6 60 5b` does not.
 
 The proof defines instruction boundaries independently from the scanner using source byte lengths.
 The kernel checks that membership is exactly a boundary containing byte `0x5b`.
@@ -285,7 +289,7 @@ The decoder and scanner do not model frames, gas, stack effects or instruction e
 
 # Restricted frame execution
 
-The frame runner supports STOP, JUMP, JUMPI, JUMPDEST, PC, MSIZE, GAS, MLOAD, MSTORE, MSTORE8, MCOPY, CALLDATALOAD, CALLDATASIZE, CALLDATACOPY, CODESIZE, CODECOPY, PUSH0 through PUSH32, POP, arithmetic, comparison and bitwise instructions, DUP1 through DUP16, and SWAP1 through SWAP16.
+The frame runner supports STOP, JUMP, JUMPI, JUMPDEST, PC, MSIZE, GAS, MLOAD, MSTORE, MSTORE8, MCOPY, CALLDATALOAD, CALLDATASIZE, CALLDATACOPY, CODESIZE, CODECOPY, PUSH0 through PUSH32, POP, arithmetic, comparison and bitwise instructions, DUP1 through DUP16, SWAP1 through SWAP16, DUPN, SWAPN and EXCHANGE.
 The implemented arithmetic and bitwise instructions are ADD, MUL, SUB, DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD, EXP, LT, GT, SLT, SGT, EQ, ISZERO, AND, OR, XOR, NOT, SHL, SHR, SAR, BYTE and SIGNEXTEND.
 The arithmetic, comparison and bitwise instructions have independent success, underflow and out-of-gas rules.
 Operand checks precede charging gas.
@@ -677,6 +681,5 @@ The result is 256 for zero and otherwise identifies the power-of-two interval co
 `Word.countLeadingZeros_spec` states this interval independently of the implementation.
 `Frame.clz_helper_iff` and `Frame.clz_step_iff` describe all outcomes with that specification.
 `Runner.CountLeadingZeros.run` composes ADD, CLZ, PC and STOP over arbitrary accepted contexts and memory.
-The decoder is the Cancun table augmented with CLZ.
-Amsterdam SLOTNUM, DUPN, SWAPN and EXCHANGE remain outside this target subset.
+The decoder also includes SLOTNUM and the EIP-8024 stack instructions.
 The frame does not implement full Amsterdam execution.
