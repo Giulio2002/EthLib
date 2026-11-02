@@ -7,6 +7,8 @@ public import EthLib.EVM.Word.DivMod
 public import EthLib.EVM.Word.SignedDivMod
 public import EthLib.EVM.Word.Comparisons
 public import EthLib.EVM.Word.Bitwise
+public import EthLib.EVM.Word.Shifts
+public import EthLib.EVM.Word.ByteSignExtend
 
 /-!
 # Cancun frame subset
@@ -251,6 +253,66 @@ def step (s : State) : Outcome :=
         | .ok (b, stack) =>
           charge s 3 fun gas =>
             match Stack.push stack (Word.bitwiseXor a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `bitwise.py`, `bitwise_shl`: pop the index or count first.
+    | some .shl =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 3 fun gas =>
+            match Stack.push stack (Word.shl a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `bitwise.py`, `bitwise_shr`: pop the index or count first.
+    | some .shr =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 3 fun gas =>
+            match Stack.push stack (Word.shr a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `bitwise.py`, `bitwise_sar`: pop the index or count first.
+    | some .sar =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 3 fun gas =>
+            match Stack.push stack (Word.sar a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `bitwise.py`, `get_byte`: pop the index or count first.
+    | some .byte =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 3 fun gas =>
+            match Stack.push stack (Word.byte a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `arithmetic.py`, `signextend`: pop the index or count first.
+    | some .signextend =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 5 fun gas =>
+            match Stack.push stack (Word.signextend a b) with
             | .error e => failStack s e
             | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
     -- Cancun `comparison.py`, `is_zero`: pop the operand before charging gas.

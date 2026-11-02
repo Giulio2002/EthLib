@@ -20,7 +20,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -124,6 +124,36 @@ inductive Rule : State → Outcome → Prop where
       Rule s (.exception s .outOfGas)
   | and (s t x y xs) : At s (some .and) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
       Advances s t (s.pc + 1) (s.gas - 3) (Word.bitwiseAnd x y :: xs) → Rule s (.continue t)
+  | shlEmpty (s) : At s (some .shl) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | shlGas (s x y xs) : At s (some .shl) → s.stack.val = x :: y :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | shl (s t x y xs) : At s (some .shl) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.shl x y :: xs) → Rule s (.continue t)
+  | shrEmpty (s) : At s (some .shr) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | shrGas (s x y xs) : At s (some .shr) → s.stack.val = x :: y :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | shr (s t x y xs) : At s (some .shr) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.shr x y :: xs) → Rule s (.continue t)
+  | sarEmpty (s) : At s (some .sar) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | sarGas (s x y xs) : At s (some .sar) → s.stack.val = x :: y :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | sar (s t x y xs) : At s (some .sar) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.sar x y :: xs) → Rule s (.continue t)
+  | byteEmpty (s) : At s (some .byte) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | byteGas (s x y xs) : At s (some .byte) → s.stack.val = x :: y :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | byte (s t x y xs) : At s (some .byte) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.byte x y :: xs) → Rule s (.continue t)
+  | signextendEmpty (s) : At s (some .signextend) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | signextendGas (s x y xs) : At s (some .signextend) → s.stack.val = x :: y :: xs → s.gas < 5 →
+      Rule s (.exception s .outOfGas)
+  | signextend (s t x y xs) : At s (some .signextend) → s.stack.val = x :: y :: xs → 5 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 5) (Word.signextend x y :: xs) → Rule s (.continue t)
   | orEmpty (s) : At s (some .or) → s.stack.val.length < 2 →
       Rule s (.exception s .stackUnderflow)
   | orGas (s x y xs) : At s (some .or) → s.stack.val = x :: y :: xs → s.gas < 3 →

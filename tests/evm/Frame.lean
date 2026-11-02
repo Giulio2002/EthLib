@@ -28,8 +28,8 @@ example : match Runner.run 1 (initial ⟨#[]⟩ 0) with
     | _ => ([], 0)
 
 -- An assigned instruction outside the slice is tooling unsupported.
-example : match Runner.run 1 (initial ⟨#[0x1a]⟩ 0) with
-    | .unsupported _ .byte => True
+example : match Runner.run 1 (initial ⟨#[0x20]⟩ 0) with
+    | .unsupported _ .keccak => True
     | _ => False := by cbv
 
 -- An unassigned instruction is exceptional.
@@ -139,7 +139,7 @@ example : match Runner.run 5 (initial ⟨#[0x00]⟩ 9) with
 example : match Runner.run 1 (initial ⟨#[0xfe]⟩ 9) with
     | .exception s e => s.gas = 9 ∧ Runner.settle (.exception s e) = some (.exceptional 0 e)
     | _ => False := by cbv
-example : Runner.settle (Runner.run 1 (initial ⟨#[0x1a]⟩ 9)) = none := by cbv
+example : Runner.settle (Runner.run 1 (initial ⟨#[0x20]⟩ 9)) = none := by cbv
 example : Runner.settle (Runner.run 0 (initial ⟨#[0x00]⟩ 9)) = none := by cbv
 
 -- The first step exhausts, and resuming executes STOP.
@@ -282,3 +282,70 @@ example : match EthLib.EVM.Runner.run 1 (initial ⟨#[0xfd]⟩ 10) with
 #eval match Runner.run 5 (initial ⟨#[0x60, 2, 0x60, 9, 0x10, 0x15, 0x00]⟩ 12) with
   | .stopped s => (s.stack.val.map BitVec.toNat, s.gas, s.pc)
   | _ => ([], 0, 0)
+
+-- The first stack entry is the count or index, including full-width values.
+def indexedState (opcode : UInt8) (gas : Nat) (xs : List Word) (h : xs.length ≤ 1024) : Frame.State :=
+  ⟨⟨#[opcode]⟩, 0, ⟨xs, h⟩, gas, Memory.Allocation.empty, Memory.Allocation.empty_valid⟩
+
+def indexedResult (opcode : UInt8) (gas : Nat) (x y : Word) : Option (List Word × Nat × Nat) :=
+  match Frame.step (indexedState opcode gas [x, y] (by simp)) with
+  | .continue s => some (s.stack.val, s.gas, s.pc)
+  | _ => none
+
+-- These examples pin count boundaries and noncommutative operand order.
+#guard indexedResult 0x1b 3 1 3 == some ([6], 0, 1)
+#guard indexedResult 0x1c 3 1 6 == some ([3], 0, 1)
+#guard indexedResult 0x1d 3 1 (Word.ofSigned (-3)) == some ([Word.ofSigned (-2)], 0, 1)
+#guard indexedResult 0x1b 3 0 3 == some ([3], 0, 1)
+#guard indexedResult 0x1b 3 255 1 == some ([BitVec.ofNat 256 (2 ^ 255)], 0, 1)
+#guard indexedResult 0x1c 3 256 3 == some ([0], 0, 1)
+#guard indexedResult 0x1d 3 (BitVec.ofNat 256 (2 ^ 256 - 1)) 0 == some ([0], 0, 1)
+#guard indexedResult 0x1a 3 0 (BitVec.ofNat 256 (2 ^ 248 + 42)) == some ([1], 0, 1)
+#guard indexedResult 0x1a 3 31 0xabcd == some ([0xcd], 0, 1)
+#guard indexedResult 0x1a 3 32 0xabcd == some ([0], 0, 1)
+#guard indexedResult 0x1a 3 (BitVec.ofNat 256 (2 ^ 256 - 1)) 1 == some ([0], 0, 1)
+#guard indexedResult 0x0b 5 0 0x127f == some ([0x7f], 0, 1)
+#guard indexedResult 0x0b 5 0 0x80 == some ([Word.ofSigned (-128)], 0, 1)
+#guard indexedResult 0x0b 5 30 1 == some ([1], 0, 1)
+#guard indexedResult 0x0b 5 31 0x80 == some ([0x80], 0, 1)
+#guard indexedResult 0x0b 5 32 0x80 == some ([0x80], 0, 1)
+#guard indexedResult 0x0b 5 (BitVec.ofNat 256 (2 ^ 256 - 1)) 0x80 == some ([0x80], 0, 1)
+
+-- Both stack checks precede gas, and one gas less than the price fails.
+def indexedFailure (opcode : UInt8) (gas : Nat) (xs : List Word) (h : xs.length ≤ 1024) : Option Frame.Exception :=
+  match Frame.step (indexedState opcode gas xs h) with
+  | .exception _ e => some e
+  | _ => none
+
+#guard [0x1b, 0x1c, 0x1d, 0x1a, 0x0b].all (fun op =>
+  indexedFailure op 0 [] (by simp) == some .stackUnderflow &&
+  indexedFailure op 0 [1] (by simp) == some .stackUnderflow)
+#guard [0x1b, 0x1c, 0x1d, 0x1a].all (fun op =>
+  indexedFailure op 2 [1, 2] (by simp) == some .outOfGas)
+#guard indexedFailure 0x0b 4 [1, 2] (by simp) == some .outOfGas
+#guard [0x1b, 0x1c, 0x1d].all (fun op =>
+  indexedResult op 3 256 0 == some ([0], 0, 1) &&
+  indexedResult op 3 (BitVec.ofNat 256 (2 ^ 256 - 1)) 0 == some ([0], 0, 1))
+#guard indexedResult 0x1d 3 255 (Word.ofSigned (-3)) == some ([Word.ofSigned (-1)], 0, 1)
+#guard indexedResult 0x1d 3 256 (Word.ofSigned (-3)) == some ([Word.ofSigned (-1)], 0, 1)
+#guard indexedResult 0x0b 5 30 (BitVec.ofNat 256 (2 ^ 247)) ==
+  some ([BitVec.ofNat 256 (2 ^ 256 - 2 ^ 247)], 0, 1)
+#guard indexedResult 0x0b 5 31 (BitVec.ofNat 256 (2 ^ 255)) ==
+  some ([BitVec.ofNat 256 (2 ^ 255)], 0, 1)
+
+-- This program shifts and extracts a byte while preserving code and memory.
+#guard match Runner.run 6 (initial ⟨#[0x60, 0xab, 0x60, 8, 0x1b, 0x60, 30, 0x1a, 0x00]⟩ 15) with
+    | .stopped s => s.stack.val == [0xab] && s.pc == 9 && s.gas == 0 &&
+        s.code == ⟨#[0x60, 0xab, 0x60, 8, 0x1b, 0x60, 30, 0x1a, 0x00]⟩ &&
+        decide (s.memory = Memory.Allocation.empty)
+    | _ => false
+#guard indexedResult 0x1c 3 255 (BitVec.ofNat 256 (2 ^ 255)) == some ([1], 0, 1)
+#guard indexedResult 0x1b 3 256 1 == some ([0], 0, 1)
+#guard indexedResult 0x1b 3 (BitVec.ofNat 256 (2 ^ 256 - 1)) 1 == some ([0], 0, 1)
+#guard indexedResult 0x1c 3 (BitVec.ofNat 256 (2 ^ 256 - 1)) 1 == some ([0], 0, 1)
+#guard indexedResult 0x1d 3 (BitVec.ofNat 256 (2 ^ 256 - 1)) (Word.ofSigned (-3)) ==
+  some ([Word.ofSigned (-1)], 0, 1)
+#guard indexedResult 0x0b 5 32 (BitVec.ofNat 256 (2 ^ 255)) ==
+  some ([BitVec.ofNat 256 (2 ^ 255)], 0, 1)
+#guard indexedResult 0x1c 3 0 7 == some ([7], 0, 1)
+#guard indexedResult 0x1d 3 0 (Word.ofSigned (-3)) == some ([Word.ofSigned (-3)], 0, 1)
