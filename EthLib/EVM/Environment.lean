@@ -49,9 +49,47 @@ structure Context where
   excessBlobGas : Fin (2 ^ 64)
   /-- Transaction versioned hashes, decoded from 32-byte big-endian values. -/
   blobVersionedHashes : List Word
+  /-- Previous block hashes, oldest first, decoded from 32-byte big-endian values. -/
+  blockHashes : List Word
 
 /-- Cancun `environment.py`, `blob_hash`, indexes without narrowing the word. -/
 def blobHash (context : Context) (index : Word) : Word :=
   (context.blobVersionedHashes[index.toNat]?).getD 0
+
+/-- A history is ordered by increasing block number.
+
+Cancun `fork.py`, `get_last_256_block_hashes`, constructs this order.
+Each word is the big-endian decoding of a 32-byte hash.
+-/
+abbrev BlockHistory := List Word
+
+/-- The supplied suffix covers every block that EELS may index. -/
+def HistoryCoversWindow (history : BlockHistory) (current : Word) : Prop :=
+  min current.toNat 256 ≤ history.length
+
+/-- The history covers the window and agrees with the supplied chain.
+
+The oldest entry can be the parent of genesis and has no natural block number.
+The remaining entries use the age-based index of Cancun `block_hash`.
+The relation assumes the chain hashes; it does not validate headers.
+-/
+def HistoryMatches (history : BlockHistory) (current : Word) (chain : Nat → Word) : Prop :=
+  HistoryCoversWindow history current ∧ history.length ≤ 256 ∧
+  history.length ≤ current.toNat + 1 ∧
+  ∀ i (h : i < history.length), history.length ≤ current.toNat + i →
+    history[i]'h = chain (current.toNat + i - history.length)
+
+/-- Cancun `block.py`, `block_hash`, with a total extension for short history.
+
+The source raises an index error when a requested in-window hash is missing.
+This function returns zero in that case.
+The block number is restricted to the existing U256 context domain.
+-/
+def blockHash (history : BlockHistory) (current index : Word) : Word :=
+  if index.toNat < current.toNat ∧ current.toNat ≤ index.toNat + 256 then
+    if current.toNat - index.toNat ≤ history.length then
+      (history[history.length - (current.toNat - index.toNat)]?).getD 0
+    else 0
+  else 0
 
 end EthLib.EVM.Environment

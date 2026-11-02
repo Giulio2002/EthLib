@@ -2,7 +2,7 @@ import EthLib.EVM.Proofs.Runner.Environment
 
 open EthLib.EVM
 
-private def env : Environment.Context := ⟨1, 2, 3, BitVec.ofNat 256 (2^255), BitVec.ofNat 256 (2^255 + 7), 0, 0, 0, 0, 0, 0, 0, 0, []⟩
+private def env : Environment.Context := ⟨1, 2, 3, BitVec.ofNat 256 (2^255), BitVec.ofNat 256 (2^255 + 7), 0, 0, 0, 0, 0, 0, 0, 0, [], []⟩
 private def frame (op : UInt8) (gas : Nat) (xs : List Word) (h : xs.length ≤ 1024) : Frame.State :=
   ⟨⟨#[op]⟩, 0, ⟨xs, h⟩, gas, Memory.Allocation.empty,
     by intro a _; rfl, ⟨⟨#[7]⟩, env⟩, ⟨#[8]⟩⟩

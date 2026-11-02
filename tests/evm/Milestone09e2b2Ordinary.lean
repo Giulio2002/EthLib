@@ -3,7 +3,7 @@ import EthLib.EVM
 open EthLib.EVM
 
 private def env : Environment.Context :=
-  ⟨1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 2314058, [42]⟩
+  ⟨1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 2314058, [42], []⟩
 
 private def state (xs : List Word) (bound : xs.length ≤ 1024) (gas : Nat) : Frame.State :=
   ⟨⟨#[0x4a, 0x00]⟩, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty,

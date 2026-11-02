@@ -21,7 +21,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -127,6 +127,18 @@ def InputSource.bytes (source : InputSource) (s : State) : ByteArray :=
   | .calldata => s.context.data
   | .code => s.code
 
+/-- The mathematical result for a block number and an oldest-first history.
+
+A missing in-window entry is the total extension of the source indexing rule.
+-/
+def BlockHashValue (history : List Word) (current index : Word) (value : Word) : Prop :=
+  (index.toNat < current.toNat ∧ current.toNat ≤ index.toNat + 256 ∧
+    current.toNat - index.toNat ≤ history.length ∧
+    ∃ h : history.length - (current.toNat - index.toNat) < history.length,
+      value = history[history.length - (current.toNat - index.toNat)]'h) ∨
+  ((current.toNat ≤ index.toNat ∨ index.toNat + 256 < current.toNat ∨
+    history.length < current.toNat - index.toNat) ∧ value = 0)
+
 /-- Source-oriented rules for one frame transition. -/
 inductive Rule : State → Outcome → Prop where
   | endCode (s) : s.code.size ≤ s.pc → Rule s (.stop s)
@@ -154,6 +166,14 @@ inductive Rule : State → Outcome → Prop where
   | calldataload (s t x xs) : At s (some .calldataload) → s.stack.val = x :: xs →
       3 ≤ s.gas → Advances s t (s.pc + 1) (s.gas - 3)
         (CallData.load s.context x :: xs) → Rule s (.continue t)
+  | blockhashEmpty (s) : At s (some .blockhash) → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | blockhashGas (s x xs) : At s (some .blockhash) → s.stack.val = x :: xs →
+      s.gas < 20 → Rule s (.exception s .outOfGas)
+  | blockhash (s t x xs value) : At s (some .blockhash) → s.stack.val = x :: xs →
+      20 ≤ s.gas → BlockHashValue s.context.environment.blockHashes
+        s.context.environment.number x value →
+      Advances s t (s.pc + 1) (s.gas - 20) (value :: xs) → Rule s (.continue t)
   | blobhashEmpty (s) : At s (some .blobhash) → s.stack.val = [] →
       Rule s (.exception s .stackUnderflow)
   | blobhashGas (s x xs) : At s (some .blobhash) → s.stack.val = x :: xs →

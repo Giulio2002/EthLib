@@ -1052,6 +1052,37 @@ theorem step_blobhash (s t : State) (x : Word) (xs : List Word)
   simp only [step, dite_eq_left bounds, decoded, blobHash, pop, charge, Gas.charge, ite_eq_left gas, push]
   rw [update]
 
+/-- BLOCKHASH checks its operand before gas. -/
+theorem step_blockhash_empty (s : State) (h : At s (some .blockhash)) (empty : s.stack.val = []) :
+    step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr empty
+  simp [step, bounds, decoded, blockHash, pop, failStack]
+
+/-- BLOCKHASH checks gas after popping its operand. -/
+theorem step_blockhash_gas (s : State) (x : Word) (xs : List Word)
+    (h : At s (some .blockhash)) (items : s.stack.val = x :: xs) (gas : s.gas < 20) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  simp [step, bounds, decoded, blockHash, pop, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- BLOCKHASH replaces its operand with the result. -/
+theorem step_blockhash (s t : State) (x : Word) (xs : List Word)
+    (h : At s (some .blockhash)) (items : s.stack.val = x :: xs) (gas : 20 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 20) (Environment.blockHash s.context.environment.blockHashes s.context.environment.number x :: xs)) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  let final : Stack := ⟨Environment.blockHash s.context.environment.blockHashes s.context.environment.number x :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have push : rest.push (Environment.blockHash s.context.environment.blockHashes s.context.environment.number x) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 20) final fields
+  simp only [step, dite_eq_left bounds, decoded, blockHash, pop, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
 /-- ISZERO checks its operand before gas. -/
 theorem step_iszero_empty (s : State) (h : At s (some .iszero)) (empty : s.stack.val = []) :
     step s = .exception s .stackUnderflow := by
@@ -2222,6 +2253,26 @@ theorem keccak_helper_store (s t : State) (x y : Word) (xs : List Word)
   rfl
 
 /-- Every relational rule is accepted by the executable step. -/
+theorem blockHashValue_iff (history : List Word) (current index value : Word) :
+    BlockHashValue history current index value ↔
+      value = Environment.blockHash history current index := by
+  by_cases window : index.toNat < current.toNat ∧ current.toNat ≤ index.toNat + 256
+  · by_cases available : current.toNat - index.toNat ≤ history.length
+    · have bound : history.length - (current.toNat - index.toNat) < history.length := by omega
+      simp [BlockHashValue, Environment.blockHash, window, available, bound]
+      omega
+    · have missing : history.length < current.toNat - index.toNat := by omega
+      simp [BlockHashValue, Environment.blockHash, window, available, missing]
+  · have outside : current.toNat ≤ index.toNat ∨ index.toNat + 256 < current.toNat := by omega
+    simp only [BlockHashValue, Environment.blockHash, ite_eq_right window]
+    constructor
+    · intro h
+      rcases h with h | h
+      · exact False.elim (window ⟨h.1, h.2.1⟩)
+      · exact h.2
+    · intro h
+      exact Or.inr ⟨outside.elim Or.inl (fun h => Or.inr (Or.inl h)), h⟩
+
 theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out := by
   cases h with
   | endCode end_ => exact step_end _ end_
@@ -2249,6 +2300,12 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | calldataloadEmpty at_ empty => exact step_calldataload_empty _ at_ empty
   | calldataloadGas x xs at_ items gas => exact step_calldataload_gas _ x xs at_ items gas
   | calldataload t x xs at_ items gas fields => exact step_calldataload _ t x xs at_ items gas fields
+  | blockhashEmpty at_ empty => exact step_blockhash_empty _ at_ empty
+  | blockhashGas x xs at_ items gas => exact step_blockhash_gas _ x xs at_ items gas
+  | blockhash t x xs value at_ items gas lookup fields =>
+    have eq := (blockHashValue_iff _ _ _ _).mp lookup
+    subst value
+    exact step_blockhash _ t x xs at_ items gas fields
   | blobhashEmpty at_ empty => exact step_blobhash_empty _ at_ empty
   | blobhashGas x xs at_ items gas => exact step_blobhash_gas _ x xs at_ items gas
   | blobhash t x xs at_ items gas fields => exact step_blobhash _ t x xs at_ items gas fields
@@ -2949,6 +3006,16 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
             let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
             exact ⟨_, .calldataload s t x xs at_ items gas (by simp [Advances, t, stack])⟩
           · exact ⟨_, .calldataloadGas s x xs at_ items (Nat.lt_of_not_ge gas)⟩
+      | blockhash =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .blockhashEmpty s at_ items⟩
+        | cons x xs =>
+          by_cases gas : 20 ≤ s.gas
+          · let value := Environment.blockHash s.context.environment.blockHashes s.context.environment.number x
+            let stack : Stack := ⟨value :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 20 }
+            exact ⟨_, .blockhash s t x xs value at_ items gas ((blockHashValue_iff _ _ _ _).mpr rfl) (by simp [Advances, t, stack])⟩
+          · exact ⟨_, .blockhashGas s x xs at_ items (Nat.lt_of_not_ge gas)⟩
       | blobhash =>
         cases items : s.stack.val with
         | nil => exact ⟨_, .blobhashEmpty s at_ items⟩

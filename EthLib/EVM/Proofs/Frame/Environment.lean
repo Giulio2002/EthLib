@@ -151,4 +151,89 @@ theorem step_blobHash_actual (s t : State) (at_ : At s (some .blobhash))
     simpa [step, bounds, decoded] using run
   exact blobHash_actual s t helper
 
+/-- An empty stack fails before the gas check for every helper invocation. -/
+theorem blockHash_empty (s : State) (history : Environment.BlockHistory) (empty : s.stack.val = []) :
+    blockHash s history = .exception s .stackUnderflow := by
+  have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr empty
+  simp [blockHash, pop, failStack]
+
+/-- A present index with insufficient gas fails before lookup. -/
+theorem blockHash_gas (s : State) (history : Environment.BlockHistory) (x : Word) (xs : List Word)
+    (items : s.stack.val = x :: xs) (gas : s.gas < 20) :
+    blockHash s history = .exception s .outOfGas := by
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  simp [blockHash, pop, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- A successful lookup replaces the index and preserves all other frame fields. -/
+theorem blockHash_success (s t : State) (history : Environment.BlockHistory) (x : Word) (xs : List Word)
+    (items : s.stack.val = x :: xs) (gas : 20 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 20)
+      (Environment.blockHash history s.context.environment.number x :: xs)) :
+    blockHash s history = .continue t := by
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  let final : Stack := ⟨Environment.blockHash history s.context.environment.number x :: xs,
+    by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have push : rest.push (Environment.blockHash history s.context.environment.number x) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 20) final fields
+  simp only [blockHash, pop, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
+/-- Observed helper success determines its operand, gas, and every output field. -/
+theorem blockHash_actual (s t : State) (history : Environment.BlockHistory) (run : blockHash s history = .continue t) :
+    ∃ x xs, s.stack.val = x :: xs ∧ 20 ≤ s.gas ∧
+      Advances s t (s.pc + 1) (s.gas - 20)
+        (Environment.blockHash history s.context.environment.number x :: xs) := by
+  cases items : s.stack.val with
+  | nil =>
+    have bad := blockHash_empty s history items
+    rw [run] at bad
+    cases bad
+  | cons x xs =>
+    have gas : 20 ≤ s.gas := by
+      by_cases h : 20 ≤ s.gas
+      · exact h
+      have bad := blockHash_gas s history x xs items (by omega)
+      rw [run] at bad
+      cases bad
+    let stack : Stack := ⟨Environment.blockHash history s.context.environment.number x :: xs,
+      by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+    let target : State := { s with stack, pc := s.pc + 1, gas := s.gas - 20 }
+    have fields : Advances s target (s.pc + 1) (s.gas - 20)
+        (Environment.blockHash history s.context.environment.number x :: xs) := by simp [Advances, target, stack]
+    have ok := blockHash_success s target history x xs items gas fields
+    rw [run] at ok
+    have eq : t = target := Outcome.continue.inj ok
+    exact ⟨x, xs, rfl, gas, eq ▸ fields⟩
+
+/-- Actual opcode success determines the full frame without assumed output fields. -/
+theorem step_blockHash_actual (s t : State) (at_ : At s (some .blockhash))
+    (run : step s = .continue t) :
+    ∃ x xs, s.stack.val = x :: xs ∧ 20 ≤ s.gas ∧
+      Advances s t (s.pc + 1) (s.gas - 20)
+        (Environment.blockHash s.context.environment.blockHashes s.context.environment.number x :: xs) := by
+  obtain ⟨bounds, decoded⟩ := at_
+  have helper : blockHash s s.context.environment.blockHashes = .continue t := by
+    simpa [step, bounds, decoded] using run
+  exact blockHash_actual s t s.context.environment.blockHashes helper
+
+/-- Actual successful execution exposes the source bytes of an available hash. -/
+theorem step_blockHash_codec (s t : State) (at_ : At s (some .blockhash))
+    (run : step s = .continue t) (x : Word) (xs : List Word)
+    (items : s.stack.val = x :: xs) (bytes : ByteArray)
+    (window : x.toNat < s.context.environment.number.toNat ∧
+      s.context.environment.number.toNat ≤ x.toNat + 256)
+    (available : s.context.environment.number.toNat - x.toNat ≤ s.context.environment.blockHashes.length)
+    (codec : Word.ofBytesBE bytes = .ok
+      (s.context.environment.blockHashes[s.context.environment.blockHashes.length -
+        (s.context.environment.number.toNat - x.toNat)]' (by omega))) :
+    ∃ w, t.stack.val = w :: xs ∧ w.toBytesBE = bytes := by
+  obtain ⟨y, ys, input, gas, fields⟩ := step_blockHash_actual s t at_ run
+  rw [items] at input
+  cases input
+  refine ⟨_, fields.2.2.2.2.1, ?_⟩
+  exact Environment.blockHash_codec _ _ _ bytes window available codec
+
 end EthLib.EVM.Frame
