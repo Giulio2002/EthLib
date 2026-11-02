@@ -1,0 +1,717 @@
+{
+  "method": "Diff each exact child against its parent and enumerate added declaration names in EthLib/EVM; compare against the same path in the working tree. Name-presence is not semantic API equivalence.",
+  "commits": [
+    {
+      "commit": "81d4251173bee3884861eb90903090a7a9f994dc",
+      "authored_declarations": [
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "block_observation_values",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "chainId_word_toNat",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "prevRandao_codec",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "block_observation_actual",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlockEnvironment.lean",
+          "declaration": "program",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlockEnvironment.lean",
+          "declaration": "run",
+          "present_at_head": true
+        }
+      ],
+      "missing": []
+    },
+    {
+      "commit": "5629dc3cec1903df275e8562cf70e55b5d83aee3",
+      "authored_declarations": [
+        {
+          "file": "EthLib/EVM/Environment.lean",
+          "declaration": "blobHash",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Frame.lean",
+          "declaration": "blobHash",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Environment.lean",
+          "declaration": "blobHash_in_range",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Environment.lean",
+          "declaration": "blobHash_out_of_range",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Environment.lean",
+          "declaration": "blobHash_codec",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Environment.lean",
+          "declaration": "blobHash_decode_iff",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame.lean",
+          "declaration": "step_blobhash_empty",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame.lean",
+          "declaration": "step_blobhash_gas",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame.lean",
+          "declaration": "step_blobhash",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "blobHash_empty",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "blobHash_gas",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "blobHash_success",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "blobHash_actual",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "step_blobHash_actual",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlobHash.lean",
+          "declaration": "program",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlobHash.lean",
+          "declaration": "run",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlobHash.lean",
+          "declaration": "run_in_out",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlobHash.lean",
+          "declaration": "run_preserves",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlobHash.lean",
+          "declaration": "run_preserves_memory",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlobHash.lean",
+          "declaration": "program_pure",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlobHash.lean",
+          "declaration": "program_memory",
+          "present_at_head": true
+        }
+      ],
+      "missing": []
+    },
+    {
+      "commit": "217c2028afc1dfe260990e7e2bd088dab5f8df7e",
+      "authored_declarations": [
+        {
+          "file": "EthLib/EVM/BlobFee.lean",
+          "declaration": "recurrence",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/BlobFee.lean",
+          "declaration": "taylorExponential",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/BlobFee.lean",
+          "declaration": "minBlobGasPrice",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/BlobFee.lean",
+          "declaration": "blobBaseFeeUpdateFraction",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/BlobFee.lean",
+          "declaration": "calculateBlobGasPrice",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Frame.lean",
+          "declaration": "blobBaseFee",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/BlobFee.lean",
+          "declaration": "RecurrenceSpec",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/BlobFee.lean",
+          "declaration": "recurrence_spec",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/BlobFee.lean",
+          "declaration": "recurrenceSpec_unique",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/BlobFee.lean",
+          "declaration": "recurrence_iff",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/BlobFee.lean",
+          "declaration": "taylorExponential_spec",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/BlobFee.lean",
+          "declaration": "calculateBlobGasPrice_spec",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/BlobFee.lean",
+          "declaration": "blobBaseFee_gas",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/BlobFee.lean",
+          "declaration": "blobBaseFee_full",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/BlobFee.lean",
+          "declaration": "blobBaseFee_success",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/BlobFee.lean",
+          "declaration": "blobBaseFee_helper_actual",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/BlobFee.lean",
+          "declaration": "blobBaseFee_actual",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/BlobFee.lean",
+          "declaration": "blobBaseFee_success_iff",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/BlobFee.lean",
+          "declaration": "BlobBaseFeeRule",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/BlobFee.lean",
+          "declaration": "blobBaseFee_step_iff",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/BlobFee.lean",
+          "declaration": "blobBaseFee_step_head_mod",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/BlobFee.lean",
+          "declaration": "blobBaseFee_step_head_exact",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/BlobFee.lean",
+          "declaration": "blobBaseFee_word_exact",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlobFee.lean",
+          "declaration": "program",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlobFee.lean",
+          "declaration": "run",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlobFee.lean",
+          "declaration": "run_preserves",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlobFee.lean",
+          "declaration": "program_pure",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlobFee.lean",
+          "declaration": "program_memory",
+          "present_at_head": true
+        }
+      ],
+      "missing": []
+    },
+    {
+      "commit": "afb03ca43019d4a6b721e65f65022f561674ae1c",
+      "authored_declarations": [
+        {
+          "file": "EthLib/EVM/Environment.lean",
+          "declaration": "BlockHistory",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Environment.lean",
+          "declaration": "HistoryCoversWindow",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Environment.lean",
+          "declaration": "HistoryMatches",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Environment.lean",
+          "declaration": "blockHash",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Frame.lean",
+          "declaration": "blockHash",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Frame/Rules.lean",
+          "declaration": "BlockHashValue",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Environment.lean",
+          "declaration": "blockHash_in_range",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Environment.lean",
+          "declaration": "blockHash_out_of_window",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Environment.lean",
+          "declaration": "blockHash_missing",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Environment.lean",
+          "declaration": "blockHash_covered",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Environment.lean",
+          "declaration": "blockHash_source_agreement",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Environment.lean",
+          "declaration": "blockHash_codec",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame.lean",
+          "declaration": "step_blockhash_empty",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame.lean",
+          "declaration": "step_blockhash_gas",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame.lean",
+          "declaration": "step_blockhash",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame.lean",
+          "declaration": "blockHashValue_iff",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "blockHash_empty",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "blockHash_gas",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "blockHash_success",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "blockHash_actual",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "step_blockHash_actual",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+          "declaration": "step_blockHash_codec",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlockHash.lean",
+          "declaration": "program",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlockHash.lean",
+          "declaration": "run",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlockHash.lean",
+          "declaration": "run_preserves",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlockHash.lean",
+          "declaration": "run_preserves_memory",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlockHash.lean",
+          "declaration": "program_pure",
+          "present_at_head": true
+        },
+        {
+          "file": "EthLib/EVM/Proofs/Runner/BlockHash.lean",
+          "declaration": "program_memory",
+          "present_at_head": true
+        }
+      ],
+      "missing": []
+    }
+  ],
+  "roots": {
+    "ordinary": "EthLib/EVM.lean",
+    "proof": "EthLib/EVM/Proofs.lean"
+  },
+  "constructor": "Environment.Context fields appended in successive children: 09e2a seven block fields, 09e2b1 blobVersionedHashes, 09e2b2 excessBlobGas before blobVersionedHashes, 09e2c blockHashes. Current constructor must supply all 15 fields.",
+  "linear_ancestry": [
+    "81d4251173bee3884861eb90903090a7a9f994dc",
+    "5629dc3cec1903df275e8562cf70e55b5d83aee3",
+    "217c2028afc1dfe260990e7e2bd088dab5f8df7e",
+    "afb03ca43019d4a6b721e65f65022f561674ae1c"
+  ],
+  "all_declaration_header_comparison": {
+    "method": "Compare matched top-level declaration headers and import lines in every Lean file changed by each child against the working tree. The extractor handles :=, where, and equation-style declarations, including at end of file. This is lexical, not elaborated type equality; constructor-and-roots.diff records structure fields and import changes.",
+    "children": [
+      {
+        "commit": "81d4251173bee3884861eb90903090a7a9f994dc",
+        "files": [
+          {
+            "file": "EthLib/EVM/Environment.lean",
+            "declarations_compared": 3,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Frame.lean",
+            "declarations_compared": 15,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Frame/Rules.lean",
+            "declarations_compared": 15,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs.lean",
+            "declarations_compared": 0,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/Frame.lean",
+            "declarations_compared": 185,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+            "declarations_compared": 7,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/Runner/BlockEnvironment.lean",
+            "declarations_compared": 2,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          }
+        ]
+      },
+      {
+        "commit": "5629dc3cec1903df275e8562cf70e55b5d83aee3",
+        "files": [
+          {
+            "file": "EthLib/EVM/Environment.lean",
+            "declarations_compared": 4,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Frame.lean",
+            "declarations_compared": 16,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Frame/Rules.lean",
+            "declarations_compared": 15,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs.lean",
+            "declarations_compared": 0,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/Environment.lean",
+            "declarations_compared": 7,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/Frame.lean",
+            "declarations_compared": 188,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+            "declarations_compared": 12,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/Runner/BlobHash.lean",
+            "declarations_compared": 7,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          }
+        ]
+      },
+      {
+        "commit": "217c2028afc1dfe260990e7e2bd088dab5f8df7e",
+        "files": [
+          {
+            "file": "EthLib/EVM.lean",
+            "declarations_compared": 0,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/BlobFee.lean",
+            "declarations_compared": 5,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Environment.lean",
+            "declarations_compared": 4,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Frame.lean",
+            "declarations_compared": 17,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Frame/Rules.lean",
+            "declarations_compared": 15,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs.lean",
+            "declarations_compared": 0,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/BlobFee.lean",
+            "declarations_compared": 6,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/Frame.lean",
+            "declarations_compared": 188,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/Frame/BlobFee.lean",
+            "declarations_compared": 11,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/Runner/BlobFee.lean",
+            "declarations_compared": 5,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          }
+        ]
+      },
+      {
+        "commit": "afb03ca43019d4a6b721e65f65022f561674ae1c",
+        "files": [
+          {
+            "file": "EthLib/EVM/Environment.lean",
+            "declarations_compared": 8,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Frame.lean",
+            "declarations_compared": 18,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Frame/Rules.lean",
+            "declarations_compared": 16,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs.lean",
+            "declarations_compared": 0,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/Environment.lean",
+            "declarations_compared": 13,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/Frame.lean",
+            "declarations_compared": 192,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/Frame/Environment.lean",
+            "declarations_compared": 18,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          },
+          {
+            "file": "EthLib/EVM/Proofs/Runner/BlockHash.lean",
+            "declarations_compared": 6,
+            "changed_or_missing_headers": [],
+            "child_imports_missing_at_head": []
+          }
+        ]
+      }
+    ],
+    "interpretation": "Review changed headers and missing imports below. Structure and rule constructors gained fields or cases; see constructor-and-roots.diff.",
+    "terminal_equation_checks": [
+      {
+        "commit": "81d4251173bee3884861eb90903090a7a9f994dc",
+        "file": "EthLib/EVM/Frame.lean",
+        "child_header": "def settle : Outcome \u2192 Option Boundary",
+        "candidate_header": "def settle : Outcome \u2192 Option Boundary",
+        "definition_sha256_child": "41966ecf862297b455838ea6c0bd572b362a1a48146af0292ac08de5fbb88fe8",
+        "definition_sha256_candidate": "41966ecf862297b455838ea6c0bd572b362a1a48146af0292ac08de5fbb88fe8",
+        "definition_byte_identical": true
+      },
+      {
+        "commit": "5629dc3cec1903df275e8562cf70e55b5d83aee3",
+        "file": "EthLib/EVM/Frame.lean",
+        "child_header": "def settle : Outcome \u2192 Option Boundary",
+        "candidate_header": "def settle : Outcome \u2192 Option Boundary",
+        "definition_sha256_child": "41966ecf862297b455838ea6c0bd572b362a1a48146af0292ac08de5fbb88fe8",
+        "definition_sha256_candidate": "41966ecf862297b455838ea6c0bd572b362a1a48146af0292ac08de5fbb88fe8",
+        "definition_byte_identical": true
+      },
+      {
+        "commit": "217c2028afc1dfe260990e7e2bd088dab5f8df7e",
+        "file": "EthLib/EVM/Frame.lean",
+        "child_header": "def settle : Outcome \u2192 Option Boundary",
+        "candidate_header": "def settle : Outcome \u2192 Option Boundary",
+        "definition_sha256_child": "41966ecf862297b455838ea6c0bd572b362a1a48146af0292ac08de5fbb88fe8",
+        "definition_sha256_candidate": "41966ecf862297b455838ea6c0bd572b362a1a48146af0292ac08de5fbb88fe8",
+        "definition_byte_identical": true
+      },
+      {
+        "commit": "afb03ca43019d4a6b721e65f65022f561674ae1c",
+        "file": "EthLib/EVM/Frame.lean",
+        "child_header": "def settle : Outcome \u2192 Option Boundary",
+        "candidate_header": "def settle : Outcome \u2192 Option Boundary",
+        "definition_sha256_child": "41966ecf862297b455838ea6c0bd572b362a1a48146af0292ac08de5fbb88fe8",
+        "definition_sha256_candidate": "41966ecf862297b455838ea6c0bd572b362a1a48146af0292ac08de5fbb88fe8",
+        "definition_byte_identical": true
+      }
+    ]
+  }
+}

@@ -626,3 +626,24 @@ Some U64 excess values require an impractical number of iterations or very large
 `observationWord_checked` relates representable values to the checked word conversion.
 `observationWord_toNat` gives the modulo result on the whole natural-number domain.
 The source's U256 conversion is represented exactly when the natural fee is below `2^256`.
+
+## 09e2 historical integration and Amsterdam target
+
+`Runner.BlockBlobIntegration.run` executes BLOCKHASH, SWAP1, BLOBHASH, NUMBER and BLOBBASEFEE.
+It states the exact bounded result for arbitrary accepted contexts, stack tails, gas, memory and return data.
+Its fee and history results use the total Lean helpers described above.
+The theorem does not establish Amsterdam source correspondence.
+
+`Runner.BlockBlobIntegration.run_source_in_window` applies that result to a matching chain history.
+It also requires the calculated Cancun fee to fit a word.
+Its output identifies the selected chain hash and the checked fee conversion.
+The premises do not validate the supplied chain or transaction.
+`tests/evm/Milestone09e2IntegrationProof.lean` applies both contracts.
+`tests/evm/Milestone09e2IntegrationOrdinary.lean` executes the bytecode through the ordinary import.
+
+The pinned Amsterdam source snapshot and migration map are in
+`artifacts/09e2-integration/amsterdam-source-manifest.json`.
+`artifacts/09e2-integration/source-and-dispatch-audit.md` records the historical source boundary.
+Amsterdam remains the target, and this historical integration does not meet it.
+The Amsterdam fee update fraction differs from the Cancun constant used here.
+Fork-specific semantics, their source correspondence and fixture validation remain open.
