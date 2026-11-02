@@ -21,7 +21,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .blobhash | .coinbase | .timestamp | .number | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -70,7 +70,7 @@ def ValidJumpDest (code : ByteArray) (pc : Nat) : Prop :=
 inductive Observation where
   | pc | msize | gas | calldatasize | codesize | returndatasize
   | address | origin | caller | callvalue | gasprice
-  | coinbase | timestamp | number | prevrandao | gaslimit | chainid | basefee
+  | coinbase | timestamp | number | prevrandao | gaslimit | chainid | basefee | blobbasefee
   deriving DecidableEq
 
 /-- Opcode corresponding to an observation. -/
@@ -84,6 +84,7 @@ def Observation.opcode : Observation → Opcode
   | .gaslimit => .gaslimit
   | .chainid => .chainid
   | .basefee => .basefee
+  | .blobbasefee => .blobbasefee
   | .pc => .pc | .msize => .msize | .gas => .gas
   | .calldatasize => .calldatasize | .codesize => .codesize | .returndatasize => .returndatasize
 
@@ -102,6 +103,7 @@ def Observation.value (o : Observation) (s : State) : Nat :=
   | .gaslimit => s.context.environment.gasLimit.toNat
   | .chainid => s.context.environment.chainId.val
   | .basefee => s.context.environment.baseFee.toNat
+  | .blobbasefee => BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas
   | .pc => s.pc
   | .msize => Memory.Allocation.byteSize s.memory
   | .gas => s.gas - 2

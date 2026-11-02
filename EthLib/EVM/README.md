@@ -437,7 +437,7 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The 256-byte dispatch regression covers 123 supported instructions, 25 assigned but unsupported instructions, 107 unassigned bytes, and INVALID.
+The 256-byte dispatch regression covers 124 supported instructions, 24 assigned but unsupported instructions, 107 unassigned bytes, and INVALID.
 These counts describe this restricted frame, not the full Cancun EVM.
 
 ## KECCAK256 execution (09d)
@@ -543,8 +543,8 @@ The seven instructions charge two gas before pushing the selected field.
 `Frame.block_observation_values` connects each selection to its field.
 `Frame.block_observation_actual` derives the stack and context from actual success.
 `Runner.BlockEnvironmentProgram.run` covers arbitrary accepted context and memory.
-The context supplies metadata and does not validate a block or calculate fees.
-BLOCKHASH and BLOBBASEFEE remain outside this slice.
+The context supplies metadata and does not validate a block.
+BLOCKHASH remains outside this slice.
 
 `Environment.Context.blobVersionedHashes` supplies the transaction's decoded hashes.
 Each word represents exactly one 32-byte big-endian versioned hash.
@@ -558,5 +558,49 @@ The helper uses the full word as a natural number, with no native-width conversi
 The `blobHash_in_range`, `blobHash_out_of_range`, and `blobHash_codec` contracts
 state the lookup and byte encoding relations.
 
-The `Environment.Context` constructor takes one additional final field.
+The `Environment.Context` constructor requires excess blob gas and transaction hashes.
+Excess blob gas uses the U64 source type.
 Callers must pass the supplied transaction hashes, or `[]` when there are none.
+
+Cancun `vm/gas.py`, `calculate_blob_gas_price`, uses the integer recurrence in
+`ethereum/utils/numeric.py`, `taylor_exponential`.
+Each division truncates before the next term.
+`BlobFee.recurrence_iff` relates the executable loop to an independent relation.
+`BlobFee.calculateBlobGasPrice_spec` fixes the Cancun constants and initial terms.
+
+BLOBBASEFEE charges two gas before it pushes the fee derived from excess blob gas.
+The source converts that fee to U256.
+The frame uses `observationWord`, which preserves representable values and reduces larger values modulo `2^256`.
+The modulo case extends the source conversion and is not a source execution claim.
+The source checks U256 conversion before it pushes the fee.
+Source agreement therefore requires the fee to fit U256, including for a full stack.
+`Frame.blobBaseFee_word_exact` states exactness for representable fees.
+The Shanghai Yellow Paper revision used here has no BLOBBASEFEE rule.
+Agent source inspection is not human approval or a proof of equivalence to Python.
+
+The source-to-contract map for blob fee execution is:
+
+- `recurrence_spec`, `recurrenceSpec_unique`, and `recurrence_iff` characterize the
+  loop for positive denominators and positive starting indices.
+- `taylorExponential_spec` characterizes the initial term and final division.
+- `calculateBlobGasPrice_spec` specializes the relation to Cancun and U64 excess gas.
+- `blobBaseFee_gas`, `blobBaseFee_full`, `blobBaseFee_success`, and
+  `blobBaseFee_helper_actual` cover direct helper calls for any code and PC.
+- `blobBaseFee_actual` connects actual opcode success to the recurrence.
+- `blobBaseFee_success_iff` gives both directions for a continuing step.
+- `blobBaseFee_step_head_mod` derives the wrapped head from actual success.
+- `blobBaseFee_step_head_exact` derives its value and checked conversion when representable.
+- `BlobBaseFeeRule` and `blobBaseFee_step_iff` characterize every opcode outcome.
+- `step_iff_rule` and `rule_total` cover every frame step.
+- `BlobFeeProgram.run` combines actual blob hash and fee observations.
+- `BlobFeeProgram.run_preserves` preserves context and return data for every bounded run.
+- `BlobFeeProgram.program_pure` and `program_memory` preserve memory for the program.
+- `BlobHashProgram.run` and the Keccak runner contracts retain arbitrary contexts.
+
+The relational arithmetic contract describes integer truncation, not the real exponential.
+A positive denominator and a positive starting index are explicit loop requirements.
+The termination proof is mathematical and does not bound practical runtime.
+Some U64 excess values require an impractical number of iterations or very large integers.
+`observationWord_checked` relates representable values to the checked word conversion.
+`observationWord_toNat` gives the modulo result on the whole natural-number domain.
+The source's U256 conversion is represented exactly when the natural fee is below `2^256`.
