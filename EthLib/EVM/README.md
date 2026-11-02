@@ -428,3 +428,17 @@ It derives bytes and preserved fields from a successful helper call.
 Consumers constructing a pure-step proof must establish those extra exclusions.
 The independent rules include both instructions and `step_iff_rule` remains unconditional.
 The pinned source review is manual and does not prove Python-to-Lean equivalence.
+
+The milestone 09c integration proof `Runner.MixedCopy.run_mixed` executes five instructions.
+CALLDATACOPY writes 32 bytes at offset 0 and RETURNDATACOPY writes 32 bytes at offset 32.
+Two MLOAD instructions observe those ranges, with SWAP1 between them.
+The theorem takes arbitrary valid initial memory and computes each expansion charge from it.
+It requires the return-data source range to contain 32 bytes.
+Calldata reads use zero padding, so they need no source bound.
+The theorem gives the stack, gas, program counter, bytes, and preserved frame inputs.
+It also proves that bytes at offsets 64 and above are unchanged.
+
+The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
+`Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
+The 256-byte dispatch regression covers 109 supported instructions, 39 assigned but unsupported instructions, 107 unassigned bytes, and INVALID.
+These counts describe this restricted frame, not the full Cancun EVM.
