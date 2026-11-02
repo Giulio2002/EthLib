@@ -437,7 +437,7 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The 256-byte dispatch regression covers 110 supported instructions, 38 assigned but unsupported instructions, 107 unassigned bytes, and INVALID.
+The 256-byte dispatch regression covers 115 supported instructions, 33 assigned but unsupported instructions, 107 unassigned bytes, and INVALID.
 These counts describe this restricted frame, not the full Cancun EVM.
 
 ## KECCAK256 execution (09d)
@@ -468,3 +468,60 @@ Iota and round correspondences use the 24 source round indices.
 Known-answer regressions do not establish these universal equalities by themselves.
 The pinned source review is agent inspection, not human approval or a Python-to-Lean proof.
 The full Cancun EVM remains outside this proved instruction subset.
+
+## 09e1 message environment
+
+`CallData.Context` contains input bytes and an `Environment.Context`.
+Constructors must now supply both fields.
+The environment supplies the current target, transaction origin, immediate caller,
+message value and effective transaction gas price.
+The three addresses are `Fin (2^160)` and the two amounts are `Word` values.
+The gas price boundary accepts values below `2^256`, as required by the source
+conversion to U256.
+It does not model the transaction envelope, calls or account balances.
+
+ADDRESS, ORIGIN, CALLER, CALLVALUE and GASPRICE charge two gas before stack push.
+They preserve the context, return data, code and memory.
+`Frame.step_observation_actual` states their exact successful frame fields.
+`Frame.step_observation_gas` and `Frame.step_observation_full` state the errors.
+`Frame.environment_address_values` and `Frame.environment_word_values` connect
+the independent observation selection to the supplied fields.
+`Environment.addressWord_toNat`, `addressWord_injective`, and `addressWord_codec`
+state the address conversion contracts.
+`Runner.EnvironmentProgram.run` runs all five instructions over arbitrary context,
+return data, residual stack, gas and valid memory.
+`Runner.run_context_unchanged` covers every bounded result, including exceptions,
+unsupported instructions and fuel exhaustion.
+
+The public `Frame.observe` helper accepts any natural-valued function.
+`observe_gas`, `observe_full`, `observe_success` and `observe_actual` cover its
+errors and exact successful output.
+`observationWord_toNat` specifies reduction modulo `2^256` for every natural input.
+The five environment observations stay in range by their field types.
+
+The 09e1 migration changes `CallData.Context` construction from `⟨data⟩` to
+`⟨data, environment⟩`.
+The new field is explicit and has no default.
+The address fields are independent, and gas price must fit in a word.
+Cancun's source stores gas price as Uint and constructs U256 at GASPRICE.
+This interface covers the representable U256 inputs.
+
+`Environment.addressWord` has numeric, injectivity and word-codec contracts in
+`addressWord_toNat`, `addressWord_injective` and `addressWord_codec`.
+`observationWord_toNat` covers the complete natural-input domain of
+`Frame.observationWord`, including its modulo extension.
+`observationWord_exact` and `observationWord_checked` cover word-sized inputs.
+`observe_gas`, `observe_full`, `observe_success` and `observe_actual` cover
+`Frame.observe` for arbitrary frames and value functions, without an opcode premise.
+The last theorem derives the complete output fields from a successful call.
+
+For each environment observation, `Observation.opcode` and `Observation.value`
+select its byte and source field.
+`environment_address_values` and `environment_word_values` connect these
+selections to the supplied metadata.
+The inherited `step_observation_gas`, `step_observation_full`,
+`step_observation` and `step_observation_actual` apply to each selection.
+`rule_total` and `step_iff_rule` cover all executable frame outcomes.
+The inherited `run_context_unchanged` preserves the environment for every
+bounded result.
+`Runner.EnvironmentProgram.run` specifies the combined five-opcode run.

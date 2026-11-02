@@ -3,6 +3,7 @@ public import EthLib.EVM.Proofs.Memory.WordAccess
 public import EthLib.EVM.Proofs.Gas
 
 public import EthLib.EVM.Proofs.Word
+public import EthLib.EVM.Proofs.Environment
 public import EthLib.EVM.Proofs.Memory
 public import EthLib.EVM.Proofs.Memory.Ranges
 public import EthLib.EVM.Proofs.Memory.Allocation
@@ -20,6 +21,7 @@ public import EthLib.EVM.Proofs.CallData
 public import EthLib.EVM.Proofs.JumpDest
 public import EthLib.EVM.Proofs.Stack
 public import EthLib.EVM.Proofs.Frame
+public import EthLib.EVM.Proofs.Frame.Environment
 public import EthLib.EVM.Proofs.Keccak
 public import EthLib.EVM.Proofs.KeccakBits
 public import EthLib.EVM.Proofs.FrameArithmetic
@@ -29,6 +31,7 @@ public import EthLib.EVM.Proofs.Frame.Memory
 public import EthLib.EVM.Proofs.Runner
 public import EthLib.EVM.Proofs.Runner.StraightLine
 public import EthLib.EVM.Proofs.Runner.Mixed
+public import EthLib.EVM.Proofs.Runner.Environment
 public import EthLib.EVM.Proofs.Runner.Memory
 public import EthLib.EVM.Proofs.Runner.CallData
 public import EthLib.EVM.Proofs.Runner.MixedCopy

@@ -5,7 +5,7 @@ open EthLib.EVM
 
 private def initial (stack : Stack) (gas : Nat) : Frame.State :=
   ⟨⟨#[0x20]⟩, 0, stack, gas, Memory.Allocation.empty,
-    Memory.Allocation.empty_valid, ⟨ByteArray.empty⟩, ByteArray.empty⟩
+    Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0⟩⟩, ByteArray.empty⟩
 
 -- Keccak team's ShortMsgKAT_256.txt, Len = 0.
 /-- info: (89477152217924674838424037953991966239322087453347756267410168184682657981552, 0, 1, 0) -/

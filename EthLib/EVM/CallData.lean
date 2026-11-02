@@ -1,6 +1,7 @@
 module
 
 public import EthLib.EVM.PushImmediate
+public import EthLib.EVM.Environment
 
 /-!
 # Call data observations
@@ -16,6 +17,7 @@ namespace EthLib.EVM.CallData
 /-- Immutable input bytes for a message. -/
 structure Context where
   data : ByteArray
+  environment : Environment.Context
 
 /-- Read exactly `length` bytes from a buffer, padding past its end with zeros.
 

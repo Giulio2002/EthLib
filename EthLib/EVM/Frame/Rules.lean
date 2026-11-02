@@ -21,7 +21,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -69,16 +69,24 @@ def ValidJumpDest (code : ByteArray) (pc : Nat) : Prop :=
 /-- The natural observation selected by an introspection opcode. -/
 inductive Observation where
   | pc | msize | gas | calldatasize | codesize | returndatasize
+  | address | origin | caller | callvalue | gasprice
   deriving DecidableEq
 
 /-- Opcode corresponding to an observation. -/
 def Observation.opcode : Observation → Opcode
+  | .address => .address | .origin => .origin | .caller => .caller
+  | .callvalue => .callvalue | .gasprice => .gasprice
   | .pc => .pc | .msize => .msize | .gas => .gas
   | .calldatasize => .calldatasize | .codesize => .codesize | .returndatasize => .returndatasize
 
 /-- Value observed after the instruction has paid its gas cost. -/
 def Observation.value (o : Observation) (s : State) : Nat :=
   match o with
+  | .address => s.context.environment.currentTarget.val
+  | .origin => s.context.environment.origin.val
+  | .caller => s.context.environment.caller.val
+  | .callvalue => s.context.environment.value.toNat
+  | .gasprice => s.context.environment.gasPrice.toNat
   | .pc => s.pc
   | .msize => Memory.Allocation.byteSize s.memory
   | .gas => s.gas - 2
