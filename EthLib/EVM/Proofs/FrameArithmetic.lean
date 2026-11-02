@@ -1,6 +1,9 @@
 module
 
 public import EthLib.EVM.Proofs.Frame
+public import EthLib.EVM.Proofs.Word.AddMulMod
+public import EthLib.EVM.Proofs.Word.Exp
+public import EthLib.EVM.Proofs.Gas
 public import EthLib.EVM.Proofs.Word.DivMod
 public import EthLib.EVM.Proofs.Word.SignedDivMod
 
@@ -55,5 +58,35 @@ theorem step_smod_numeric (s t : State) (x y : Word) (xs : List Word)
     (fields : Advances s t (s.pc + 1) (s.gas - 5) (Word.smod x y :: xs)) :
     step s = .continue t ∧ Word.signed (Word.smod x y) = Proofs.Word.SignedDivMod.Reference.remainder (Word.signed x) (Word.signed y) :=
   ⟨step_smod s t x y xs at_ items gas fields, Proofs.Word.SignedDivMod.smod_refines x y⟩
+
+/-- ADDMOD uses the full natural sum before reducing by the third operand. -/
+theorem step_addmod_numeric (s t : State) (x y m : Word) (xs : List Word)
+    (at_ : At s (some .addmod)) (items : s.stack.val = x :: y :: m :: xs) (gas : 8 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 8) (Word.addmod x y m :: xs)) :
+    step s = .continue t ∧
+      (Word.addmod x y m).toNat = if m.toNat = 0 then 0 else (x.toNat + y.toNat) % m.toNat :=
+  ⟨step_addmod s t x y m xs at_ items gas fields,
+    Proofs.Word.AddMulMod.toNat_addmod x y m⟩
+
+/-- MULMOD uses the full natural product before reducing by the third operand. -/
+theorem step_mulmod_numeric (s t : State) (x y m : Word) (xs : List Word)
+    (at_ : At s (some .mulmod)) (items : s.stack.val = x :: y :: m :: xs) (gas : 8 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 8) (Word.mulmod x y m :: xs)) :
+    step s = .continue t ∧
+      (Word.mulmod x y m).toNat = if m.toNat = 0 then 0 else (x.toNat * y.toNat) % m.toNat :=
+  ⟨step_mulmod s t x y m xs at_ items gas fields,
+    Proofs.Word.AddMulMod.toNat_mulmod x y m⟩
+
+/-- EXP computes the modular power and charges for the exponent's byte length. -/
+theorem step_exp_numeric (s t : State) (base exponent : Word) (xs : List Word)
+    (at_ : At s (some .exp)) (items : s.stack.val = base :: exponent :: xs)
+    (gas : Gas.expCost exponent ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - Gas.expCost exponent)
+      (Word.exp base exponent :: xs)) :
+    step s = .continue t ∧
+      (Word.exp base exponent).toNat = base.toNat ^ exponent.toNat % Word.modulus ∧
+      ∃ bytes, Gas.ExpByteCount exponent.toNat bytes ∧ Gas.expCost exponent = 10 + 50 * bytes :=
+  ⟨step_exp s t base exponent xs at_ items gas fields,
+    Proofs.Word.toNat_exp base exponent, (Gas.expCost_spec exponent _).mp rfl⟩
 
 end EthLib.EVM.Frame

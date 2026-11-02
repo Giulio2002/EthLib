@@ -19,3 +19,12 @@ example : rangeCost 0 (2^256 - 1) 0 = 0 := by decide
 example : pairCost 0 0 32 64 32 = 9 := by decide
 -- This calculates only the cost, without allocating the range.
 example : rangeCost 0 (2^256) 1 > 2^256 := by decide
+
+-- Cancun EXP prices depend on the exponent's shortest unsigned encoding.
+example : expCost 0 = 10 := by decide
+example : expCost 1 = 60 := by decide
+example : expCost 255 = 60 := by decide
+example : expCost 256 = 110 := by decide
+example : expCost (BitVec.allOnes 256) = 1610 := by decide
+example : charge 110 (expCost 256) = .ok 0 := by rfl
+example : charge 109 (expCost 256) = .error .outOfGas := by rfl

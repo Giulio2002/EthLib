@@ -20,7 +20,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -52,6 +52,24 @@ inductive Rule : State → Outcome → Prop where
       Rule s (.exception s .outOfGas)
   | add (s t x y xs) : At s (some .add) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
       Advances s t (s.pc + 1) (s.gas - 3) (Word.add x y :: xs) → Rule s (.continue t)
+  | addmodEmpty (s) : At s (some .addmod) → s.stack.val.length < 3 →
+      Rule s (.exception s .stackUnderflow)
+  | addmodGas (s x y m xs) : At s (some .addmod) → s.stack.val = x :: y :: m :: xs → s.gas < 8 →
+      Rule s (.exception s .outOfGas)
+  | addmod (s t x y m xs) : At s (some .addmod) → s.stack.val = x :: y :: m :: xs → 8 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 8) (Word.addmod x y m :: xs) → Rule s (.continue t)
+  | mulmodEmpty (s) : At s (some .mulmod) → s.stack.val.length < 3 →
+      Rule s (.exception s .stackUnderflow)
+  | mulmodGas (s x y m xs) : At s (some .mulmod) → s.stack.val = x :: y :: m :: xs → s.gas < 8 →
+      Rule s (.exception s .outOfGas)
+  | mulmod (s t x y m xs) : At s (some .mulmod) → s.stack.val = x :: y :: m :: xs → 8 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 8) (Word.mulmod x y m :: xs) → Rule s (.continue t)
+  | expEmpty (s) : At s (some .exp) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | expGas (s x y xs) : At s (some .exp) → s.stack.val = x :: y :: xs → s.gas < Gas.expCost y →
+      Rule s (.exception s .outOfGas)
+  | exp (s t x y xs) : At s (some .exp) → s.stack.val = x :: y :: xs → Gas.expCost y ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - Gas.expCost y) (Word.exp x y :: xs) → Rule s (.continue t)
   | mulEmpty (s) : At s (some .mul) → s.stack.val.length < 2 →
       Rule s (.exception s .stackUnderflow)
   | mulGas (s x y xs) : At s (some .mul) → s.stack.val = x :: y :: xs → s.gas < 5 →

@@ -3,6 +3,8 @@ module
 public import EthLib.EVM.Stack
 public import EthLib.EVM.PushImmediate
 public import EthLib.EVM.Gas
+public import EthLib.EVM.Word.AddMulMod
+public import EthLib.EVM.Word.Exp
 public import EthLib.EVM.Word.DivMod
 public import EthLib.EVM.Word.SignedDivMod
 public import EthLib.EVM.Word.Comparisons
@@ -85,6 +87,48 @@ def step (s : State) : Outcome :=
         | .ok (b, stack) =>
           charge s 3 fun gas =>
             match Stack.push stack (Word.add a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `arithmetic.py`, `addmod`: pop three operands before charging.
+    | some .addmod =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          match Stack.pop stack with
+          | .error e => failStack s e
+          | .ok (m, stack) =>
+            charge s 8 fun gas =>
+              match Stack.push stack (Word.addmod a b m) with
+              | .error e => failStack s e
+              | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `arithmetic.py`, `mulmod`: pop three operands before charging.
+    | some .mulmod =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          match Stack.pop stack with
+          | .error e => failStack s e
+          | .ok (m, stack) =>
+            charge s 8 fun gas =>
+              match Stack.push stack (Word.mulmod a b m) with
+              | .error e => failStack s e
+              | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `arithmetic.py`, `exp`: base is popped before exponent.
+    | some .exp =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (base, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (exponent, stack) =>
+          charge s (Gas.expCost exponent) fun gas =>
+            match Stack.push stack (Word.exp base exponent) with
             | .error e => failStack s e
             | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
     -- Cancun `arithmetic.py`, `mul`: pop twice before charging `OPCODE_MUL`.
