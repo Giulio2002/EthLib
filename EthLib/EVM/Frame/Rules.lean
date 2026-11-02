@@ -8,7 +8,7 @@ public import EthLib.EVM.Frame
 These rules state stack and gas conditions without invoking the executable step.
 The source is Cancun execution-specs revision
 `fd9298410ec7218838c8348f69c1eb633f1797dc`, `vm/interpreter.py`,
-`vm/instructions/stack.py`, `arithmetic.py`, and `control_flow.py`.
+`vm/instructions/stack.py`, `arithmetic.py`, `comparison.py`, `bitwise.py`, and `control_flow.py`.
 -/
 
 @[expose] public section
@@ -20,7 +20,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -88,6 +88,64 @@ inductive Rule : State → Outcome → Prop where
       Rule s (.exception s .outOfGas)
   | smod (s t x y xs) : At s (some .smod) → s.stack.val = x :: y :: xs → 5 ≤ s.gas →
       Advances s t (s.pc + 1) (s.gas - 5) (Word.smod x y :: xs) → Rule s (.continue t)
+  | ltEmpty (s) : At s (some .lt) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | ltGas (s x y xs) : At s (some .lt) → s.stack.val = x :: y :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | lt (s t x y xs) : At s (some .lt) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.ltResult x y :: xs) → Rule s (.continue t)
+  | gtEmpty (s) : At s (some .gt) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | gtGas (s x y xs) : At s (some .gt) → s.stack.val = x :: y :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | gt (s t x y xs) : At s (some .gt) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.gtResult x y :: xs) → Rule s (.continue t)
+  | sltEmpty (s) : At s (some .slt) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | sltGas (s x y xs) : At s (some .slt) → s.stack.val = x :: y :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | slt (s t x y xs) : At s (some .slt) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.sltResult x y :: xs) → Rule s (.continue t)
+  | sgtEmpty (s) : At s (some .sgt) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | sgtGas (s x y xs) : At s (some .sgt) → s.stack.val = x :: y :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | sgt (s t x y xs) : At s (some .sgt) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.sgtResult x y :: xs) → Rule s (.continue t)
+  | eqEmpty (s) : At s (some .eq) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | eqGas (s x y xs) : At s (some .eq) → s.stack.val = x :: y :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | eq (s t x y xs) : At s (some .eq) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.eqResult x y :: xs) → Rule s (.continue t)
+  | andEmpty (s) : At s (some .and) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | andGas (s x y xs) : At s (some .and) → s.stack.val = x :: y :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | and (s t x y xs) : At s (some .and) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.bitwiseAnd x y :: xs) → Rule s (.continue t)
+  | orEmpty (s) : At s (some .or) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | orGas (s x y xs) : At s (some .or) → s.stack.val = x :: y :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | or (s t x y xs) : At s (some .or) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.bitwiseOr x y :: xs) → Rule s (.continue t)
+  | xorEmpty (s) : At s (some .xor) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | xorGas (s x y xs) : At s (some .xor) → s.stack.val = x :: y :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | xor (s t x y xs) : At s (some .xor) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.bitwiseXor x y :: xs) → Rule s (.continue t)
+  | iszeroEmpty (s) : At s (some .iszero) → s.stack.val = [] → Rule s (.exception s .stackUnderflow)
+  | iszeroGas (s x xs) : At s (some .iszero) → s.stack.val = x :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | iszero (s t x xs) : At s (some .iszero) → s.stack.val = x :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.iszeroResult x :: xs) → Rule s (.continue t)
+  | notEmpty (s) : At s (some .not) → s.stack.val = [] → Rule s (.exception s .stackUnderflow)
+  | notGas (s x xs) : At s (some .not) → s.stack.val = x :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | not (s t x xs) : At s (some .not) → s.stack.val = x :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.bitwiseNot x :: xs) → Rule s (.continue t)
   | dupGas (s i) : At s (some (.dup i)) → s.gas < 3 → Rule s (.exception s .outOfGas)
   | dupEmpty (s i) : At s (some (.dup i)) → 3 ≤ s.gas → s.stack.val.length ≤ i.val →
       Rule s (.exception s .stackUnderflow)

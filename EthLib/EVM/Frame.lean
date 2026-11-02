@@ -5,13 +5,16 @@ public import EthLib.EVM.PushImmediate
 public import EthLib.EVM.Gas
 public import EthLib.EVM.Word.DivMod
 public import EthLib.EVM.Word.SignedDivMod
+public import EthLib.EVM.Word.Comparisons
+public import EthLib.EVM.Word.Bitwise
 
 /-!
 # Cancun frame subset
 
 The instruction rules come from Cancun execution-specs revision
 `fd9298410ec7218838c8348f69c1eb633f1797dc`, `vm/interpreter.py`,
-`vm/instructions/stack.py`, `arithmetic.py`, `control_flow.py`, and `vm/gas.py`.
+`vm/instructions/stack.py`, `arithmetic.py`, `comparison.py`, `bitwise.py`,
+`control_flow.py`, and `vm/gas.py`.
 An exception retains the input frame only as diagnostic context.
 Its gas is zero at the message boundary; its stack is not a protocol final state.
 Unsupported instructions are a tooling result and do not execute.
@@ -154,6 +157,120 @@ def step (s : State) : Outcome :=
             match Stack.push stack (Word.smod a b) with
             | .error e => failStack s e
             | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `comparison.py`, `less_than`: pop both operands before charging gas.
+    | some .lt =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 3 fun gas =>
+            match Stack.push stack (Word.ltResult a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `comparison.py`, `greater_than`: pop both operands before charging gas.
+    | some .gt =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 3 fun gas =>
+            match Stack.push stack (Word.gtResult a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `comparison.py`, `signed_less_than`: pop both operands before charging gas.
+    | some .slt =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 3 fun gas =>
+            match Stack.push stack (Word.sltResult a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `comparison.py`, `signed_greater_than`: pop both operands before charging gas.
+    | some .sgt =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 3 fun gas =>
+            match Stack.push stack (Word.sgtResult a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `comparison.py`, `equal`: pop both operands before charging gas.
+    | some .eq =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 3 fun gas =>
+            match Stack.push stack (Word.eqResult a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `bitwise.py`, `bitwise_and`: pop both operands before charging gas.
+    | some .and =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 3 fun gas =>
+            match Stack.push stack (Word.bitwiseAnd a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `bitwise.py`, `bitwise_or`: pop both operands before charging gas.
+    | some .or =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 3 fun gas =>
+            match Stack.push stack (Word.bitwiseOr a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `bitwise.py`, `bitwise_xor`: pop both operands before charging gas.
+    | some .xor =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 3 fun gas =>
+            match Stack.push stack (Word.bitwiseXor a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `comparison.py`, `is_zero`: pop the operand before charging gas.
+    | some .iszero =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        charge s 3 fun gas =>
+          match Stack.push stack (Word.iszeroResult a) with
+          | .error e => failStack s e
+          | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `bitwise.py`, `bitwise_not`: pop the operand before charging gas.
+    | some .not =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        charge s 3 fun gas =>
+          match Stack.push stack (Word.bitwiseNot a) with
+          | .error e => failStack s e
+          | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
     | some (.dup i) =>
       charge s 3 fun gas =>
         match Stack.dup s.stack i with
