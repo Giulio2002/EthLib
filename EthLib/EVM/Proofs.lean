@@ -3,6 +3,7 @@ module
 public import EthLib.EVM.Proofs.Word
 public import EthLib.EVM.Proofs.Memory
 public import EthLib.EVM.Proofs.Memory.Ranges
+public import EthLib.EVM.Proofs.Memory.Allocation
 
 /-!
 # `EthLib.EVM.Proofs`
