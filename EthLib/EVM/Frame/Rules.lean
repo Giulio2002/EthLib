@@ -20,12 +20,27 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
 def Advances (s t : State) (pc gas : Nat) (xs : List Word) : Prop :=
   t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs
+
+/-- Cancun `runtime.py`: the source byte length at an instruction boundary. -/
+def jumpSourceLength (b : UInt8) : Nat :=
+  if 0x60 ≤ b.toNat ∧ b.toNat ≤ 0x7f then 1 + (b.toNat - 0x5f) else 1
+
+/-- Instruction boundaries reached by the source byte-length rule. -/
+inductive JumpBoundaryFrom (code : ByteArray) : Nat → Nat → Prop where
+  | here (pc : Nat) (inside : pc < code.size) : JumpBoundaryFrom code pc pc
+  | step (pc x : Nat) (inside : pc < code.size)
+      (later : JumpBoundaryFrom code (pc + jumpSourceLength (PushImmediate.byteAt code pc)) x) :
+      JumpBoundaryFrom code pc x
+
+/-- A valid target is a JUMPDEST byte at a source instruction boundary. -/
+def ValidJumpDest (code : ByteArray) (pc : Nat) : Prop :=
+  JumpBoundaryFrom code 0 pc ∧ PushImmediate.byteAt code pc = 0x5b
 
 /-- Source-oriented rules for one frame transition. -/
 inductive Rule : State → Outcome → Prop where
@@ -33,6 +48,29 @@ inductive Rule : State → Outcome → Prop where
   | stop (s) : At s (some .stop) → Rule s (.stop { s with pc := s.pc + 1 })
   | invalid (s) : At s none ∨ At s (some .invalid) → Rule s (.exception s .invalidOpcode)
   | unsupported (s op) : At s (some op) → Unsupported op → Rule s (.unsupported s op)
+  | jumpEmpty (s) : At s (some .jump) → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | jumpGas (s x xs) : At s (some .jump) → s.stack.val = x :: xs → s.gas < 8 →
+      Rule s (.exception s .outOfGas)
+  | jumpInvalid (s x xs) : At s (some .jump) → s.stack.val = x :: xs → 8 ≤ s.gas →
+      ¬ ValidJumpDest s.code x.toNat → Rule s (.exception s .invalidJumpDestination)
+  | jump (s t x xs) : At s (some .jump) → s.stack.val = x :: xs → 8 ≤ s.gas →
+      ValidJumpDest s.code x.toNat → Advances s t x.toNat (s.gas - 8) xs → Rule s (.continue t)
+  | jumpiEmpty (s) : At s (some .jumpi) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | jumpiGas (s x y xs) : At s (some .jumpi) → s.stack.val = x :: y :: xs → s.gas < 10 →
+      Rule s (.exception s .outOfGas)
+  | jumpiInvalid (s x y xs) : At s (some .jumpi) → s.stack.val = x :: y :: xs → 10 ≤ s.gas →
+      y.toNat ≠ 0 → ¬ ValidJumpDest s.code x.toNat →
+      Rule s (.exception s .invalidJumpDestination)
+  | jumpiFalse (s t x y xs) : At s (some .jumpi) → s.stack.val = x :: y :: xs → 10 ≤ s.gas →
+      y.toNat = 0 → Advances s t (s.pc + 1) (s.gas - 10) xs → Rule s (.continue t)
+  | jumpiTrue (s t x y xs) : At s (some .jumpi) → s.stack.val = x :: y :: xs → 10 ≤ s.gas →
+      y.toNat ≠ 0 → ValidJumpDest s.code x.toNat →
+      Advances s t x.toNat (s.gas - 10) xs → Rule s (.continue t)
+  | jumpdestGas (s) : At s (some .jumpdest) → s.gas < 1 → Rule s (.exception s .outOfGas)
+  | jumpdest (s t) : At s (some .jumpdest) → 1 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 1) s.stack.val → Rule s (.continue t)
   | pushGas (s n) : At s (some (.push n)) → s.gas < (if n.val = 0 then 2 else 3) →
       Rule s (.exception s .outOfGas)
   | pushFull (s n) : At s (some (.push n)) → (if n.val = 0 then 2 else 3) ≤ s.gas →

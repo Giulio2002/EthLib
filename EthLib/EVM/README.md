@@ -263,7 +263,7 @@ Its program counters use natural arithmetic.
 The proof defines instruction boundaries independently from the scanner using source byte lengths.
 The kernel checks that membership is exactly a boundary containing byte `0x5b`.
 It also checks strict ordering, bounds, progress and agreement of the decoder step with the byte ranges.
-The correspondence between that Lean relation and the source is a human source review.
+The correspondence between that Lean relation and the source is a manual source inspection.
 
 The combined opcode decoder, PUSH immediate reader and jump destination scanner pass their library, proof and standalone test gates.
 This completes the scoped decoding milestone, not EVM execution or EELS differential validation.
@@ -271,7 +271,8 @@ The decoder and scanner do not model frames, gas, stack effects or instruction e
 
 # Restricted frame execution
 
-The frame runner supports STOP, PUSH0 through PUSH32, POP, ADD, MUL, SUB, DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD, EXP, LT, GT, SLT, SGT, EQ, ISZERO, AND, OR, XOR, NOT, SHL, SHR, SAR, BYTE, SIGNEXTEND, DUP1 through DUP16, and SWAP1 through SWAP16.
+The frame runner supports STOP, JUMP, JUMPI, JUMPDEST, PUSH0 through PUSH32, POP, arithmetic, comparison and bitwise instructions, DUP1 through DUP16, and SWAP1 through SWAP16.
+The implemented arithmetic and bitwise instructions are ADD, MUL, SUB, DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD, EXP, LT, GT, SLT, SGT, EQ, ISZERO, AND, OR, XOR, NOT, SHL, SHR, SAR, BYTE and SIGNEXTEND.
 The arithmetic, comparison and bitwise instructions have independent success, underflow and out-of-gas rules.
 Operand checks precede charging gas.
 ADDMOD and MULMOD pop their modulus third and use full-precision intermediates.
@@ -280,9 +281,15 @@ For shifts and byte operations, the first-popped word is the count or index.
 BYTE indexes from the most significant byte.
 SAR rounds a negative quotient down.
 Their numeric refinement theorems compose the instruction rules with the existing word contracts.
+JUMP and JUMPI pop the full 256-bit destination before charging gas.
+JUMPI pops its condition second and checks the destination only when that condition is nonzero.
+A taken jump requires a JUMPDEST at an instruction boundary, outside PUSH data.
+An invalid destination has its own exceptional-halt reason.
+JUMPDEST charges one gas and advances one byte.
 Other assigned Cancun opcodes return a distinct unsupported tooling result.
 Unassigned bytes and INVALID cause exceptional halts.
 Fuel exhaustion is a tooling result and is not an EVM exception.
+The runner is fuel bounded and makes no claim that every program terminates.
 The frame holds code, a natural program counter, a bounded stack, gas, and valid allocated memory.
 It does not execute REVERT or model world state, calls, or rollback.
 A manually constructed revert carries remaining gas and output bytes as scaffolding.
@@ -303,7 +310,7 @@ It does not assert a final stack or model world-state rollback.
 The independent `Frame.Rule` relation states the instruction cases using stack lists and gas conditions.
 The kernel checks `step_iff_rule` for all frames and outcomes.
 Runner terminal trace adequacy uses this relation and sufficient fuel.
-The source transcription is a human reading of the cited Python, not an automatically checked equivalence to it.
+The source transcription is a manual inspection of the cited Python, not an automatically checked equivalence to it.
 
 `Runner.StraightLine.push_push_add_stop` proves the example for any two immediate bytes.
 It assumes at most 1022 initial stack entries and gas `9 + g`.

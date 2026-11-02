@@ -156,6 +156,11 @@ theorem contains_iff (code : ByteArray) (pc : Nat) :
     contains code pc = true ↔ pc ∈ destinations code := by
   simp [contains]
 
+/-- The executable test agrees with the independent instruction-boundary rule. -/
+theorem contains_iff_boundary (code : ByteArray) (pc : Nat) :
+    contains code pc = true ↔ Boundary code pc ∧ PushImmediate.byteAt code pc = 0x5b := by
+  rw [contains_iff, mem_iff]
+
 /-- Empty code has no destinations. -/
 theorem empty : destinations (ByteArray.mk #[]) = [] := by
   rw [destinations, scanFrom]

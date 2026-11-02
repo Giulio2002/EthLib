@@ -2,6 +2,7 @@ module
 
 public import EthLib.EVM.Stack
 public import EthLib.EVM.PushImmediate
+public import EthLib.EVM.JumpDest
 public import EthLib.EVM.Gas
 public import EthLib.EVM.Word.AddMulMod
 public import EthLib.EVM.Word.Exp
@@ -38,7 +39,7 @@ structure State where
 
 /-- Exceptional halts distinguished by their first failing check. -/
 inductive Exception where
-  | invalidOpcode | outOfGas | stackUnderflow | stackOverflow
+  | invalidOpcode | invalidJumpDestination | outOfGas | stackUnderflow | stackOverflow
   deriving DecidableEq, Repr
 
 /-- Frame outcomes include a typed revert for future semantics.
@@ -73,6 +74,32 @@ def step (s : State) : Outcome :=
         match Stack.push s.stack (PushImmediate.value s.code s.pc n) with
         | .error e => failStack s e
         | .ok stack => .continue { s with stack, gas, pc := PushImmediate.nextPC s.pc n }
+    -- Cancun `control_flow.py`, `jump`: pop, charge, then validate the full word.
+    | some .jump =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (destination, stack) =>
+        charge s 8 fun gas =>
+          if JumpDest.contains s.code destination.toNat then
+            .continue { s with stack, gas, pc := destination.toNat }
+          else .exception s .invalidJumpDestination
+    -- Cancun `control_flow.py`, `jumpi`: the destination is popped first.
+    | some .jumpi =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (destination, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (condition, stack) =>
+          charge s 10 fun gas =>
+            if condition.toNat = 0 then
+              .continue { s with stack, gas, pc := s.pc + 1 }
+            else if JumpDest.contains s.code destination.toNat then
+              .continue { s with stack, gas, pc := destination.toNat }
+            else .exception s .invalidJumpDestination
+    -- Cancun `control_flow.py`, `jumpdest`: charge before advancing.
+    | some .jumpdest =>
+      charge s 1 fun gas => .continue { s with gas, pc := s.pc + 1 }
     | some .pop =>
       match Stack.pop s.stack with
       | .error e => failStack s e

@@ -2,6 +2,7 @@ module
 
 public import EthLib.EVM.Frame.Rules
 public import EthLib.EVM.Proofs.Stack
+public import EthLib.EVM.Proofs.JumpDest
 
 /-!
 # Frame invariants
@@ -1321,6 +1322,154 @@ theorem step_smod (s t : State) (x y : Word) (xs : List Word)
   simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas, push]
   rw [update]
 
+/-- The source-oriented frame boundary relation matches the scanner proof relation. -/
+theorem jumpBoundary_iff (code : ByteArray) (pc x : Nat) :
+    JumpBoundaryFrom code pc x ↔ Proofs.JumpDest.BoundaryFrom code pc x := by
+  constructor
+  · intro h
+    induction h with
+    | here pc inside => exact .here pc inside
+    | step pc x inside _ ih =>
+      exact .step pc x inside (by simpa [jumpSourceLength, Proofs.JumpDest.sourceLength] using ih)
+  · intro h
+    induction h with
+    | here pc inside => exact .here pc inside
+    | step pc x inside _ ih =>
+      exact .step pc x inside (by simpa [jumpSourceLength, Proofs.JumpDest.sourceLength] using ih)
+
+/-- Executable target lookup is equivalent to the independent boundary rule. -/
+theorem validJumpDest_iff (code : ByteArray) (pc : Nat) :
+    JumpDest.contains code pc = true ↔ ValidJumpDest code pc := by
+  rw [Proofs.JumpDest.contains_iff_boundary]
+  simp only [ValidJumpDest, Proofs.JumpDest.Boundary, jumpBoundary_iff]
+
+/-- JUMP checks stack depth before gas. -/
+theorem step_jump_empty (s : State) (h : At s (some .jump)) (empty : s.stack.val = []) :
+    step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  have pop : s.stack.pop = .error .underflow :=
+    (Proofs.Stack.pop_underflow_iff s.stack).mpr empty
+  simp [step, bounds, decoded, pop, failStack]
+
+/-- JUMP checks gas after the operand. -/
+theorem step_jump_gas (s : State) (x : Word) (xs : List Word)
+    (h : At s (some .jump)) (items : s.stack.val = x :: xs) (gas : s.gas < 8) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let stack : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  simp [step, bounds, decoded, pop, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- JUMPI checks both operands before gas. -/
+theorem step_jumpi_empty (s : State) (h : At s (some .jumpi))
+    (short : s.stack.val.length < 2) : step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  cases items : s.stack.val with
+  | nil =>
+    have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr items
+    simp [step, bounds, decoded, pop, failStack]
+  | cons x xs =>
+    cases xs with
+    | nil =>
+      let stack : Stack := Stack.empty
+      have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+      have pop2 : stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+      simp [step, bounds, decoded, pop, pop2, failStack]
+    | cons y ys => simp [items] at short; omega
+
+/-- JUMPI checks gas after both operands. -/
+theorem step_jumpi_gas (s : State) (x y : Word) (xs : List Word)
+    (h : At s (some .jumpi)) (items : s.stack.val = x :: y :: xs) (gas : s.gas < 10) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have bound := s.stack.property; rw [items] at bound; simp at bound ⊢; omega⟩
+  let second : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  simp [step, bounds, decoded, p1, p2, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- JUMP rejects a non-boundary target after the gas check. -/
+theorem step_jump_invalid (s : State) (x : Word) (xs : List Word)
+    (h : At s (some .jump)) (items : s.stack.val = x :: xs) (gas : 8 ≤ s.gas)
+    (invalid : ¬ ValidJumpDest s.code x.toNat) : step s = .exception s .invalidJumpDestination := by
+  obtain ⟨bounds, decoded⟩ := h
+  let stack : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have target : JumpDest.contains s.code x.toNat = false := by
+    cases h : JumpDest.contains s.code x.toNat with
+    | false => rfl
+    | true => exact False.elim (invalid ((validJumpDest_iff _ _).mp h))
+  simp [step, bounds, decoded, pop, charge, Gas.charge, gas, target]
+
+/-- JUMP consumes its destination and transfers control to it. -/
+theorem step_jump (s t : State) (x : Word) (xs : List Word)
+    (h : At s (some .jump)) (items : s.stack.val = x :: xs) (gas : 8 ≤ s.gas)
+    (valid : ValidJumpDest s.code x.toNat) (fields : Advances s t x.toNat (s.gas - 8) xs) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let stack : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have target := (validJumpDest_iff s.code x.toNat).mpr valid
+  have update := advances_eq s t x.toNat (s.gas - 8) stack fields
+  simp only [step, dite_eq_left bounds, decoded, pop, charge, Gas.charge, ite_eq_left gas, target, ↓reduceIte]
+  rw [update]
+
+/-- JUMPI invalid case follows the source check order. -/
+theorem step_jumpi_invalid (s : State) (x y : Word) (xs : List Word)
+    (h : At s (some .jumpi)) (items : s.stack.val = x :: y :: xs) (gas : 10 ≤ s.gas)
+    (cond : y.toNat ≠ 0) (invalid : ¬ ValidJumpDest s.code x.toNat) : step s = .exception s .invalidJumpDestination := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let second : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have target : JumpDest.contains s.code x.toNat = false := by
+    cases h : JumpDest.contains s.code x.toNat with
+    | false => rfl
+    | true => exact False.elim (invalid ((validJumpDest_iff _ _).mp h))
+  simp [step, bounds, decoded, p1, p2, charge, Gas.charge, gas, cond, target]
+
+/-- JUMPI false case follows the source check order. -/
+theorem step_jumpi_false (s : State) (t : State) (x y : Word) (xs : List Word)
+    (h : At s (some .jumpi)) (items : s.stack.val = x :: y :: xs) (gas : 10 ≤ s.gas)
+    (cond : y.toNat = 0)  (fields : Advances s t (s.pc + 1) (s.gas - 10) xs) : step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let second : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have update := advances_eq s t (s.pc + 1) (s.gas - 10) second fields
+  simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas, cond, ↓reduceIte]
+  rw [update]
+
+/-- JUMPI true case follows the source check order. -/
+theorem step_jumpi_true (s : State) (t : State) (x y : Word) (xs : List Word)
+    (h : At s (some .jumpi)) (items : s.stack.val = x :: y :: xs) (gas : 10 ≤ s.gas)
+    (cond : y.toNat ≠ 0) (valid : ValidJumpDest s.code x.toNat) (fields : Advances s t (x.toNat) (s.gas - 10) xs) : step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let second : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have target := (validJumpDest_iff s.code x.toNat).mpr valid
+  have update := advances_eq s t x.toNat (s.gas - 10) second fields
+  simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas, cond, ↓reduceIte, target]
+  rw [update]
+
+/-- JUMPDEST reports insufficient gas. -/
+theorem step_jumpdest_gas (s : State) (h : At s (some .jumpdest)) (gas : s.gas < 1) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  simp [step, bounds, decoded, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- JUMPDEST consumes one gas and advances one byte. -/
+theorem step_jumpdest (s t : State) (h : At s (some .jumpdest)) (gas : 1 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 1) s.stack.val) : step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  have update := advances_eq s t (s.pc + 1) (s.gas - 1) s.stack fields
+  simp only [step, dite_eq_left bounds, decoded, charge, Gas.charge, ite_eq_left gas]
+  rw [update]
+
 /-- An assigned opcode outside this slice yields the tooling result. -/
 theorem step_unsupported (s : State) (op : Opcode) (h : At s (some op))
     (unsupported : Unsupported op) : step s = .unsupported s op := by
@@ -1334,6 +1483,17 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | stop at_ => exact step_stop _ at_
   | invalid at_ => rcases at_ with h | h; exact step_unassigned _ h; exact step_invalid _ h
   | unsupported op at_ unsupported => exact step_unsupported _ op at_ unsupported
+  | jumpEmpty at_ empty => exact step_jump_empty _ at_ empty
+  | jumpGas x xs at_ items gas => exact step_jump_gas _ x xs at_ items gas
+  | jumpInvalid x xs at_ items gas invalid => exact step_jump_invalid _ x xs at_ items gas invalid
+  | jump t x xs at_ items gas valid fields => exact step_jump _ t x xs at_ items gas valid fields
+  | jumpiEmpty at_ empty => exact step_jumpi_empty _ at_ empty
+  | jumpiGas x y xs at_ items gas => exact step_jumpi_gas _ x y xs at_ items gas
+  | jumpiInvalid x y xs at_ items gas cond invalid => exact step_jumpi_invalid _ x y xs at_ items gas cond invalid
+  | jumpiFalse t x y xs at_ items gas cond fields => exact step_jumpi_false _ t x y xs at_ items gas cond fields
+  | jumpiTrue t x y xs at_ items gas cond valid fields => exact step_jumpi_true _ t x y xs at_ items gas cond valid fields
+  | jumpdestGas at_ gas => exact step_jumpdest_gas _ at_ gas
+  | jumpdest t at_ gas fields => exact step_jumpdest _ t at_ gas fields
   | pushGas n at_ gas => exact step_push_gas _ n at_ gas
   | pushFull n at_ gas full => exact step_push_full _ n at_ gas full
   | push t n at_ gas room fields => exact step_push _ t n at_ gas room fields
@@ -1442,6 +1602,40 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
           · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
             exact ⟨_, .pushFull s n at_ gas full⟩
         · exact ⟨_, .pushGas s n at_ (Nat.lt_of_not_ge gas)⟩
+      | jump =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .jumpEmpty s at_ items⟩
+        | cons x xs =>
+          by_cases gas : 8 ≤ s.gas
+          · by_cases valid : ValidJumpDest s.code x.toNat
+            · let stack : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+              let t := { s with stack, pc := x.toNat, gas := s.gas - 8 }
+              exact ⟨_, .jump s t x xs at_ items gas valid (by simp [Advances, t, stack])⟩
+            · exact ⟨_, .jumpInvalid s x xs at_ items gas valid⟩
+          · exact ⟨_, .jumpGas s x xs at_ items (Nat.lt_of_not_ge gas)⟩
+      | jumpi =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .jumpiEmpty s at_ (by simp [items])⟩
+        | cons x xs =>
+          cases xs with
+          | nil => exact ⟨_, .jumpiEmpty s at_ (by simp [items])⟩
+          | cons y ys =>
+            by_cases gas : 10 ≤ s.gas
+            · by_cases cond : y.toNat = 0
+              · let stack : Stack := ⟨ys, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+                let t := { s with stack, pc := s.pc + 1, gas := s.gas - 10 }
+                exact ⟨_, .jumpiFalse s t x y ys at_ items gas cond (by simp [Advances, t, stack])⟩
+              · by_cases valid : ValidJumpDest s.code x.toNat
+                · let stack : Stack := ⟨ys, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+                  let t := { s with stack, pc := x.toNat, gas := s.gas - 10 }
+                  exact ⟨_, .jumpiTrue s t x y ys at_ items gas cond valid (by simp [Advances, t, stack])⟩
+                · exact ⟨_, .jumpiInvalid s x y ys at_ items gas cond valid⟩
+            · exact ⟨_, .jumpiGas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
+      | jumpdest =>
+        by_cases gas : 1 ≤ s.gas
+        · let t := { s with pc := s.pc + 1, gas := s.gas - 1 }
+          exact ⟨_, .jumpdest s t at_ gas (by simp [Advances, t])⟩
+        · exact ⟨_, .jumpdestGas s at_ (Nat.lt_of_not_ge gas)⟩
       | pop =>
         cases items : s.stack.val with
         | nil => exact ⟨_, .popEmpty s at_ items⟩
