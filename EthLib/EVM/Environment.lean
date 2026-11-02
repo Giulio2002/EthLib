@@ -51,6 +51,8 @@ structure Context where
   blobVersionedHashes : List Word
   /-- Previous block hashes, oldest first, decoded from 32-byte big-endian values. -/
   blockHashes : List Word
+  /-- The current block configuration used by BLOBBASEFEE. -/
+  blobFeeSchedule : BlobFee.Schedule := BlobFee.cancun
 
 /-- Cancun `environment.py`, `blob_hash`, indexes without narrowing the word. -/
 def blobHash (context : Context) (index : Word) : Word :=

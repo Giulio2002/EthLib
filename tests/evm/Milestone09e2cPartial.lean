@@ -3,7 +3,7 @@ import EthLib.EVM
 open EthLib.EVM
 
 private def env : Environment.Context :=
-  ⟨0, 0, 0, 0, 0, 0, 0, 257, 0, 0, 0, 0, 0, [], []⟩
+  ⟨0, 0, 0, 0, 0, 0, 0, 257, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩
 
 private def input (xs : List Word) (bound : xs.length ≤ 1024) (gas : Nat) : Frame.State :=
   ⟨⟨#[0]⟩, 10, ⟨xs, bound⟩, gas, Memory.Allocation.empty,

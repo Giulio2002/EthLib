@@ -635,7 +635,7 @@ Its fee and history results use the total Lean helpers described above.
 The theorem does not establish Amsterdam source correspondence.
 
 `Runner.BlockBlobIntegration.run_source_in_window` applies that result to a matching chain history.
-It also requires the calculated Cancun fee to fit a word.
+It also requires the calculated configured fee to fit a word.
 Its output identifies the selected chain hash and the checked fee conversion.
 The premises do not validate the supplied chain or transaction.
 `tests/evm/Milestone09e2IntegrationProof.lean` applies both contracts.
@@ -644,6 +644,16 @@ The premises do not validate the supplied chain or transaction.
 The pinned Amsterdam source snapshot and migration map are in
 `artifacts/09e2-integration/amsterdam-source-manifest.json`.
 `artifacts/09e2-integration/source-and-dispatch-audit.md` records the historical source boundary.
-Amsterdam remains the target, and this historical integration does not meet it.
-The Amsterdam fee update fraction differs from the Cancun constant used here.
-Fork-specific semantics, their source correspondence and fixture validation remain open.
+The blob fee observation accepts the current block's configured update fraction.
+The named Cancun and Amsterdam schedules use 3338477 and 11684671 respectively.
+`calculateBlobGasPrice` remains the historical Cancun wrapper.
+`Environment.Context.blobFeeSchedule` defaults to Cancun for structure literals.
+Positional context constructors must supply a schedule as the last field.
+The caller must choose the schedule for the current fork and network configuration.
+The subtype requires a positive fraction.
+The recurrence relation covers every positive fraction and U64 excess.
+For fees at least `2^256`, the frame uses a modulo extension of the source conversion.
+
+The excess gas transition, reserve price rule and block validity remain outside this slice.
+The rest of Amsterdam opcode and gas semantics and fixture validation remain open.
+The frame is not a complete Amsterdam EVM.

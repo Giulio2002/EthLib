@@ -48,8 +48,38 @@ def minBlobGasPrice : Nat := 1
 /-- Cancun `gas.py` uses this update fraction for blob gas prices. -/
 def blobBaseFeeUpdateFraction : {d : Nat // 0 < d} := ⟨3338477, by decide⟩
 
+/-- The positive update fraction used by a blob fee schedule.
+
+EIP-7892, Blob base fee computations, uses the current block's schedule.
+The subtype excludes a zero update fraction.
+-/
+structure Schedule where
+  updateFraction : {d : Nat // 0 < d}
+
+/-- Cancun execution-specs `vm/gas.py`, `calculate_blob_gas_price`. -/
+def cancun : Schedule := ⟨blobBaseFeeUpdateFraction⟩
+
+/-- Prague execution-specs `vm/gas.py`, `BLOB_BASE_FEE_UPDATE_FRACTION`. -/
+def prague : Schedule := ⟨⟨5007716, by decide⟩⟩
+
+/-- Osaka execution-specs uses the Prague update fraction. -/
+def osaka : Schedule := prague
+
+/-- BPO1 execution-specs `vm/gas.py`, `GasCosts`. -/
+def bpo1 : Schedule := ⟨⟨8346193, by decide⟩⟩
+
+/-- BPO2 execution-specs `vm/gas.py`, `GasCosts`. -/
+def bpo2 : Schedule := ⟨⟨11684671, by decide⟩⟩
+
+/-- Amsterdam execution-specs `vm/gas.py`, `GasCosts`. -/
+def amsterdam : Schedule := ⟨⟨11684671, by decide⟩⟩
+
+/-- Calculate a fee for a supplied schedule and source-domain excess. -/
+def calculateWith (schedule : Schedule) (excessBlobGas : Fin (2 ^ 64)) : Nat :=
+  taylorExponential minBlobGasPrice excessBlobGas.val schedule.updateFraction
+
 /-- Cancun `calculate_blob_gas_price`, before the source U256 conversion. -/
 def calculateBlobGasPrice (excessBlobGas : Fin (2 ^ 64)) : Nat :=
-  taylorExponential minBlobGasPrice excessBlobGas.val blobBaseFeeUpdateFraction
+  calculateWith cancun excessBlobGas
 
 end EthLib.EVM.BlobFee

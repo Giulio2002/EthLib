@@ -3,7 +3,7 @@ module
 public import EthLib.EVM.Proofs.Frame.Environment
 public import EthLib.EVM.Proofs.BlobFee
 
-/-! Contracts for the Cancun blob base fee observation. -/
+/-! Contracts for the configured blob base fee observation. -/
 
 @[expose] public section
 namespace EthLib.EVM.Frame
@@ -22,7 +22,7 @@ theorem blobBaseFee_full (s : State) (gas : 2 ≤ s.gas)
 theorem blobBaseFee_success (s t : State) (gas : 2 ≤ s.gas)
     (room : s.stack.val.length < 1024)
     (fields : Advances s t (s.pc + 1) (s.gas - 2)
-      (observationWord (BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas) :: s.stack.val)) :
+      (observationWord (BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas) :: s.stack.val)) :
     blobBaseFee s = .continue t :=
   observe_success s t _ gas room fields
 
@@ -30,19 +30,20 @@ theorem blobBaseFee_success (s t : State) (gas : 2 ≤ s.gas)
 theorem blobBaseFee_helper_actual (s t : State) (run : blobBaseFee s = .continue t) :
     2 ≤ s.gas ∧ s.stack.val.length < 1024 ∧
     Advances s t (s.pc + 1) (s.gas - 2)
-      (observationWord (BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas) :: s.stack.val) :=
+      (observationWord (BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas) :: s.stack.val) :=
   observe_actual s t _ run
 
 /-- A successful opcode follows the independent integer recurrence. -/
 theorem blobBaseFee_actual (s t : State) (at_ : At s (some .blobbasefee))
     (run : step s = .continue t) :
     ∃ sum, BlobFee.RecurrenceSpec s.context.environment.excessBlobGas.val
-        3338477 1 3338477 0 sum ∧
+        s.context.environment.blobFeeSchedule.updateFraction.val 1
+          s.context.environment.blobFeeSchedule.updateFraction.val 0 sum ∧
       2 ≤ s.gas ∧ s.stack.val.length < 1024 ∧
       Advances s t (s.pc + 1) (s.gas - 2)
-        (observationWord (sum / 3338477) :: s.stack.val) := by
-  have spec := (BlobFee.calculateBlobGasPrice_spec s.context.environment.excessBlobGas
-    (BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas)).mpr rfl
+        (observationWord (sum / s.context.environment.blobFeeSchedule.updateFraction.val) :: s.stack.val) := by
+  have spec := (BlobFee.calculateWith_spec s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas
+    (BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas)).mpr rfl
   obtain ⟨sum, hs, hr⟩ := spec
   have actual := step_observation_actual s t .blobbasefee at_ run
   refine ⟨sum, hs, actual.1, actual.2.1, ?_⟩
@@ -52,15 +53,16 @@ theorem blobBaseFee_actual (s t : State) (at_ : At s (some .blobbasefee))
 theorem blobBaseFee_success_iff (s t : State) (at_ : At s (some .blobbasefee)) :
     step s = .continue t ↔
       ∃ sum, BlobFee.RecurrenceSpec s.context.environment.excessBlobGas.val
-          3338477 1 3338477 0 sum ∧
+          s.context.environment.blobFeeSchedule.updateFraction.val 1
+          s.context.environment.blobFeeSchedule.updateFraction.val 0 sum ∧
         2 ≤ s.gas ∧ s.stack.val.length < 1024 ∧
         Advances s t (s.pc + 1) (s.gas - 2)
-          (observationWord (sum / 3338477) :: s.stack.val) := by
+          (observationWord (sum / s.context.environment.blobFeeSchedule.updateFraction.val) :: s.stack.val) := by
   constructor
   · exact blobBaseFee_actual s t at_
   · rintro ⟨sum, spec, gas, room, fields⟩
-    have eq := (BlobFee.calculateBlobGasPrice_spec s.context.environment.excessBlobGas
-      (sum / 3338477)).mp ⟨sum, spec, rfl⟩
+    have eq := (BlobFee.calculateWith_spec s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas
+      (sum / s.context.environment.blobFeeSchedule.updateFraction.val)).mp ⟨sum, spec, rfl⟩
     apply step_observation s t .blobbasefee at_ gas room
     simpa [Observation.value, observationWord, eq] using fields
 
@@ -71,10 +73,11 @@ inductive BlobBaseFeeRule (s : State) : Outcome → Prop where
       BlobBaseFeeRule s (.exception s .stackOverflow)
   | success (t : State) :
       (∃ sum, BlobFee.RecurrenceSpec s.context.environment.excessBlobGas.val
-          3338477 1 3338477 0 sum ∧
+          s.context.environment.blobFeeSchedule.updateFraction.val 1
+          s.context.environment.blobFeeSchedule.updateFraction.val 0 sum ∧
         2 ≤ s.gas ∧ s.stack.val.length < 1024 ∧
         Advances s t (s.pc + 1) (s.gas - 2)
-          (observationWord (sum / 3338477) :: s.stack.val)) →
+          (observationWord (sum / s.context.environment.blobFeeSchedule.updateFraction.val) :: s.stack.val)) →
       BlobBaseFeeRule s (.continue t)
 
 /-- At BLOBBASEFEE the independent rules characterize every outcome. -/
@@ -84,10 +87,10 @@ theorem blobBaseFee_step_iff (s : State) (out : Outcome)
   · intro run
     by_cases gas : 2 ≤ s.gas
     · by_cases room : s.stack.val.length < 1024
-      · let stack : Stack := ⟨observationWord (BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas) :: s.stack.val, by simp; omega⟩
+      · let stack : Stack := ⟨observationWord (BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas) :: s.stack.val, by simp; omega⟩
         let t : State := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
         have fields : Advances s t (s.pc + 1) (s.gas - 2)
-            (observationWord (BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas) :: s.stack.val) := by
+            (observationWord (BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas) :: s.stack.val) := by
           simp [Advances, t, stack]
         have success := step_observation s t .blobbasefee at_ gas room (by
           simpa [Observation.value, observationWord] using fields)
@@ -114,30 +117,30 @@ theorem blobBaseFee_step_iff (s : State) (out : Outcome)
 theorem blobBaseFee_step_head_mod (s t : State) (at_ : At s (some .blobbasefee))
     (run : step s = .continue t) :
     ∃ head, t.stack.val.head? = some head ∧
-      head.toNat = BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas % Word.modulus := by
+      head.toNat = BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas % Word.modulus := by
   have actual := step_observation_stack s t .blobbasefee at_ run
-  refine ⟨observationWord (BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas), ?_, ?_⟩
+  refine ⟨observationWord (BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas), ?_, ?_⟩
   · simpa [Observation.value] using congrArg List.head? actual
   · exact observationWord_toNat _
 
 /-- A representable fee from an actual successful step agrees with checked conversion. -/
 theorem blobBaseFee_step_head_exact (s t : State) (at_ : At s (some .blobbasefee))
     (run : step s = .continue t)
-    (representable : BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas < Word.modulus) :
+    (representable : BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas < Word.modulus) :
     ∃ head, t.stack.val.head? = some head ∧
-      head.toNat = BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas ∧
-      Word.ofNat (BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas) = .ok head := by
+      head.toNat = BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas ∧
+      Word.ofNat (BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas) = .ok head := by
   have actual := step_observation_stack s t .blobbasefee at_ run
-  refine ⟨observationWord (BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas), ?_, ?_, ?_⟩
+  refine ⟨observationWord (BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas), ?_, ?_, ?_⟩
   · simpa [Observation.value] using congrArg List.head? actual
   · exact observationWord_exact _ representable
   · exact observationWord_checked _ representable
 
-/-- A representable Cancun fee is preserved by the stack-word conversion. -/
+/-- A representable configured fee is preserved by the stack-word conversion. -/
 theorem blobBaseFee_word_exact (s : State)
-    (representable : BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas < Word.modulus) :
-    (observationWord (BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas)).toNat =
-      BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas :=
+    (representable : BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas < Word.modulus) :
+    (observationWord (BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas)).toNat =
+      BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas :=
   observationWord_exact _ representable
 
 end EthLib.EVM.Frame

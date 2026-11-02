@@ -5,7 +5,7 @@ open EthLib.EVM
 
 private def frame (code : ByteArray) (gas : Nat) (xs : List Word)
     (bound : xs.length ≤ 1024) : Frame.State :=
-  ⟨code, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], []⟩⟩, ByteArray.empty⟩
+  ⟨code, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty⟩
 
 -- The three missing-operand cases fail before gas is checked.
 example : match Frame.step (frame ⟨#[0x5e]⟩ 0 [] (by decide)) with
@@ -72,7 +72,7 @@ example : match Frame.step (frame ⟨#[0x5e]⟩ 0 [0, 0] (by decide)) with
 private def seeded (xs : List Word) (bound : xs.length ≤ 1024) : Frame.State :=
   ⟨⟨#[0x5e]⟩, 0, ⟨xs, bound⟩, 6,
     Memory.Allocation.write Memory.Allocation.empty 0 [1, 2, 3, 4],
-    Memory.Allocation.write_valid_for_frame _ _ _ Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], []⟩⟩, ByteArray.empty⟩
+    Memory.Allocation.write_valid_for_frame _ _ _ Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty⟩
 
 -- Reverse overlap and self-copy execute against the pre-step snapshot.
 /-- info: ([2, 3, 4, 4], [1, 2, 3, 4]) -/

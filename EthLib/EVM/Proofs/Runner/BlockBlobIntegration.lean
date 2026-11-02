@@ -17,7 +17,7 @@ theorem run (context : CallData.Context) (returnData : ByteArray) (x y : Word)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) :
     ∃ t, Runner.run 5 ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩,
         30 + g, mem, valid, context, returnData⟩ = .exhausted t ∧
-      t.stack.val = Frame.observationWord (BlobFee.calculateBlobGasPrice context.environment.excessBlobGas) ::
+      t.stack.val = Frame.observationWord (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas) ::
         context.environment.number :: Environment.blobHash context.environment y ::
         Environment.blockHash context.environment.blockHashes context.environment.number x :: xs ∧
       t.code = program ∧ t.context = context ∧ t.memory = mem ∧ t.returnData = returnData ∧
@@ -25,7 +25,7 @@ theorem run (context : CallData.Context) (returnData : ByteArray) (x y : Word)
   let a := Environment.blockHash context.environment.blockHashes context.environment.number x
   let b := Environment.blobHash context.environment y
   let c := context.environment.number
-  let d := Frame.observationWord (BlobFee.calculateBlobGasPrice context.environment.excessBlobGas)
+  let d := Frame.observationWord (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas)
   let s : Frame.State := ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩, 30 + g, mem, valid, context, returnData⟩
   let s1 : Frame.State := { s with pc := 1, gas := 10 + g, stack := ⟨a :: y :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s with pc := 2, gas := 7 + g, stack := ⟨y :: a :: xs, by simp; omega⟩ }
@@ -71,7 +71,7 @@ theorem run (context : CallData.Context) (returnData : ByteArray) (x y : Word)
 The chain maps block numbers to decoded 32-byte hashes.
 The list in the context contains the transaction's decoded versioned hashes.
 The premises do not validate headers, transactions, or chain ancestry.
-The fee is the Cancun recurrence, not an Amsterdam fee claim. -/
+The fee uses the supplied schedule and is exact when it fits a word. -/
 theorem run_source_in_window (context : CallData.Context) (returnData : ByteArray)
     (x y : Word) (xs : List Word) (room : xs.length ≤ 1020) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
@@ -80,18 +80,18 @@ theorem run_source_in_window (context : CallData.Context) (returnData : ByteArra
       context.environment.number chain)
     (window : x.toNat < context.environment.number.toNat ∧
       context.environment.number.toNat ≤ x.toNat + 256)
-    (feeBound : BlobFee.calculateBlobGasPrice context.environment.excessBlobGas < Word.modulus) :
+    (feeBound : BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas < Word.modulus) :
     ∃ t fee, Runner.run 5 ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩,
         30 + g, mem, valid, context, returnData⟩ = .exhausted t ∧
-      Word.ofNat (BlobFee.calculateBlobGasPrice context.environment.excessBlobGas) = .ok fee ∧
-      fee.toNat = BlobFee.calculateBlobGasPrice context.environment.excessBlobGas ∧
+      Word.ofNat (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas) = .ok fee ∧
+      fee.toNat = BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas ∧
       t.stack.val = fee :: context.environment.number ::
         (context.environment.blobVersionedHashes[y.toNat]?).getD 0 :: chain x.toNat :: xs ∧
       t.code = program ∧ t.context = context ∧ t.memory = mem ∧ t.returnData = returnData ∧
       t.gas = g ∧ t.pc = 5 := by
   obtain ⟨t, result, stack, code, ctx, memory, data, gas, pc⟩ :=
     run context returnData x y xs room g mem valid
-  refine ⟨t, Frame.observationWord (BlobFee.calculateBlobGasPrice context.environment.excessBlobGas),
+  refine ⟨t, Frame.observationWord (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas),
     result, Frame.observationWord_checked _ feeBound, Frame.observationWord_exact _ feeBound, ?_,
     code, ctx, memory, data, gas, pc⟩
   simpa [Environment.blobHash,

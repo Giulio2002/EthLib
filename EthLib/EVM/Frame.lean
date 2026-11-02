@@ -111,9 +111,9 @@ def observe (s : State) (value : Nat → Nat) : Outcome :=
     | .error e => failStack s e
     | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
 
-/-- Cancun `environment.py`, `blob_base_fee`, charges before computing and pushing. -/
+/-- Amsterdam `environment.py`, `blob_base_fee`, charges before computing and pushing. -/
 def blobBaseFee (s : State) : Outcome :=
-  observe s (fun _ => BlobFee.calculateBlobGasPrice s.context.environment.excessBlobGas)
+  observe s (fun _ => BlobFee.calculateWith s.context.environment.blobFeeSchedule s.context.environment.excessBlobGas)
 
 /-- Copy an immutable source after checking operands and gas.
 

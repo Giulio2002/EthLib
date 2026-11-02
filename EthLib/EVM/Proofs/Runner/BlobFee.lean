@@ -17,12 +17,12 @@ theorem run (context : CallData.Context) (returnData : ByteArray) (x : Word)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) :
     ∃ t, Runner.run 2 ⟨program, 0, ⟨x :: xs, by simp; omega⟩,
         5 + g, mem, valid, context, returnData⟩ = .exhausted t ∧
-      t.stack.val = Frame.observationWord (BlobFee.calculateBlobGasPrice context.environment.excessBlobGas) ::
+      t.stack.val = Frame.observationWord (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas) ::
         Environment.blobHash context.environment x :: xs ∧
       t.context = context ∧ t.memory = mem ∧ t.returnData = returnData ∧
       t.gas = g ∧ t.pc = 2 := by
   let a := Environment.blobHash context.environment x
-  let b := Frame.observationWord (BlobFee.calculateBlobGasPrice context.environment.excessBlobGas)
+  let b := Frame.observationWord (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas)
   let s : Frame.State := ⟨program, 0, ⟨x :: xs, by simp; omega⟩, 5 + g, mem, valid, context, returnData⟩
   let s1 : Frame.State := { s with pc := 1, gas := 2 + g, stack := ⟨a :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s1 with pc := 2, gas := g, stack := ⟨b :: a :: xs, by simp; omega⟩ }

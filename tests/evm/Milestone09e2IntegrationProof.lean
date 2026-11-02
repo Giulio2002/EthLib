@@ -7,7 +7,7 @@ example (context : CallData.Context) (data : ByteArray) (x y : Word)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) :
     ∃ t, Runner.run 5 ⟨Runner.BlockBlobIntegration.program, 0,
         ⟨x :: y :: xs, by simp; omega⟩, 30 + g, mem, valid, context, data⟩ = .exhausted t ∧
-      t.stack.val = Frame.observationWord (BlobFee.calculateBlobGasPrice context.environment.excessBlobGas) ::
+      t.stack.val = Frame.observationWord (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas) ::
         context.environment.number :: Environment.blobHash context.environment y ::
         Environment.blockHash context.environment.blockHashes context.environment.number x :: xs ∧
       t.code = Runner.BlockBlobIntegration.program ∧ t.context = context ∧ t.memory = mem ∧
@@ -24,11 +24,11 @@ example (context : CallData.Context) (data : ByteArray) (x y : Word)
     (history : Environment.HistoryMatches context.environment.blockHashes context.environment.number chain)
     (window : x.toNat < context.environment.number.toNat ∧
       context.environment.number.toNat ≤ x.toNat + 256)
-    (feeBound : BlobFee.calculateBlobGasPrice context.environment.excessBlobGas < Word.modulus) :
+    (feeBound : BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas < Word.modulus) :
     ∃ t fee, Runner.run 5 ⟨Runner.BlockBlobIntegration.program, 0,
         ⟨x :: y :: xs, by simp; omega⟩, 30 + g, mem, valid, context, data⟩ = .exhausted t ∧
-      Word.ofNat (BlobFee.calculateBlobGasPrice context.environment.excessBlobGas) = .ok fee ∧
-      fee.toNat = BlobFee.calculateBlobGasPrice context.environment.excessBlobGas ∧
+      Word.ofNat (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas) = .ok fee ∧
+      fee.toNat = BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas ∧
       t.stack.val = fee :: context.environment.number ::
         (context.environment.blobVersionedHashes[y.toNat]?).getD 0 :: chain x.toNat :: xs ∧
       t.code = Runner.BlockBlobIntegration.program ∧ t.context = context ∧ t.memory = mem ∧

@@ -6,7 +6,7 @@ set_option maxRecDepth 10000
 set_option maxHeartbeats 2000000
 
 def initial (code : ByteArray) (gas : Nat) : Frame.State :=
-  ⟨code, 0, Stack.empty, gas, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], []⟩⟩, ByteArray.empty⟩
+  ⟨code, 0, Stack.empty, gas, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty⟩
 
 -- The STOP byte is at position five, and executing it advances the counter.
 /-- info: ([5], 0, 6) -/
@@ -69,7 +69,7 @@ example : match Runner.run 1 (initial ⟨#[0x90]⟩ 0) with
 
 def full (code : ByteArray) (gas : Nat) : Frame.State :=
   ⟨code, 0, ⟨List.replicate 1024 0, by simp⟩, gas,
-    Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], []⟩⟩, ByteArray.empty⟩
+    Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty⟩
 
 -- A full stack makes PUSH overflow after its gas check.
 /-- info: true -/
@@ -94,7 +94,7 @@ def full (code : ByteArray) (gas : Nat) : Frame.State :=
 
 def withStack (code : ByteArray) (gas : Nat) (xs : List Word)
     (bound : xs.length ≤ 1024) : Frame.State :=
-  ⟨code, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], []⟩⟩, ByteArray.empty⟩
+  ⟨code, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty⟩
 
 -- POP with an entry and insufficient gas reports out of gas.
 /-- info: true -/
@@ -285,7 +285,7 @@ example : match EthLib.EVM.Runner.run 1 (initial ⟨#[0xfd]⟩ 10) with
 
 -- The first stack entry is the count or index, including full-width values.
 def indexedState (opcode : UInt8) (gas : Nat) (xs : List Word) (h : xs.length ≤ 1024) : Frame.State :=
-  ⟨⟨#[opcode]⟩, 0, ⟨xs, h⟩, gas, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], []⟩⟩, ByteArray.empty⟩
+  ⟨⟨#[opcode]⟩, 0, ⟨xs, h⟩, gas, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty⟩
 
 def indexedResult (opcode : UInt8) (gas : Nat) (x y : Word) : Option (List Word × Nat × Nat) :=
   match Frame.step (indexedState opcode gas [x, y] (by simp)) with
@@ -380,7 +380,7 @@ def indexedFailure (opcode : UInt8) (gas : Nat) (xs : List Word) (h : xs.length 
 def allocatedObservation : Frame.State :=
   ⟨⟨#[0x59]⟩, 0, Stack.empty, 2,
     Memory.Allocation.expand Memory.Allocation.empty 64 1,
-    Memory.Allocation.expand_valid _ _ _ Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], []⟩⟩, ByteArray.empty⟩
+    Memory.Allocation.expand_valid _ _ _ Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty⟩
 
 -- Expansion without writes is still visible to MSIZE.
 /-- info: [96] -/
@@ -391,7 +391,7 @@ def allocatedObservation : Frame.State :=
 def writtenObservation : Frame.State :=
   ⟨⟨#[0x59]⟩, 0, Stack.empty, 2,
     Memory.Allocation.write Memory.Allocation.empty 32 [7],
-    Memory.Allocation.write_valid _ _ _ Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], []⟩⟩, ByteArray.empty⟩
+    Memory.Allocation.write_valid _ _ _ Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty⟩
 
 /-- info: [64] -/
 #guard_msgs in

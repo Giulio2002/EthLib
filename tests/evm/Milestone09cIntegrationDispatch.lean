@@ -14,7 +14,7 @@ private instance (op : Opcode) : Decidable (Frame.Unsupported op) := by
 
 private def state (b : UInt8) : Frame.State :=
   ⟨⟨#[b]⟩, 0, ⟨[2, 1, 3], by decide⟩, 10000,
-    Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], []⟩⟩, ByteArray.empty⟩
+    Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty⟩
 
 -- Check the independent reference, classification predicate and executable dispatch.
 private def check (n : Nat) : Bool := Id.run do

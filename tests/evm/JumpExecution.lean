@@ -5,7 +5,7 @@ open EthLib.EVM
 
 private def frame (code : ByteArray) (pc gas : Nat) (xs : List Word) : Frame.State :=
   ⟨code, pc, if h : xs.length ≤ 1024 then ⟨xs, h⟩ else Stack.empty, gas,
-    Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], []⟩⟩, ByteArray.empty⟩
+    Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty⟩
 
 private def continued (s : Frame.State) (pc gas : Nat) (xs : List Word) : Bool :=
   match Frame.step s with
@@ -75,7 +75,7 @@ private def branchCode : ByteArray := ⟨#[0x60, 2, 0x60, 7, 0x57, 0x60, 0xff, 0
 private def filledMemory : Memory.Allocation.State := Memory.Allocation.write Memory.Allocation.empty 0 [0xab]
 private def branchFrame : Frame.State :=
   ⟨branchCode, 0, Stack.empty, 20, filledMemory,
-    Memory.Allocation.write_valid _ _ _ Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], []⟩⟩, ByteArray.empty⟩
+    Memory.Allocation.write_valid _ _ _ Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty⟩
 
 -- The taken branch skips PUSH1 0xff and preserves nonempty memory and code.
 /-- info: true -/
