@@ -84,6 +84,24 @@ def observe (s : State) (value : Nat → Nat) : Outcome :=
     | .error e => failStack s e
     | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
 
+/-- Copy an immutable source after checking operands and gas.
+
+Cancun `environment.py`, `calldatacopy` and `codecopy` charge before reading.
+-/
+def inputCopy (s : State) (data : ByteArray) : Outcome :=
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (destination, stack) =>
+    match Stack.pop stack with
+    | .error e => failStack s e
+    | .ok (source, stack) =>
+      match Stack.pop stack with
+      | .error e => failStack s e
+      | .ok (length, stack) =>
+        charge s (Gas.inputCopyCost s.memory.words destination.toNat length.toNat) fun gas =>
+          let bytes := CallData.readRange data source.toNat length.toNat
+          .continue { s with stack, gas, pc := s.pc + 1, memory := Memory.Allocation.write s.memory destination.toNat bytes, memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
+
 /-- Execute one instruction or stop at the end of code. -/
 def step (s : State) : Outcome :=
   if h : s.pc < s.code.size then
@@ -130,6 +148,9 @@ def step (s : State) : Outcome :=
           match Stack.push stack (CallData.load s.context offset) with
           | .error e => failStack s e
           | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `environment.py`: copy from the selected immutable source.
+    | some .calldatacopy => inputCopy s s.context.data
+    | some .codecopy => inputCopy s s.code
     -- Cancun `environment.py`, `calldatasize` and `codesize`: charge before push.
     | some .calldatasize => observe s (fun _ => s.context.data.size)
     | some .codesize => observe s (fun _ => s.code.size)

@@ -35,3 +35,11 @@ example (s t : Frame.State) (x y z : Word) (a b rest : Stack)
     Memory.Allocation.empty, by intro a _h; rfl, ⟨⟨#[0x12, 0x34]⟩⟩⟩ with
   | .continue t => t.stack.val.head?.map BitVec.toNat == some (0x1234 * 256 ^ 30)
   | _ => false
+
+-- Ordinary imports execute CALLDATACOPY without importing the proof library.
+/-- info: [42, 0] -/
+#guard_msgs in
+#eval match Frame.step ⟨⟨#[0x37]⟩, 0, ⟨[0, 0, 2], by decide⟩, 9,
+    Memory.Allocation.empty, by intro a _h; rfl, ⟨⟨#[42]⟩⟩⟩ with
+  | .continue s => (Memory.readRange s.memory.store 0 2).map UInt8.toNat
+  | _ => []

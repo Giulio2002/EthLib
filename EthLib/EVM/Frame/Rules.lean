@@ -21,7 +21,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -85,6 +85,22 @@ def Observation.value (o : Observation) (s : State) : Nat :=
   | .calldatasize => s.context.data.size
   | .codesize => s.code.size
 
+/-- Immutable source selected by an input copy instruction. -/
+inductive InputSource where
+  | calldata | code
+  deriving DecidableEq
+
+/-- The instruction associated with a source. -/
+def InputSource.opcode : InputSource → Opcode
+  | .calldata => .calldatacopy
+  | .code => .codecopy
+
+/-- The bytes selected from the current frame. -/
+def InputSource.bytes (source : InputSource) (s : State) : ByteArray :=
+  match source with
+  | .calldata => s.context.data
+  | .code => s.code
+
 /-- Source-oriented rules for one frame transition. -/
 inductive Rule : State → Outcome → Prop where
   | endCode (s) : s.code.size ≤ s.pc → Rule s (.stop s)
@@ -98,6 +114,19 @@ inductive Rule : State → Outcome → Prop where
   | calldataload (s t x xs) : At s (some .calldataload) → s.stack.val = x :: xs →
       3 ≤ s.gas → Advances s t (s.pc + 1) (s.gas - 3)
         (CallData.load s.context x :: xs) → Rule s (.continue t)
+  | inputCopyEmpty (s) (source : InputSource) : At s (some source.opcode) →
+      s.stack.val.length < 3 → Rule s (.exception s .stackUnderflow)
+  | inputCopyGas (s) (source : InputSource) (destination offset length xs) :
+      At s (some source.opcode) → s.stack.val = destination :: offset :: length :: xs →
+      s.gas < Gas.inputCopyCost s.memory.words destination.toNat length.toNat →
+      Rule s (.exception s .outOfGas)
+  | inputCopy (s t) (source : InputSource) (destination offset length xs) :
+      At s (some source.opcode) → s.stack.val = destination :: offset :: length :: xs →
+      Gas.inputCopyCost s.memory.words destination.toNat length.toNat ≤ s.gas →
+      AdvancesMemory s t (Memory.Allocation.write s.memory destination.toNat
+        (CallData.readRange (source.bytes s) offset.toNat length.toNat))
+        (s.pc + 1) (s.gas - Gas.inputCopyCost s.memory.words destination.toNat length.toNat) xs →
+      Rule s (.continue t)
   | mcopyEmpty (s) : At s (some .mcopy) → s.stack.val.length < 3 →
       Rule s (.exception s .stackUnderflow)
   | mcopyGas (s destination source length xs) : At s (some .mcopy) →

@@ -224,7 +224,7 @@ It charges the base, rounded copy words and expansion for both ranges before cop
 The copy reads the input snapshot, so overlapping ranges work in either direction.
 Empty ranges do not expand memory, even at the largest word offset.
 The frame proofs derive the exact gas, allocation and byte observations from a successful step.
-`PureMemoryStep` excludes `mcopy` as well as the other memory instructions.
+`PureMemoryStep` excludes `calldatacopy`, `codecopy`, `mcopy`, and the other memory instructions.
 
 A load entirely beyond valid allocation returns zero.
 For any prefix length `k <= 32`, a load whose remaining bytes are outside allocation
@@ -279,7 +279,7 @@ The decoder and scanner do not model frames, gas, stack effects or instruction e
 
 # Restricted frame execution
 
-The frame runner supports STOP, JUMP, JUMPI, JUMPDEST, PC, MSIZE, GAS, MLOAD, MSTORE, MSTORE8, MCOPY, CALLDATALOAD, CALLDATASIZE, CODESIZE, PUSH0 through PUSH32, POP, arithmetic, comparison and bitwise instructions, DUP1 through DUP16, and SWAP1 through SWAP16.
+The frame runner supports STOP, JUMP, JUMPI, JUMPDEST, PC, MSIZE, GAS, MLOAD, MSTORE, MSTORE8, MCOPY, CALLDATALOAD, CALLDATASIZE, CALLDATACOPY, CODESIZE, CODECOPY, PUSH0 through PUSH32, POP, arithmetic, comparison and bitwise instructions, DUP1 through DUP16, and SWAP1 through SWAP16.
 The implemented arithmetic and bitwise instructions are ADD, MUL, SUB, DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD, EXP, LT, GT, SLT, SGT, EQ, ISZERO, AND, OR, XOR, NOT, SHL, SHR, SAR, BYTE and SIGNEXTEND.
 The arithmetic, comparison and bitwise instructions have independent success, underflow and out-of-gas rules.
 Operand checks precede charging gas.
@@ -376,3 +376,29 @@ The result is exact when that reserve is below 2^256.
 
 The integration audit covers this restricted subset and its stated source-domain bounds.
 An agent inspected the pinned sources; that inspection is not human approval or a Python-to-Lean proof.
+
+## Input copying (09c2)
+
+CALLDATACOPY reads the immutable message input.
+CODECOPY reads the executing frame code.
+Each pops destination, source and length before charging gas.
+The charge covers the rounded length and destination expansion.
+The source never expands memory.
+Bytes beyond the source are zero.
+An empty copy leaves memory unchanged at any offsets.
+
+`CallData.readRange` accepts natural offsets and lengths.
+It builds exactly the requested number of bytes.
+Callers must check gas before requesting a potentially large range.
+Frame operands are 256-bit words and range arithmetic uses natural numbers.
+The helper also accepts natural numbers outside the source word domain.
+
+`Frame.inputCopy_helper_success_output` applies to any byte array and any frame counter.
+It derives bytes and preserved fields from a successful helper call.
+`Frame.inputCopy_success_output` derives the same facts from a successful step.
+`Frame.inputCopy_then_mload_actual` relates a 32-byte copy and a following load.
+`Frame.inputCopy_then_mload_program` constructs both steps from code and gas premises.
+`PureMemoryStep` now excludes both input-copy instructions.
+Consumers constructing a pure-step proof must establish those extra exclusions.
+The independent rules include both instructions and `step_iff_rule` remains unconditional.
+The pinned source review is manual and does not prove Python-to-Lean equivalence.

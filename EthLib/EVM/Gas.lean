@@ -53,6 +53,13 @@ Expansion covers both source and destination in one charge.
 def mcopyCost (old destination source length : Nat) : Nat :=
   3 + 3 * ((length + 31) / 32) + pairCost old source length destination length
 
+/-- Cancun `instructions/environment.py`, `calldatacopy` and `codecopy`.
+
+Only the destination range expands memory.
+-/
+def inputCopyCost (old destination length : Nat) : Nat :=
+  3 + 3 * ((length + 31) / 32) + rangeCost old destination length
+
 /-- Charge before expanding the logical allocation. -/
 def chargeExpand (gas : Nat) (s : State) (offset length : Nat) : Except Error (Nat × State) :=
   match charge gas (rangeCost s.words offset length) with

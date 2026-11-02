@@ -61,3 +61,22 @@ example (s t : Frame.State) (x y z : Word) (xs : List Word)
     Memory.readByte t.memory.store (x.toNat + i) =
       Memory.readByte s.memory.store (y.toNat + i) :=
   (Frame.mcopy_success_output s t x y z xs at_ items run).2.2.2.2.2.1 i hi
+
+-- The public helper accepts data unrelated to the frame and any program counter.
+example (s t : Frame.State) (data : ByteArray) (x y z : Word) (xs : List Word)
+    (items : s.stack.val = x :: y :: z :: xs)
+    (run : Frame.inputCopy s data = .continue t) (i : Nat) (hi : i < z.toNat) :
+    t.pc = s.pc + 1 ∧ t.code = s.code ∧ t.context = s.context ∧
+      Memory.readByte t.memory.store (x.toNat + i) =
+        PushImmediate.byteAt data (y.toNat + i) := by
+  have output := Frame.inputCopy_helper_success_output s t data x y z xs items run
+  exact ⟨output.2.2.1, output.1, output.2.1, output.2.2.2.2.2.2.1 i hi⟩
+
+-- A caller can derive zero padding without relating the data to the frame.
+example (s t : Frame.State) (data : ByteArray) (x y z : Word) (xs : List Word)
+    (items : s.stack.val = x :: y :: z :: xs)
+    (run : Frame.inputCopy s data = .continue t) (i : Nat) (hi : i < z.toNat)
+    (outside : data.size ≤ y.toNat + i) :
+    Memory.readByte t.memory.store (x.toNat + i) = 0 := by
+  rw [(Frame.inputCopy_helper_success_output s t data x y z xs items run).2.2.2.2.2.2.1 i hi]
+  exact Proofs.PushImmediate.byteAt_out_of_range data (y.toNat + i) outside

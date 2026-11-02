@@ -11,6 +11,36 @@ namespace EthLib.EVM.Proofs.CallData
 
 open EthLib.EVM.CallData
 
+/-- A padded range has the requested length. -/
+theorem readRange_length (data : ByteArray) (offset length : Nat) :
+    (readRange data offset length).length = length := by
+  simp [readRange]
+
+/-- Each position uses the full natural source offset. -/
+theorem readRange_get (data : ByteArray) (offset length i : Nat) (h : i < length) :
+    (readRange data offset length)[i]'(by simp [readRange, h]) =
+      PushImmediate.byteAt data (offset + i) := by
+  simp [readRange]
+
+/-- A position beyond the source is zero. -/
+theorem readRange_pad (data : ByteArray) (offset length i : Nat) (h : i < length)
+    (outside : data.size ≤ offset + i) :
+    (readRange data offset length)[i]'(by simp [readRange, h]) = 0 := by
+  rw [readRange_get data offset length i h]
+  exact PushImmediate.byteAt_out_of_range _ _ outside
+
+/-- A position inside the source returns its byte. -/
+theorem readRange_in_range (data : ByteArray) (offset length i : Nat) (h : i < length)
+    (inside : offset + i < data.size) :
+    (readRange data offset length)[i]'(by simp [readRange, h]) = data[offset + i] := by
+  rw [readRange_get data offset length i h]
+  exact PushImmediate.byteAt_in_range _ _ inside
+
+/-- An empty range allocates no list elements, at any offset. -/
+theorem readRange_zero (data : ByteArray) (offset : Nat) :
+    readRange data offset 0 = [] := by
+  simp [readRange]
+
 /-- Every read contains exactly 32 bytes. -/
 theorem bytes_length (ctx : Context) (offset : Word) :
     (bytes ctx offset).length = 32 := by

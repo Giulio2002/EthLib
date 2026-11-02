@@ -82,6 +82,20 @@ theorem pairCost_telescope (old a n b m : Nat) :
       rangeCost (max old (requiredWords a n)) b m := by
   exact (expansion_telescope old (requiredWords a n) (requiredWords b m)).symm
 
+/-- An empty input copy pays only its base charge at every destination. -/
+theorem inputCopyCost_zero (old destination : Nat) :
+    inputCopyCost old destination 0 = 3 := by
+  simp [inputCopyCost, rangeCost_zero]
+
+/-- Input copying charges rounded words and destination expansion. -/
+theorem inputCopyCost_rounding (old destination length : Nat) :
+    inputCopyCost old destination length =
+      3 + 3 * requiredWords 0 length + rangeCost old destination length := by
+  by_cases h : length = 0
+  · subst length
+    simp [inputCopyCost, requiredWords]
+  · simp [inputCopyCost, requiredWords, h]
+
 /-- An empty copy pays only its base charge, regardless of either offset. -/
 theorem mcopyCost_zero (old destination source : Nat) :
     mcopyCost old destination source 0 = 3 := by
