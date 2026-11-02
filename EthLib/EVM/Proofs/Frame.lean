@@ -2521,6 +2521,17 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
           · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
             exact ⟨_, .observationFull s o atO gas full⟩
         · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
+      | slotnum =>
+        let o := Observation.slotnum
+        have atO : At s (some o.opcode) := at_
+        by_cases gas : 2 ≤ s.gas
+        · by_cases room : s.stack.val.length < 1024
+          · let stack : Stack := ⟨BitVec.ofNat 256 (o.value s) :: s.stack.val, by simp; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
+            exact ⟨_, .observation s t o atO gas room (by simp [Advances, t, stack])⟩
+          · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+            exact ⟨_, .observationFull s o atO gas full⟩
+        · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
       | prevrandao =>
         let o := Observation.prevrandao
         have atO : At s (some o.opcode) := at_

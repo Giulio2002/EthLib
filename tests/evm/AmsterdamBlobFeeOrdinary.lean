@@ -3,7 +3,7 @@ import EthLib.EVM
 open EthLib.EVM
 
 private def env : Environment.Context :=
-  ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10000000, [], [], BlobFee.amsterdam⟩
+  ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10000000, [], [], BlobFee.amsterdam⟩
 
 private def state : Frame.State :=
   ⟨⟨#[0x4a]⟩, 0, Stack.empty, 2, Memory.Allocation.empty,

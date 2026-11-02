@@ -4,7 +4,8 @@ module
 # Opcode bytes for the implemented target subset
 
 The source is execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`,
-Cancun `vm.instructions.Ops` and `op_implementation`, with CLZ from Osaka.
+Cancun `vm.instructions.Ops` and `op_implementation`, with CLZ from Osaka
+and SLOTNUM from Amsterdam.
 The designated INVALID byte is named by the Shanghai Yellow Paper Appendix H.2.
 Decoding an opcode does not implement its execution.
 -/
@@ -13,7 +14,7 @@ Decoding an opcode does not implement its execution.
 
 namespace EthLib.EVM
 
-/-- Cancun opcode bytes plus Osaka CLZ, including the designated INVALID byte. -/
+/-- Cancun opcode bytes plus Osaka CLZ and Amsterdam SLOTNUM, including INVALID. -/
 inductive Opcode where
   | stop
   | add
@@ -63,6 +64,7 @@ inductive Opcode where
   | coinbase
   | timestamp
   | number
+  | slotnum
   | prevrandao
   | gaslimit
   | chainid
@@ -157,6 +159,7 @@ def decode (byte : UInt8) : Option Opcode :=
   | 0x40 => some .blockhash
   | 0x41 => some .coinbase
   | 0x42 => some .timestamp
+  | 0x4b => some .slotnum
   | 0x43 => some .number
   | 0x44 => some .prevrandao
   | 0x45 => some .gaslimit
@@ -262,9 +265,13 @@ def decode (byte : UInt8) : Option Opcode :=
   | 0xa4 => some (.log ⟨4, by decide⟩)
   | _ => none
 
-/-- The historical Cancun classifier does not assign CLZ. -/
+/-- The historical Cancun classifier does not assign CLZ or SLOTNUM. -/
 def decodeCancun (byte : UInt8) : Option Opcode :=
-  if byte = 0x1e then none else decode byte
+  if byte = 0x1e ∨ byte = 0x4b then none else decode byte
+
+/-- Cancun plus Osaka CLZ, without Amsterdam SLOTNUM. -/
+def decodeCancunClz (byte : UInt8) : Option Opcode :=
+  if byte = 0x4b then none else decode byte
 
 /-- Encode each opcode as its unique byte. -/
 def encode : Opcode → UInt8
@@ -315,6 +322,7 @@ def encode : Opcode → UInt8
   | .blockhash => 0x40
   | .coinbase => 0x41
   | .timestamp => 0x42
+  | .slotnum => 0x4b
   | .number => 0x43
   | .prevrandao => 0x44
   | .gaslimit => 0x45

@@ -5,7 +5,7 @@ open EthLib.EVM
 
 def memoryFrame (code : ByteArray) (gas : Nat) (xs : List Word)
     (bound : xs.length ≤ 1024) : Frame.State :=
-  ⟨code, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty⟩
+  ⟨code, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty⟩
 
 -- Offset is the top operand; the unaligned write crosses a word boundary.
 /-- info: ([0, 64, 4660], 0) -/
