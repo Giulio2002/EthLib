@@ -1598,6 +1598,148 @@ theorem step_unsupported (s : State) (op : Opcode) (h : At s (some op))
   obtain ⟨bounds, decoded⟩ := h
   cases op <;> simp_all [Unsupported, step]
 
+/-- Fields determine a memory-effect frame up to proof irrelevance. -/
+theorem advancesMemory_eq (s t : State) (memory : Memory.Allocation.State)
+    (valid : Memory.Allocation.Valid memory) (pc gas : Nat) (stack : Stack)
+    (h : AdvancesMemory s t memory pc gas stack.val) :
+    t = { s with memory, memoryValid := valid, pc, gas, stack } := by
+  rcases h with ⟨code, mem, pcEq, gasEq, stackEq⟩
+  have stackEq' : t.stack = stack := Subtype.ext stackEq
+  cases s
+  cases t
+  simp_all
+
+/-- MLOAD checks the stack before gas. -/
+theorem step_mload_empty (s : State) (h : At s (some .mload))
+    (empty : s.stack.val = []) : step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr empty
+  simp [step, bounds, decoded, pop, failStack]
+
+/-- MLOAD charges the full expansion cost. -/
+theorem step_mload_gas (s : State) (x : Word) (xs : List Word)
+    (h : At s (some .mload)) (items : s.stack.val = x :: xs)
+    (gas : s.gas < 3 + Gas.rangeCost s.memory.words x.toNat 32) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let stack : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+  have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  simp [step, bounds, decoded, pop, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- A successful MLOAD reads the selected word and expands memory. -/
+theorem step_mload (s t : State) (x : Word) (xs : List Word)
+    (h : At s (some .mload)) (items : s.stack.val = x :: xs)
+    (gas : 3 + Gas.rangeCost s.memory.words x.toNat 32 ≤ s.gas)
+    (fields : AdvancesMemory s t (Memory.Allocation.loadWord s.memory x.toNat).2
+      (s.pc + 1) (s.gas - (3 + Gas.rangeCost s.memory.words x.toNat 32))
+      ((Memory.Allocation.loadWord s.memory x.toNat).1 :: xs)) : step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let stack : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  let final : Stack := ⟨(Memory.Allocation.loadWord s.memory x.toNat).1 :: xs,
+    by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have push : stack.push (Memory.Allocation.loadWord s.memory x.toNat).1 = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advancesMemory_eq s t _ (Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid)
+    (s.pc + 1) (s.gas - (3 + Gas.rangeCost s.memory.words x.toNat 32)) final fields
+  simp only [step, dite_eq_left bounds, decoded, pop, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+  rfl
+
+/-- MSTORE checks both operands before gas. -/
+theorem step_mstore_empty (s : State) (h : At s (some .mstore))
+    (short : s.stack.val.length < 2) : step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  cases items : s.stack.val with
+  | nil =>
+    have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr items
+    simp [step, bounds, decoded, pop, failStack]
+  | cons x xs =>
+    cases xs with
+    | nil =>
+      let stack : Stack := Stack.empty
+      have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+      have pop2 : stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+      simp [step, bounds, decoded, pop, pop2, failStack]
+    | cons y ys => simp [items] at short; omega
+
+/-- MSTORE fails when gas cannot cover expansion. -/
+theorem step_mstore_gas (s : State) (x y : Word) (xs : List Word)
+    (h : At s (some .mstore)) (items : s.stack.val = x :: y :: xs)
+    (gas : s.gas < 3 + Gas.rangeCost s.memory.words x.toNat 32) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let second : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  simp [step, bounds, decoded, p1, p2, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- Successful MSTORE stores the value and expands memory. -/
+theorem step_mstore (s t : State) (x y : Word) (xs : List Word)
+    (h : At s (some .mstore)) (items : s.stack.val = x :: y :: xs)
+    (gas : 3 + Gas.rangeCost s.memory.words x.toNat 32 ≤ s.gas)
+    (fields : AdvancesMemory s t (Memory.Allocation.storeWord s.memory x.toNat y)
+      (s.pc + 1) (s.gas - (3 + Gas.rangeCost s.memory.words x.toNat 32)) xs) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let second : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have update := advancesMemory_eq s t _ (Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid)
+    (s.pc + 1) (s.gas - (3 + Gas.rangeCost s.memory.words x.toNat 32)) second fields
+  simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas]
+  rw [update]
+  rfl
+
+/-- MSTORE8 checks both operands before gas. -/
+theorem step_mstore8_empty (s : State) (h : At s (some .mstore8))
+    (short : s.stack.val.length < 2) : step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  cases items : s.stack.val with
+  | nil =>
+    have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr items
+    simp [step, bounds, decoded, pop, failStack]
+  | cons x xs =>
+    cases xs with
+    | nil =>
+      let stack : Stack := Stack.empty
+      have pop : s.stack.pop = .ok (x, stack) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+      have pop2 : stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr rfl
+      simp [step, bounds, decoded, pop, pop2, failStack]
+    | cons y ys => simp [items] at short; omega
+
+/-- MSTORE8 fails when gas cannot cover expansion. -/
+theorem step_mstore8_gas (s : State) (x y : Word) (xs : List Word)
+    (h : At s (some .mstore8)) (items : s.stack.val = x :: y :: xs)
+    (gas : s.gas < 3 + Gas.rangeCost s.memory.words x.toNat 1) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let second : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  simp [step, bounds, decoded, p1, p2, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- Successful MSTORE8 stores the value and expands memory. -/
+theorem step_mstore8 (s t : State) (x y : Word) (xs : List Word)
+    (h : At s (some .mstore8)) (items : s.stack.val = x :: y :: xs)
+    (gas : 3 + Gas.rangeCost s.memory.words x.toNat 1 ≤ s.gas)
+    (fields : AdvancesMemory s t (Memory.Allocation.storeByte s.memory x.toNat y)
+      (s.pc + 1) (s.gas - (3 + Gas.rangeCost s.memory.words x.toNat 1)) xs) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let first : Stack := ⟨y :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let second : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have p1 : s.stack.pop = .ok (x, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have p2 : first.pop = .ok (y, second) := (Proofs.Stack.pop_ok_iff _ _ _).mpr rfl
+  have update := advancesMemory_eq s t _ (Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid)
+    (s.pc + 1) (s.gas - (3 + Gas.rangeCost s.memory.words x.toNat 1)) second fields
+  simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas]
+  rw [update]
+  rfl
+
 /-- Every relational rule is accepted by the executable step. -/
 theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out := by
   cases h with
@@ -1605,6 +1747,15 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | stop at_ => exact step_stop _ at_
   | invalid at_ => rcases at_ with h | h; exact step_unassigned _ h; exact step_invalid _ h
   | unsupported op at_ unsupported => exact step_unsupported _ op at_ unsupported
+  | mloadEmpty at_ empty => exact step_mload_empty _ at_ empty
+  | mloadGas x xs at_ items gas => exact step_mload_gas _ x xs at_ items gas
+  | mload t x xs at_ items gas fields => exact step_mload _ t x xs at_ items gas fields
+  | mstoreEmpty at_ empty => exact step_mstore_empty _ at_ empty
+  | mstoreGas x y xs at_ items gas => exact step_mstore_gas _ x y xs at_ items gas
+  | mstore t x y xs at_ items gas fields => exact step_mstore _ t x y xs at_ items gas fields
+  | mstore8Empty at_ empty => exact step_mstore8_empty _ at_ empty
+  | mstore8Gas x y xs at_ items gas => exact step_mstore8_gas _ x y xs at_ items gas
+  | mstore8 t x y xs at_ items gas fields => exact step_mstore8 _ t x y xs at_ items gas fields
   | jumpEmpty at_ empty => exact step_jump_empty _ at_ empty
   | jumpGas x xs at_ items gas => exact step_jump_gas _ x xs at_ items gas
   | jumpInvalid x xs at_ items gas invalid => exact step_jump_invalid _ x xs at_ items gas invalid
@@ -2123,6 +2274,40 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
             exact ⟨_, .swap s t i depth at_ gas (by simp [Advances, t, stack])⟩
           · exact ⟨_, .swapEmpty s i at_ gas (Nat.le_of_not_gt depth)⟩
         · exact ⟨_, .swapGas s i at_ (Nat.lt_of_not_ge gas)⟩
+      | mload =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .mloadEmpty s at_ items⟩
+        | cons x xs =>
+          by_cases gas : 3 + Gas.rangeCost s.memory.words x.toNat 32 ≤ s.gas
+          · let stack : Stack := ⟨(Memory.Allocation.loadWord s.memory x.toNat).1 :: xs,
+              by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+            let t : State := { s with stack, pc := s.pc + 1, gas := s.gas - (3 + Gas.rangeCost s.memory.words x.toNat 32), memory := (Memory.Allocation.loadWord s.memory x.toNat).2, memoryValid := Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid }
+            exact ⟨_, .mload s t x xs at_ items gas (by simp [AdvancesMemory, t, stack])⟩
+          · exact ⟨_, .mloadGas s x xs at_ items (Nat.lt_of_not_ge gas)⟩
+      | mstore =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .mstoreEmpty s at_ (by simp [items])⟩
+        | cons x xs =>
+          cases xs with
+          | nil => exact ⟨_, .mstoreEmpty s at_ (by simp [items])⟩
+          | cons y ys =>
+            by_cases gas : 3 + Gas.rangeCost s.memory.words x.toNat 32 ≤ s.gas
+            · let stack : Stack := ⟨ys, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+              let t : State := { s with stack, pc := s.pc + 1, gas := s.gas - (3 + Gas.rangeCost s.memory.words x.toNat 32), memory := Memory.Allocation.storeWord s.memory x.toNat y, memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
+              exact ⟨_, .mstore s t x y ys at_ items gas (by simp [AdvancesMemory, t, stack])⟩
+            · exact ⟨_, .mstoreGas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
+      | mstore8 =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .mstore8Empty s at_ (by simp [items])⟩
+        | cons x xs =>
+          cases xs with
+          | nil => exact ⟨_, .mstore8Empty s at_ (by simp [items])⟩
+          | cons y ys =>
+            by_cases gas : 3 + Gas.rangeCost s.memory.words x.toNat 1 ≤ s.gas
+            · let stack : Stack := ⟨ys, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+              let t : State := { s with stack, pc := s.pc + 1, gas := s.gas - (3 + Gas.rangeCost s.memory.words x.toNat 1), memory := Memory.Allocation.storeByte s.memory x.toNat y, memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s.memoryValid }
+              exact ⟨_, .mstore8 s t x y ys at_ items gas (by simp [AdvancesMemory, t, stack])⟩
+            · exact ⟨_, .mstore8Gas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
       | _ => exact ⟨_, .unsupported s _ at_ (by trivial)⟩
   · exact ⟨_, .endCode s (Nat.le_of_not_gt bounds)⟩
 
@@ -2149,15 +2334,29 @@ theorem step_not_revert (s input : State) (gas : Nat) (output : ByteArray) :
   intro h
   exact rule_not_revert s input gas output ((step_iff_rule s _).mp h)
 
-/-- Every continuing instruction preserves code and memory. -/
-theorem continue_unchanged {s t : State} (h : step s = .continue t) :
-    t.code = s.code ∧ t.memory = s.memory := by
+/-- Every continuing instruction preserves code. -/
+theorem continue_code_unchanged {s t : State} (h : step s = .continue t) :
+    t.code = s.code := by
   have rule := (step_iff_rule s _).mp h
-  cases rule <;> simp_all [Advances]
+  cases rule <;> simp_all [Advances, AdvancesMemory]
 
-/-- Every outcome preserves the input code and allocated memory. -/
-theorem outcome_unchanged {s : State} {out : Outcome} (h : Rule s out) :
-    out.frame.code = s.code ∧ out.frame.memory = s.memory := by
-  cases h <;> simp_all [Outcome.frame, Advances]
+/-- Every outcome preserves the input code. -/
+theorem outcome_code_unchanged {s : State} {out : Outcome} (h : Rule s out) :
+    out.frame.code = s.code := by
+  cases h <;> simp_all [Outcome.frame, Advances, AdvancesMemory]
+
+/-- A frame whose current instruction is outside the memory access subset. -/
+def PureMemoryStep (s : State) : Prop :=
+  ¬ At s (some .mload) ∧ ¬ At s (some .mstore) ∧ ¬ At s (some .mstore8)
+
+/-- A pure instruction preserves memory for every outcome. -/
+theorem outcome_memory_unchanged_of_pure {s : State} {out : Outcome}
+    (pure : PureMemoryStep s) (h : Rule s out) : out.frame.memory = s.memory := by
+  cases h <;> simp_all [PureMemoryStep, Outcome.frame, Advances]
+
+/-- A continuing pure instruction preserves memory. -/
+theorem continue_memory_unchanged_of_pure {s t : State}
+    (pure : PureMemoryStep s) (h : step s = .continue t) : t.memory = s.memory := by
+  exact outcome_memory_unchanged_of_pure pure ((step_iff_rule s _).mp h)
 
 end EthLib.EVM.Frame
