@@ -271,9 +271,12 @@ The decoder and scanner do not model frames, gas, stack effects or instruction e
 
 # Restricted frame execution
 
-The frame runner supports STOP, PUSH0 through PUSH32, POP, ADD, MUL, SUB, DIV, MOD, SDIV, SMOD, LT, GT, SLT, SGT, EQ, ISZERO, AND, OR, XOR, NOT, DUP1 through DUP16, and SWAP1 through SWAP16.
+The frame runner supports STOP, PUSH0 through PUSH32, POP, ADD, MUL, SUB, DIV, MOD, SDIV, SMOD, LT, GT, SLT, SGT, EQ, ISZERO, AND, OR, XOR, NOT, SHL, SHR, SAR, BYTE, SIGNEXTEND, DUP1 through DUP16, and SWAP1 through SWAP16.
 The arithmetic, comparison and bitwise instructions have independent success, underflow and out-of-gas rules.
-Operand checks precede charging gas; the first-popped word is the left operand.
+Operand checks precede charging gas.
+For shifts and byte operations, the first-popped word is the count or index.
+BYTE indexes from the most significant byte.
+SAR rounds a negative quotient down.
 Their numeric refinement theorems compose the instruction rules with the existing word contracts.
 Other assigned Cancun opcodes return a distinct unsupported tooling result.
 Unassigned bytes and INVALID cause exceptional halts.

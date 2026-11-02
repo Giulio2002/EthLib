@@ -3,6 +3,8 @@ module
 public import EthLib.EVM.Proofs.Frame
 public import EthLib.EVM.Proofs.Word.Comparisons
 public import EthLib.EVM.Proofs.Word.Bitwise
+public import EthLib.EVM.Proofs.Word.Shifts
+public import EthLib.EVM.Proofs.Word.ByteSignExtend
 
 /-! # Comparison and bitwise frame refinements
 
@@ -82,5 +84,79 @@ theorem step_not_numeric (s t : State) (x : Word) (xs : List Word)
     (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.bitwiseNot x :: xs)) :
     step s = .continue t ∧ (Word.bitwiseNot x).toNat = Word.modulus - 1 - x.toNat :=
   ⟨step_not s t x xs at_ items gas fields, Proofs.Word.Bitwise.not_nat x⟩
+
+/-- The SHL transition and its numeric result. -/
+theorem step_shl_numeric (s t : State) (x y : Word) (xs : List Word)
+    (at_ : At s (some .shl)) (items : s.stack.val = x :: y :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.shl x y :: xs)) :
+    step s = .continue t ∧ ((Word.shl x y).toNat =
+      if x.toNat < 256 then (y.toNat * 2 ^ x.toNat) % (2 ^ 256) else 0) :=
+  ⟨step_shl s t x y xs at_ items gas fields, Proofs.Word.Shifts.shl_refines x y⟩
+
+/-- The SHR transition and its numeric result. -/
+theorem step_shr_numeric (s t : State) (x y : Word) (xs : List Word)
+    (at_ : At s (some .shr)) (items : s.stack.val = x :: y :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.shr x y :: xs)) :
+    step s = .continue t ∧ ((Word.shr x y).toNat =
+      if x.toNat < 256 then y.toNat / 2 ^ x.toNat else 0) :=
+  ⟨step_shr s t x y xs at_ items gas fields, Proofs.Word.Shifts.shr_refines x y⟩
+
+/-- The SAR transition and its numeric result. -/
+theorem step_sar_numeric (s t : State) (x y : Word) (xs : List Word)
+    (at_ : At s (some .sar)) (items : s.stack.val = x :: y :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.sar x y :: xs)) :
+    step s = .continue t ∧ (Word.signed (Word.sar x y) =
+      if x.toNat < 256 then Word.signed y / (2 ^ x.toNat : Int)
+      else if Word.signed y < 0 then -1 else 0) :=
+  ⟨step_sar s t x y xs at_ items gas fields, Proofs.Word.Shifts.sar_refines x y⟩
+
+/-- The BYTE transition and its numeric result. -/
+theorem step_byte_numeric (s t : State) (x y : Word) (xs : List Word)
+    (at_ : At s (some .byte)) (items : s.stack.val = x :: y :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.byte x y :: xs)) :
+    step s = .continue t ∧ ((Word.byte x y).toNat = Proofs.Word.ByteSignExtend.Reference.byte x.toNat y.toNat) :=
+  ⟨step_byte s t x y xs at_ items gas fields, Proofs.Word.ByteSignExtend.byte_refines x y⟩
+
+/-- The SIGNEXTEND transition and its numeric result. -/
+theorem step_signextend_numeric (s t : State) (x y : Word) (xs : List Word)
+    (at_ : At s (some .signextend)) (items : s.stack.val = x :: y :: xs) (gas : 5 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 5) (Word.signextend x y :: xs)) :
+    step s = .continue t ∧ ((Word.signextend x y).toNat = Proofs.Word.ByteSignExtend.Reference.signextend x.toNat y.toNat) :=
+  ⟨step_signextend s t x y xs at_ items gas fields, Proofs.Word.ByteSignExtend.signextend_refines x y⟩
+
+/-- BYTE produces one big-endian byte, or zero beyond the word. -/
+theorem step_byte_bounds (s t : State) (x y : Word) (xs : List Word)
+    (at_ : At s (some .byte)) (items : s.stack.val = x :: y :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (Word.byte x y :: xs)) :
+    step s = .continue t ∧ (Word.byte x y).toNat < 256 ∧
+      (32 ≤ x.toNat → Word.byte x y = 0) :=
+  ⟨step_byte s t x y xs at_ items gas fields, Proofs.Word.ByteSignExtend.byte_lt x y,
+    Proofs.Word.ByteSignExtend.byte_out_of_range x y⟩
+
+/-- SIGNEXTEND copies the selected sign bit to every upper bit. -/
+theorem step_signextend_bits (s t : State) (x y : Word) (xs : List Word) (k : Nat)
+    (at_ : At s (some .signextend)) (items : s.stack.val = x :: y :: xs) (gas : 5 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 5) (Word.signextend x y :: xs))
+    (h : x.toNat < 32) (hk : 8 * (x.toNat + 1) ≤ k) (hk256 : k < 256) :
+    step s = .continue t ∧
+      (Word.signextend x y).getLsbD k = y.getLsbD (8 * (x.toNat + 1) - 1) :=
+  ⟨step_signextend s t x y xs at_ items gas fields,
+    Proofs.Word.ByteSignExtend.signextend_upper_bit x y h k hk hk256⟩
+
+/-- Large SIGNEXTEND indices leave the input word unchanged. -/
+theorem step_signextend_large (s t : State) (x y : Word) (xs : List Word)
+    (at_ : At s (some .signextend)) (items : s.stack.val = x :: y :: xs) (gas : 5 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 5) (Word.signextend x y :: xs))
+    (h : 32 ≤ x.toNat) : step s = .continue t ∧ Word.signextend x y = y :=
+  ⟨step_signextend s t x y xs at_ items gas fields,
+    Proofs.Word.ByteSignExtend.signextend_out_of_range x y h⟩
+
+/-- Selecting all bytes leaves the input word unchanged. -/
+theorem step_signextend_31 (s t : State) (y : Word) (xs : List Word)
+    (at_ : At s (some .signextend)) (items : s.stack.val = 31 :: y :: xs) (gas : 5 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 5) (Word.signextend 31 y :: xs)) :
+    step s = .continue t ∧ Word.signextend 31 y = y :=
+  ⟨step_signextend s t 31 y xs at_ items gas fields,
+    Proofs.Word.ByteSignExtend.signextend_31 y⟩
 
 end EthLib.EVM.Frame
