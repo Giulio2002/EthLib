@@ -6,10 +6,12 @@ public import EthLib.EVM.Frame
 # Frame transition rules
 
 These rules state stack and gas conditions without invoking the executable step.
-The source is Cancun execution-specs revision
+The sources are Cancun execution-specs revision
 `fd9298410ec7218838c8348f69c1eb633f1797dc`, `vm/interpreter.py`,
 `vm/instructions/stack.py`, `arithmetic.py`, `comparison.py`, `bitwise.py`,
 `control_flow.py`, `memory.py`, `block.py`, and `environment.py`.
+CLZ follows Osaka `vm/instructions/bitwise.py`, `count_leading_zeros`, at the same revision.
+The blob fee rule uses the supplied schedule, which can differ from Cancun.
 -/
 
 @[expose] public section
@@ -21,7 +23,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -445,6 +447,11 @@ inductive Rule : State → Outcome → Prop where
       Rule s (.exception s .outOfGas)
   | iszero (s t x xs) : At s (some .iszero) → s.stack.val = x :: xs → 3 ≤ s.gas →
       Advances s t (s.pc + 1) (s.gas - 3) (Word.iszeroResult x :: xs) → Rule s (.continue t)
+  | clzEmpty (s) : At s (some .clz) → s.stack.val = [] → Rule s (.exception s .stackUnderflow)
+  | clzGas (s x xs) : At s (some .clz) → s.stack.val = x :: xs → s.gas < 5 →
+      Rule s (.exception s .outOfGas)
+  | clz (s t x xs) : At s (some .clz) → s.stack.val = x :: xs → 5 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 5) (Word.countLeadingZeros x :: xs) → Rule s (.continue t)
   | notEmpty (s) : At s (some .not) → s.stack.val = [] → Rule s (.exception s .stackUnderflow)
   | notGas (s x xs) : At s (some .not) → s.stack.val = x :: xs → s.gas < 3 →
       Rule s (.exception s .outOfGas)

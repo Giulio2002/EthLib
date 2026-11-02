@@ -6,7 +6,7 @@ open EthLib.EVM
 
 -- This range list is independent of the decoder and matches the supported slice.
 private def supported (n : Nat) : Bool :=
-  n ≤ 0x0b || (0x10 ≤ n && n ≤ 0x1d) || n == 0x20 || (n == 0x30 || (0x32 ≤ n && n ≤ 0x3a)) || n == 0x3d || n == 0x3e || (0x40 ≤ n && n ≤ 0x46) || n == 0x48 || n == 0x49 || n == 0x4a || n == 0x50 || n == 0x51 || n == 0x52 || n == 0x53 ||
+  n ≤ 0x0b || (0x10 ≤ n && n ≤ 0x1e) || n == 0x20 || (n == 0x30 || (0x32 ≤ n && n ≤ 0x3a)) || n == 0x3d || n == 0x3e || (0x40 ≤ n && n ≤ 0x46) || n == 0x48 || n == 0x49 || n == 0x4a || n == 0x50 || n == 0x51 || n == 0x52 || n == 0x53 ||
   (0x56 ≤ n && n ≤ 0x5b) || n == 0x5e || (0x5f ≤ n && n ≤ 0x9f)
 
 private instance (op : Opcode) : Decidable (Frame.Unsupported op) := by
@@ -39,7 +39,7 @@ private def check (n : Nat) : Bool := Id.run do
   (List.range 256).all check)
 
 -- Count the actual decoder and step classifications across unique bytes.
-/-- info: (125, 23, 107, 1) -/
+/-- info: (126, 23, 106, 1) -/
 #guard_msgs in
 #eval Id.run do
   let mut supportedCount := 0
@@ -59,7 +59,7 @@ private def check (n : Nat) : Bool := Id.run do
   return (supportedCount, unsupportedCount, unassignedCount, invalidCount)
 
 -- Count the outcomes produced by executable dispatch.
-/-- info: (125, 23, 108) -/
+/-- info: (126, 23, 107) -/
 #guard_msgs in
 #eval Id.run do
   let mut executed := 0
@@ -71,3 +71,16 @@ private def check (n : Nat) : Bool := Id.run do
     | .unsupported _ _ => unsupported := unsupported + 1
     | _ => executed := executed + 1
   return (executed, unsupported, invalid)
+
+-- The historical Cancun classifier retains the original byte classification.
+/-- info: (149, 107) -/
+#guard_msgs in
+#eval Id.run do
+  let mut assigned := 0
+  let mut gaps := 0
+  for n in List.range 256 do
+    if (Opcode.decodeCancun (UInt8.ofNat n)).isSome then
+      assigned := assigned + 1
+    else
+      gaps := gaps + 1
+  return (assigned, gaps)

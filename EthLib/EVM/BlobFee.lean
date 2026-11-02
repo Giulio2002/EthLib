@@ -3,12 +3,14 @@ module
 public import EthLib.EVM.Word
 
 /-!
-# Cancun blob fee arithmetic
+# Blob fee arithmetic
 
 Cancun execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`,
 `ethereum/utils/numeric.py`, `taylor_exponential`, defines the integer recurrence.
 `vm/gas.py`, `calculate_blob_gas_price`, supplies the constants.
 The divisions truncate at every iteration.
+The configured calculation also accepts other positive update fractions.
+The named schedules include Cancun and Amsterdam.
 -/
 
 @[expose] public section

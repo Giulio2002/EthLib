@@ -31,10 +31,10 @@ public import EthLib.EVM.Runner
 256-bit words, result helpers, and logically allocated byte memory.
 Division and remainder include signed and unsigned results.
 Arithmetic includes modular addition and exponentiation results.
-Opcode classification and PUSH immediate decoding follow Cancun.
+Opcode classification includes the historical Cancun classifier and Osaka CLZ.
 Bounded stack helpers.
-The frame runner implements a restricted Cancun instruction subset.
+The frame runner implements a restricted Cancun-based subset plus Osaka CLZ.
 It does not implement fork selection or whole-EVM execution.
-Cancun opcode decoding includes jump destination scanning.
+PUSH immediate decoding and jump destination scanning follow Cancun.
 Precompiles belong to the Execution domain.
 -/
