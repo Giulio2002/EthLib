@@ -54,7 +54,7 @@ theorem decode_eq_some_iff (b : UInt8) (op : Opcode) :
 The Cancun EELS `Ops` enum supplies the dispatched pairs.
 Yellow Paper Appendix H.2 supplies the designated INVALID byte.
 Osaka execution-specs `vm.instructions.Ops` supplies CLZ.
-Amsterdam `vm.instructions.Ops` supplies SLOTNUM.
+Amsterdam `vm.instructions.Ops` supplies SLOTNUM, DUPN, SWAPN and EXCHANGE.
 -/
 def reference : List (UInt8 × Opcode) := [
   (0x00, .stop),
@@ -198,6 +198,9 @@ def reference : List (UInt8 × Opcode) := [
   (0xa2, .log ⟨2, by decide⟩),
   (0xa3, .log ⟨3, by decide⟩),
   (0xa4, .log ⟨4, by decide⟩),
+  (0xe6, .dupn),
+  (0xe7, .swapn),
+  (0xe8, .exchange),
   (0xf0, .create),
   (0xf1, .call),
   (0xf2, .callcode),
@@ -210,7 +213,7 @@ def reference : List (UInt8 × Opcode) := [
   (0xff, .selfdestruct)]
 
 /-- The historical Cancun table excludes the later CLZ and SLOTNUM assignments. -/
-def cancunReference : List (UInt8 × Opcode) := reference.filter (fun pair => pair.1 != 0x1e && pair.1 != 0x4b)
+def cancunReference : List (UInt8 × Opcode) := reference.filter (fun pair => pair.1 != 0x1e && pair.1 != 0x4b && pair.1 != 0xe6 && pair.1 != 0xe7 && pair.1 != 0xe8)
 
 set_option maxHeartbeats 4000000 in
 /-- The historical classifier agrees with every entry and gap in the Cancun table. -/
@@ -221,7 +224,7 @@ theorem decodeCancun_reference (b : UInt8) : Opcode.decodeCancun b = cancunRefer
   simpa only [UInt8.ofNat_toNat] using check ⟨b.toNat, UInt8.toNat_lt b⟩
 
 /-- Cancun plus Osaka CLZ excludes the later SLOTNUM assignment. -/
-def cancunClzReference : List (UInt8 × Opcode) := reference.filter (fun pair => pair.1 != 0x4b)
+def cancunClzReference : List (UInt8 × Opcode) := reference.filter (fun pair => pair.1 != 0x4b && pair.1 != 0xe6 && pair.1 != 0xe7 && pair.1 != 0xe8)
 
 set_option maxHeartbeats 4000000 in
 /-- The Cancun-plus-CLZ classifier agrees with the historical table at every byte. -/
@@ -229,6 +232,20 @@ theorem decodeCancunClz_reference (b : UInt8) :
     Opcode.decodeCancunClz b = cancunClzReference.lookup b := by
   have check (n : Fin 256) :
       Opcode.decodeCancunClz (UInt8.ofNat n.val) = cancunClzReference.lookup (UInt8.ofNat n.val) := by
+    fin_cases n <;> decide
+  simpa only [UInt8.ofNat_toNat] using check ⟨b.toNat, UInt8.toNat_lt b⟩
+
+/-- The earlier subset excludes the EIP-8024 assignments. -/
+def cancunClzSlotnumReference : List (UInt8 × Opcode) :=
+  reference.filter (fun pair => pair.1 != 0xe6 && pair.1 != 0xe7 && pair.1 != 0xe8)
+
+set_option maxHeartbeats 4000000 in
+/-- The earlier subset agrees with its table at every byte. -/
+theorem decodeCancunClzSlotnum_reference (b : UInt8) :
+    Opcode.decodeCancunClzSlotnum b = cancunClzSlotnumReference.lookup b := by
+  have check (n : Fin 256) :
+      Opcode.decodeCancunClzSlotnum (UInt8.ofNat n.val) =
+        cancunClzSlotnumReference.lookup (UInt8.ofNat n.val) := by
     fin_cases n <;> decide
   simpa only [UInt8.ofNat_toNat] using check ⟨b.toNat, UInt8.toNat_lt b⟩
 

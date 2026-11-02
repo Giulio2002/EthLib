@@ -3,6 +3,7 @@ module
 public import EthLib.EVM.Frame.Rules
 public import EthLib.EVM.Proofs.Stack
 public import EthLib.EVM.Proofs.JumpDest
+public import EthLib.EVM.Proofs.Frame.StackImmediate
 
 /-!
 # Frame invariants
@@ -2310,6 +2311,71 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | stop at_ => exact step_stop _ at_
   | invalid at_ => rcases at_ with h | h; exact step_unassigned _ h; exact step_invalid _ h
   | unsupported op at_ unsupported => exact step_unsupported _ op at_ unsupported
+  | dupnGas at_ gas =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    exact Proofs.Frame.StackImmediate.dupn_gas _ gas
+  | dupnInvalid at_ gas invalid =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    exact Proofs.Frame.StackImmediate.dupn_invalid _ gas invalid
+  | dupnUnderflow n at_ gas imm depth =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    have err := (Proofs.StackIndexed.dup_underflow_iff _ _).mpr depth
+    exact Proofs.Frame.StackImmediate.dupn_stack_error _ n .underflow gas imm err
+  | dupnOverflow n at_ gas imm depth full =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    have err := (Proofs.StackIndexed.dup_overflow_iff _ _).mpr ⟨depth, full⟩
+    exact Proofs.Frame.StackImmediate.dupn_stack_error _ n .overflow gas imm err
+  | dupn t n depth at_ gas imm room fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    have stack := (Proofs.StackIndexed.dup_ok_iff _ _ _).mpr ⟨depth, room, fields.2.2.2.2.1⟩
+    exact (Proofs.Frame.StackImmediate.dupn_ok_iff _ _).mpr
+      ⟨gas, n, t.stack, imm, stack, advances_eq _ _ _ _ _ (by simpa only [fields.2.2.2.2.1] using fields)⟩
+  | swapnGas at_ gas =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    exact Proofs.Frame.StackImmediate.swapn_gas _ gas
+  | swapnInvalid at_ gas invalid =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    exact Proofs.Frame.StackImmediate.swapn_invalid _ gas invalid
+  | swapnUnderflow n at_ gas imm depth =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    have err := (Proofs.StackIndexed.exchange_underflow_iff s.stack 0 n).mpr (Or.inr depth)
+    exact Proofs.Frame.StackImmediate.swapn_stack_error _ n .underflow gas imm err
+  | swapn t n depth at_ gas imm fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    have zero : 0 < s.stack.height := by omega
+    have stack := (Proofs.StackIndexed.exchange_ok_iff _ _ _ _).mpr
+      ⟨zero, depth, fields.2.2.2.2.1⟩
+    exact (Proofs.Frame.StackImmediate.swapn_ok_iff _ _).mpr
+      ⟨gas, n, t.stack, imm, stack, advances_eq _ _ _ _ _ (by simpa only [fields.2.2.2.2.1] using fields)⟩
+  | exchangeGas at_ gas =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    exact Proofs.Frame.StackImmediate.exchange_gas _ gas
+  | exchangeInvalid at_ gas invalid =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    exact Proofs.Frame.StackImmediate.exchange_invalid _ gas invalid
+  | exchangeUnderflow n m at_ gas imm depth =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    have err := (Proofs.StackIndexed.exchange_underflow_iff _ _ _).mpr depth
+    exact Proofs.Frame.StackImmediate.exchange_stack_error _ n m .underflow gas imm err
+  | exchange t n m hn hm at_ gas imm fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, dite_eq_left bounds, decoded]
+    have stack := (Proofs.StackIndexed.exchange_ok_iff _ _ _ _).mpr
+      ⟨hn, hm, fields.2.2.2.2.1⟩
+    exact (Proofs.Frame.StackImmediate.exchange_ok_iff _ _).mpr
+      ⟨gas, n, m, t.stack, imm, stack, advances_eq _ _ _ _ _ (by simpa only [fields.2.2.2.2.1] using fields)⟩
   | keccakEmpty at_ empty =>
     obtain ⟨bounds, decoded⟩ := at_
     simp only [step, dite_eq_left bounds, decoded]
@@ -2717,6 +2783,50 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
           · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
             exact ⟨_, .pushFull s n at_ gas full⟩
         · exact ⟨_, .pushGas s n at_ (Nat.lt_of_not_ge gas)⟩
+      | dupn =>
+        by_cases gas : 3 ≤ s.gas
+        · cases imm : StackImmediate.decodeSingle (StackImmediate.byte s.code s.pc) with
+          | none => exact ⟨_, .dupnInvalid s at_ gas imm⟩
+          | some n =>
+            by_cases depth : n - 1 < s.stack.height
+            · by_cases room : s.stack.height < 1024
+              · let stack : Stack := ⟨s.stack.toList[n - 1]'depth :: s.stack.toList, by
+                  change (_ :: s.stack.val).length ≤ 1024
+                  simp only [List.length_cons]
+                  change s.stack.height + 1 ≤ 1024
+                  omega⟩
+                let t := { s with stack, pc := s.pc + 2, gas := s.gas - 3 }
+                exact ⟨_, .dupn s t n depth at_ gas imm room (by simp [Advances, t, stack, Stack.toList])⟩
+              · have full : s.stack.height = 1024 := by have := s.stack.property; change s.stack.height ≤ 1024 at this; omega
+                exact ⟨_, .dupnOverflow s n at_ gas imm depth full⟩
+            · exact ⟨_, .dupnUnderflow s n at_ gas imm (Nat.le_of_not_gt depth)⟩
+        · exact ⟨_, .dupnGas s at_ (Nat.lt_of_not_ge gas)⟩
+      | swapn =>
+        by_cases gas : 3 ≤ s.gas
+        · cases imm : StackImmediate.decodeSingle (StackImmediate.byte s.code s.pc) with
+          | none => exact ⟨_, .swapnInvalid s at_ gas imm⟩
+          | some n =>
+            by_cases depth : n < s.stack.height
+            · have zero : 0 < s.stack.height := by omega
+              let stack : Stack := ⟨(s.stack.toList.set 0 (s.stack.toList[n]'depth)).set n (s.stack.toList[0]'zero), by simpa [Stack.toList] using s.stack.property⟩
+              let t := { s with stack, pc := s.pc + 2, gas := s.gas - 3 }
+              exact ⟨_, .swapn s t n depth at_ gas imm (by simp [Advances, t, stack]; rfl)⟩
+            · exact ⟨_, .swapnUnderflow s n at_ gas imm (Nat.le_of_not_gt depth)⟩
+        · exact ⟨_, .swapnGas s at_ (Nat.lt_of_not_ge gas)⟩
+      | exchange =>
+        by_cases gas : 3 ≤ s.gas
+        · cases imm : StackImmediate.decodePair (StackImmediate.byte s.code s.pc) with
+          | none => exact ⟨_, .exchangeInvalid s at_ gas imm⟩
+          | some pair =>
+            obtain ⟨n, m⟩ := pair
+            by_cases hn : n < s.stack.height
+            · by_cases hm : m < s.stack.height
+              · let stack : Stack := ⟨(s.stack.toList.set n (s.stack.toList[m]'hm)).set m (s.stack.toList[n]'hn), by simpa [Stack.toList] using s.stack.property⟩
+                let t := { s with stack, pc := s.pc + 2, gas := s.gas - 3 }
+                exact ⟨_, .exchange s t n m hn hm at_ gas imm (by simp [Advances, t, stack])⟩
+              · exact ⟨_, .exchangeUnderflow s n m at_ gas imm (Or.inr (Nat.le_of_not_gt hm))⟩
+            · exact ⟨_, .exchangeUnderflow s n m at_ gas imm (Or.inl (Nat.le_of_not_gt hn))⟩
+        · exact ⟨_, .exchangeGas s at_ (Nat.lt_of_not_ge gas)⟩
       | jump =>
         cases items : s.stack.val with
         | nil => exact ⟨_, .jumpEmpty s at_ items⟩

@@ -5,7 +5,7 @@ module
 
 The source is execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`,
 Cancun `vm.instructions.Ops` and `op_implementation`, with CLZ from Osaka
-and SLOTNUM from Amsterdam.
+and SLOTNUM and EIP-8024 stack instructions from Amsterdam.
 The designated INVALID byte is named by the Shanghai Yellow Paper Appendix H.2.
 Decoding an opcode does not implement its execution.
 -/
@@ -14,7 +14,7 @@ Decoding an opcode does not implement its execution.
 
 namespace EthLib.EVM
 
-/-- Cancun opcode bytes plus Osaka CLZ and Amsterdam SLOTNUM, including INVALID. -/
+/-- Cancun opcode bytes plus Osaka CLZ and the selected Amsterdam opcodes. -/
 inductive Opcode where
   | stop
   | add
@@ -97,6 +97,9 @@ inductive Opcode where
   | revert
   | invalid
   | selfdestruct
+  | dupn
+  | swapn
+  | exchange
   /-- PUSH0 through PUSH32, indexed by immediate length. -/
   | push (length : Fin 33)
   /-- DUP1 through DUP16, indexed from zero. -/
@@ -183,6 +186,9 @@ def decode (byte : UInt8) : Option Opcode :=
   | 0x5c => some .tload
   | 0x5d => some .tstore
   | 0x5e => some .mcopy
+  | 0xe6 => some .dupn
+  | 0xe7 => some .swapn
+  | 0xe8 => some .exchange
   | 0xf0 => some .create
   | 0xf1 => some .call
   | 0xf2 => some .callcode
@@ -267,11 +273,15 @@ def decode (byte : UInt8) : Option Opcode :=
 
 /-- The historical Cancun classifier does not assign CLZ or SLOTNUM. -/
 def decodeCancun (byte : UInt8) : Option Opcode :=
-  if byte = 0x1e ∨ byte = 0x4b then none else decode byte
+  if byte = 0x1e ∨ byte = 0x4b ∨ byte = 0xe6 ∨ byte = 0xe7 ∨ byte = 0xe8 then none else decode byte
 
 /-- Cancun plus Osaka CLZ, without Amsterdam SLOTNUM. -/
 def decodeCancunClz (byte : UInt8) : Option Opcode :=
-  if byte = 0x4b then none else decode byte
+  if byte = 0x4b ∨ byte = 0xe6 ∨ byte = 0xe7 ∨ byte = 0xe8 then none else decode byte
+
+/-- The prior subset includes CLZ and SLOTNUM but not EIP-8024. -/
+def decodeCancunClzSlotnum (byte : UInt8) : Option Opcode :=
+  if byte = 0xe6 ∨ byte = 0xe7 ∨ byte = 0xe8 then none else decode byte
 
 /-- Encode each opcode as its unique byte. -/
 def encode : Opcode → UInt8
@@ -356,6 +366,9 @@ def encode : Opcode → UInt8
   | .revert => 0xfd
   | .invalid => 0xfe
   | .selfdestruct => 0xff
+  | .dupn => 0xe6
+  | .swapn => 0xe7
+  | .exchange => 0xe8
   | .push n => UInt8.ofNat (0x5f + n.val)
   | .dup n => UInt8.ofNat (0x80 + n.val)
   | .swap n => UInt8.ofNat (0x90 + n.val)

@@ -66,9 +66,10 @@ set_option maxHeartbeats 2000000 in
 /-- Every program counter in this program is free of memory instructions. -/
 theorem program_pure (s : Frame.State) (code : s.code = program) :
     Frame.PureMemoryStep s := by
+  unfold Frame.PureMemoryStep
   have possible : s.pc = 0 ∨ s.pc = 1 ∨ s.pc = 2 ∨ 3 ≤ s.pc := by omega
   rcases possible with pc | pc | pc | pc <;>
-    simp [Frame.PureMemoryStep, Frame.At, code, program, pc, ByteArray.size,
+    simp [Frame.At, code, program, pc, ByteArray.size,
       -ByteArray.size_data, ByteArray.getElem_eq_getElem_data, Opcode.decode]
 
 /-- All bounded outcomes of this program preserve memory. -/

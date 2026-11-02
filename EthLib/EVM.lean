@@ -17,6 +17,7 @@ public import EthLib.EVM.Word.AddMulMod
 public import EthLib.EVM.Word.Exp
 public import EthLib.EVM.Opcode
 public import EthLib.EVM.PushImmediate
+public import EthLib.EVM.StackImmediate
 public import EthLib.EVM.CallData
 public import EthLib.EVM.ReturnData
 public import EthLib.EVM.JumpDest
@@ -32,8 +33,10 @@ public import EthLib.EVM.Runner
 Division and remainder include signed and unsigned results.
 Arithmetic includes modular addition and exponentiation results.
 Bounded stack helpers.
-The frame runner implements a restricted Cancun-based subset plus Osaka CLZ.
+The frame runner implements a restricted Cancun-based subset, Osaka CLZ,
+and the selected Amsterdam opcodes SLOTNUM, DUPN, SWAPN and EXCHANGE.
 It does not implement fork selection or whole-EVM execution.
 The historical Cancun decoder and augmented decoder include PUSH immediates.
+The Amsterdam stack immediates have a separate decoder.
 The existing precompile modules retain their paths and ownership.
 -/

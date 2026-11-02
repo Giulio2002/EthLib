@@ -28,6 +28,8 @@ private def failed (s : Frame.State) (e : Frame.Exception) : Bool :=
  ("push payload", true),
  ("truncated push", true),
  ("invalid before target", true),
+ ("eip8024 invalid immediate target", true),
+ ("eip8024 push masks target", true),
  ("false invalid", true),
  ("false max", true),
  ("condition two", true),
@@ -54,6 +56,8 @@ private def failed (s : Frame.State) (e : Frame.Exception) : Bool :=
   ("push payload", failed (frame ⟨#[0x56, 0x60, 0x5b]⟩ 0 8 [2]) .invalidJumpDestination),
   ("truncated push", failed (frame ⟨#[0x56, 0x62, 0x5b]⟩ 0 8 [2]) .invalidJumpDestination),
   ("invalid before target", continued (frame ⟨#[0x56, 0x0c, 0x5b]⟩ 0 8 [2]) 2 0 []),
+  ("eip8024 invalid immediate target", continued (frame ⟨#[0x56, 0xe6, 0x5b]⟩ 0 8 [2]) 2 0 []),
+  ("eip8024 push masks target", failed (frame ⟨#[0x56, 0xe6, 0x60, 0x5b]⟩ 0 8 [3]) .invalidJumpDestination),
   ("false invalid", continued (frame ⟨#[0x57, 0x00]⟩ 0 10 [1, 0, 42]) 1 0 [42]),
   ("false max", continued (frame ⟨#[0x57]⟩ 0 10 [-1, 0]) 1 0 []),
   ("condition two", continued (frame ⟨#[0x57, 0x5b]⟩ 0 10 [1, 2, 7]) 1 0 [7]),
@@ -97,3 +101,10 @@ private def loopFrame : Frame.State := frame ⟨#[0x5b, 0x5f, 0x56]⟩ 0 11 []
   match Runner.run 4 loopFrame with
   | .exception s .outOfGas => s.pc == 0 && s.gas == 0
   | _ => false)
+
+-- EIP-8024 Specification: the jump reaches 0x5b after the invalid immediate.
+/-- info: true -/
+#guard_msgs in
+#eval match Runner.run 4 (frame ⟨#[0x60, 0x04, 0x56, 0xe6, 0x5b]⟩ 0 12 []) with
+  | .stopped s => s.pc == 5 && s.gas == 0 && s.stack.val == []
+  | _ => false

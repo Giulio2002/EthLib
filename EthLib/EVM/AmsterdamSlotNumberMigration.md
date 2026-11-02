@@ -13,8 +13,8 @@ Amsterdam `vm/instructions/__init__.py`, `Ops.SLOTNUM`, assigns byte `0x4b`.
 EIP-7843 Specification says the consensus layer supplies the slot through the engine API.
 The field is not derived from the timestamp.
 
-The target decoder extends the Cancun subset with Osaka CLZ and Amsterdam SLOTNUM.
-It does not include Amsterdam SWAPN, DUPN, or EXCHANGE.
+The target decoder extends the Cancun subset with Osaka CLZ, Amsterdam SLOTNUM, and EIP-8024 stack instructions.
+`Opcode.decodeCancunClzSlotnum` retains the earlier subset without EIP-8024.
 The Cancun and Cancun-plus-CLZ classifiers exclude SLOTNUM.
 This subset does not implement the complete Amsterdam transition.
 

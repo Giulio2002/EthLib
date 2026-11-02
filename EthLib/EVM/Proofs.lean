@@ -19,11 +19,15 @@ public import EthLib.EVM.Proofs.Word.AddMulMod
 public import EthLib.EVM.Proofs.Word.Exp
 public import EthLib.EVM.Proofs.Opcode
 public import EthLib.EVM.Proofs.PushImmediate
+public import EthLib.EVM.Proofs.StackImmediate
 public import EthLib.EVM.Proofs.CallData
 public import EthLib.EVM.Proofs.JumpDest
 public import EthLib.EVM.Proofs.Stack
+public import EthLib.EVM.Proofs.StackIndexed
 public import EthLib.EVM.Proofs.Frame
 public import EthLib.EVM.Proofs.Frame.CountLeadingZeros
+public import EthLib.EVM.Proofs.Frame.StackImmediate
+public import EthLib.EVM.Proofs.Frame.StackImmediateActual
 public import EthLib.EVM.Proofs.Frame.SlotNumber
 public import EthLib.EVM.Proofs.Frame.Environment
 public import EthLib.EVM.Proofs.Frame.BlobFee
@@ -37,6 +41,7 @@ public import EthLib.EVM.Proofs.Runner
 public import EthLib.EVM.Proofs.Runner.StraightLine
 public import EthLib.EVM.Proofs.Runner.Mixed
 public import EthLib.EVM.Proofs.Runner.SlotNumber
+public import EthLib.EVM.Proofs.Runner.StackImmediate
 public import EthLib.EVM.Proofs.Runner.CountLeadingZeros
 public import EthLib.EVM.Proofs.Runner.Environment
 public import EthLib.EVM.Proofs.Runner.BlockEnvironment
@@ -57,7 +62,7 @@ Word representation, construction, and memory access contracts.
 Arithmetic, comparison, bitwise, BYTE and SIGNEXTEND result contracts.
 Division and remainder contracts cover signed and unsigned results.
 Arithmetic contracts include modular addition and exponentiation.
-Cancun opcode classification, PUSH immediate decoding and jump destination scanning.
+Fork-scoped opcode classification, immediate decoding and jump destination scanning.
 Bounded stack correctness and source-model refinement.
 This root belongs to the separate `Proofs` library.
 -/

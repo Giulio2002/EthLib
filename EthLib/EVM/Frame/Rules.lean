@@ -12,6 +12,7 @@ The sources are Cancun execution-specs revision
 `control_flow.py`, `memory.py`, `block.py`, and `environment.py`.
 CLZ follows Osaka `vm/instructions/bitwise.py`, `count_leading_zeros`, at the same revision.
 Amsterdam `vm/instructions/block.py`, `slot_number`, defines SLOTNUM at the same revision.
+Amsterdam `vm/instructions/stack.py` defines DUPN, SWAPN and EXCHANGE.
 The blob fee rule uses the supplied schedule, which can differ from Cancun.
 -/
 
@@ -24,7 +25,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -150,6 +151,46 @@ inductive Rule : State → Outcome → Prop where
   | stop (s) : At s (some .stop) → Rule s (.stop { s with pc := s.pc + 1 })
   | invalid (s) : At s none ∨ At s (some .invalid) → Rule s (.exception s .invalidOpcode)
   | unsupported (s op) : At s (some op) → Unsupported op → Rule s (.unsupported s op)
+  | dupnGas (s) : At s (some .dupn) → s.gas < 3 → Rule s (.exception s .outOfGas)
+  | dupnInvalid (s) : At s (some .dupn) → 3 ≤ s.gas →
+      StackImmediate.decodeSingle (StackImmediate.byte s.code s.pc) = none →
+      Rule s (.exception s .invalidParameter)
+  | dupnUnderflow (s n) : At s (some .dupn) → 3 ≤ s.gas →
+      StackImmediate.decodeSingle (StackImmediate.byte s.code s.pc) = some n →
+      s.stack.height ≤ n - 1 → Rule s (.exception s .stackUnderflow)
+  | dupnOverflow (s n) : At s (some .dupn) → 3 ≤ s.gas →
+      StackImmediate.decodeSingle (StackImmediate.byte s.code s.pc) = some n →
+      n - 1 < s.stack.height → s.stack.height = 1024 → Rule s (.exception s .stackOverflow)
+  | dupn (s t n) (depth : n - 1 < s.stack.height) : At s (some .dupn) → 3 ≤ s.gas →
+      StackImmediate.decodeSingle (StackImmediate.byte s.code s.pc) = some n →
+      s.stack.height < 1024 →
+      Advances s t (s.pc + 2) (s.gas - 3) (s.stack.toList[n - 1]'depth :: s.stack.toList) →
+      Rule s (.continue t)
+  | swapnGas (s) : At s (some .swapn) → s.gas < 3 → Rule s (.exception s .outOfGas)
+  | swapnInvalid (s) : At s (some .swapn) → 3 ≤ s.gas →
+      StackImmediate.decodeSingle (StackImmediate.byte s.code s.pc) = none →
+      Rule s (.exception s .invalidParameter)
+  | swapnUnderflow (s n) : At s (some .swapn) → 3 ≤ s.gas →
+      StackImmediate.decodeSingle (StackImmediate.byte s.code s.pc) = some n →
+      s.stack.height ≤ n → Rule s (.exception s .stackUnderflow)
+  | swapn (s t n) (depth : n < s.stack.height) : At s (some .swapn) → 3 ≤ s.gas →
+      StackImmediate.decodeSingle (StackImmediate.byte s.code s.pc) = some n →
+      Advances s t (s.pc + 2) (s.gas - 3)
+        ((s.stack.toList.set 0 (s.stack.toList[n]'depth)).set n
+          (s.stack.toList[0]'(by change 0 < s.stack.height; omega))) → Rule s (.continue t)
+  | exchangeGas (s) : At s (some .exchange) → s.gas < 3 → Rule s (.exception s .outOfGas)
+  | exchangeInvalid (s) : At s (some .exchange) → 3 ≤ s.gas →
+      StackImmediate.decodePair (StackImmediate.byte s.code s.pc) = none →
+      Rule s (.exception s .invalidParameter)
+  | exchangeUnderflow (s n m) : At s (some .exchange) → 3 ≤ s.gas →
+      StackImmediate.decodePair (StackImmediate.byte s.code s.pc) = some (n, m) →
+      (s.stack.height ≤ n ∨ s.stack.height ≤ m) → Rule s (.exception s .stackUnderflow)
+  | exchange (s t n m) (hn : n < s.stack.height) (hm : m < s.stack.height) :
+      At s (some .exchange) → 3 ≤ s.gas →
+      StackImmediate.decodePair (StackImmediate.byte s.code s.pc) = some (n, m) →
+      Advances s t (s.pc + 2) (s.gas - 3)
+        ((s.stack.toList.set n (s.stack.toList[m]'hm)).set m (s.stack.toList[n]'hn)) →
+      Rule s (.continue t)
   | keccakEmpty (s) : At s (some .keccak) → s.stack.val.length < 2 →
       Rule s (.exception s .stackUnderflow)
   | keccakGas (s offset length xs) : At s (some .keccak) →

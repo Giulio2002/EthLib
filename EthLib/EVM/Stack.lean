@@ -81,5 +81,29 @@ def swap (s : Stack) (i : Fin 16) : Except StackError Stack :=
     .ok ⟨(s.val.set 0 other).set (i.val + 1) top, by simpa using s.property⟩
   else .error .underflow
 
+/-- Duplicate a zero-based stack entry.
+
+Amsterdam `vm/instructions/stack.py`, `dupn`, checks depth before
+`vm/stack.py`, `push`, checks the stack limit.
+-/
+def dupAt (s : Stack) (i : Nat) : Except StackError Stack :=
+  if h : i < s.val.length then
+    if room : s.val.length < 1024 then
+      .ok ⟨s.val[i] :: s.val, by simp only [List.length_cons]; omega⟩
+    else .error .overflow
+  else .error .underflow
+
+/-- Exchange two zero-based stack entries.
+
+Amsterdam `vm/instructions/stack.py`, `swapn` and `exchange`, check
+that both positions exist before exchanging them.
+-/
+def exchangeAt (s : Stack) (i j : Nat) : Except StackError Stack :=
+  if hi : i < s.val.length then
+    if hj : j < s.val.length then
+      .ok ⟨(s.val.set i s.val[j]).set j s.val[i], by simpa using s.property⟩
+    else .error .underflow
+  else .error .underflow
+
 end Stack
 end EthLib.EVM

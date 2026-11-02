@@ -23,3 +23,10 @@ example (code : ByteArray) (pc : Nat) :
 
 example (s : Frame.State) (out : Frame.Outcome) :
     Frame.step s = out ↔ Frame.Rule s out := Frame.step_iff_rule s out
+
+-- Consumers can reject forbidden immediates and use their index bounds.
+example (x : UInt8) : StackImmediate.decodeSingle x = none ↔
+    90 < x.toNat ∧ x.toNat < 128 := Proofs.StackImmediate.single_none x
+example (x : UInt8) (n m : Nat) (h : StackImmediate.decodePair x = some (n, m)) :
+    1 ≤ n ∧ n ≤ 14 ∧ n < m ∧ n + m ≤ 30 :=
+  Proofs.StackImmediate.pair_range x n m h
