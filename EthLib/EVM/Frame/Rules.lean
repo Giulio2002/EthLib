@@ -20,7 +20,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .stop | .invalid | .add | .pop | .push _ | .dup _ | .swap _ => False
+  | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -52,6 +52,42 @@ inductive Rule : State → Outcome → Prop where
       Rule s (.exception s .outOfGas)
   | add (s t x y xs) : At s (some .add) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
       Advances s t (s.pc + 1) (s.gas - 3) (Word.add x y :: xs) → Rule s (.continue t)
+  | mulEmpty (s) : At s (some .mul) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | mulGas (s x y xs) : At s (some .mul) → s.stack.val = x :: y :: xs → s.gas < 5 →
+      Rule s (.exception s .outOfGas)
+  | mul (s t x y xs) : At s (some .mul) → s.stack.val = x :: y :: xs → 5 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 5) (Word.mul x y :: xs) → Rule s (.continue t)
+  | subEmpty (s) : At s (some .sub) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | subGas (s x y xs) : At s (some .sub) → s.stack.val = x :: y :: xs → s.gas < 3 →
+      Rule s (.exception s .outOfGas)
+  | sub (s t x y xs) : At s (some .sub) → s.stack.val = x :: y :: xs → 3 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 3) (Word.sub x y :: xs) → Rule s (.continue t)
+  | divEmpty (s) : At s (some .div) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | divGas (s x y xs) : At s (some .div) → s.stack.val = x :: y :: xs → s.gas < 5 →
+      Rule s (.exception s .outOfGas)
+  | div (s t x y xs) : At s (some .div) → s.stack.val = x :: y :: xs → 5 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 5) (Word.div x y :: xs) → Rule s (.continue t)
+  | modEmpty (s) : At s (some .mod) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | modGas (s x y xs) : At s (some .mod) → s.stack.val = x :: y :: xs → s.gas < 5 →
+      Rule s (.exception s .outOfGas)
+  | mod (s t x y xs) : At s (some .mod) → s.stack.val = x :: y :: xs → 5 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 5) (Word.mod x y :: xs) → Rule s (.continue t)
+  | sdivEmpty (s) : At s (some .sdiv) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | sdivGas (s x y xs) : At s (some .sdiv) → s.stack.val = x :: y :: xs → s.gas < 5 →
+      Rule s (.exception s .outOfGas)
+  | sdiv (s t x y xs) : At s (some .sdiv) → s.stack.val = x :: y :: xs → 5 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 5) (Word.sdiv x y :: xs) → Rule s (.continue t)
+  | smodEmpty (s) : At s (some .smod) → s.stack.val.length < 2 →
+      Rule s (.exception s .stackUnderflow)
+  | smodGas (s x y xs) : At s (some .smod) → s.stack.val = x :: y :: xs → s.gas < 5 →
+      Rule s (.exception s .outOfGas)
+  | smod (s t x y xs) : At s (some .smod) → s.stack.val = x :: y :: xs → 5 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 5) (Word.smod x y :: xs) → Rule s (.continue t)
   | dupGas (s i) : At s (some (.dup i)) → s.gas < 3 → Rule s (.exception s .outOfGas)
   | dupEmpty (s i) : At s (some (.dup i)) → 3 ≤ s.gas → s.stack.val.length ≤ i.val →
       Rule s (.exception s .stackUnderflow)

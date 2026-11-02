@@ -3,6 +3,8 @@ module
 public import EthLib.EVM.Stack
 public import EthLib.EVM.PushImmediate
 public import EthLib.EVM.Gas
+public import EthLib.EVM.Word.DivMod
+public import EthLib.EVM.Word.SignedDivMod
 
 /-!
 # Cancun frame subset
@@ -78,6 +80,78 @@ def step (s : State) : Outcome :=
         | .ok (b, stack) =>
           charge s 3 fun gas =>
             match Stack.push stack (Word.add a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `arithmetic.py`, `mul`: pop twice before charging `OPCODE_MUL`.
+    | some .mul =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 5 fun gas =>
+            match Stack.push stack (Word.mul a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `arithmetic.py`, `sub`: the first pop is the left operand.
+    | some .sub =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 3 fun gas =>
+            match Stack.push stack (Word.sub a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `arithmetic.py`, `div`: the first pop is the left operand.
+    | some .div =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 5 fun gas =>
+            match Stack.push stack (Word.div a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `arithmetic.py`, `mod`: the first pop is the left operand.
+    | some .mod =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 5 fun gas =>
+            match Stack.push stack (Word.mod a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `arithmetic.py`, `sdiv`: the first pop is the left operand.
+    | some .sdiv =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 5 fun gas =>
+            match Stack.push stack (Word.sdiv a b) with
+            | .error e => failStack s e
+            | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `arithmetic.py`, `smod`: the first pop is the left operand.
+    | some .smod =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (a, stack) =>
+        match Stack.pop stack with
+        | .error e => failStack s e
+        | .ok (b, stack) =>
+          charge s 5 fun gas =>
+            match Stack.push stack (Word.smod a b) with
             | .error e => failStack s e
             | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
     | some (.dup i) =>

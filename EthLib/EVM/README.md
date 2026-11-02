@@ -271,7 +271,10 @@ The decoder and scanner do not model frames, gas, stack effects or instruction e
 
 # Restricted frame execution
 
-The frame runner supports STOP, PUSH0 through PUSH32, POP, ADD, DUP1 through DUP16, and SWAP1 through SWAP16.
+The frame runner supports STOP, PUSH0 through PUSH32, POP, ADD, MUL, SUB, DIV, MOD, SDIV, SMOD, DUP1 through DUP16, and SWAP1 through SWAP16.
+The six added arithmetic instructions have independent success, underflow and out-of-gas rules.
+Both operand checks precede charging gas; the first-popped word is the left operand.
+Their numeric refinement theorems compose the instruction rules with the existing word contracts.
 Other assigned Cancun opcodes return a distinct unsupported tooling result.
 Unassigned bytes and INVALID cause exceptional halts.
 Fuel exhaustion is a tooling result and is not an EVM exception.

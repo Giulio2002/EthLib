@@ -28,8 +28,8 @@ example : match Runner.run 1 (initial ⟨#[]⟩ 0) with
     | _ => ([], 0)
 
 -- An assigned instruction outside the slice is tooling unsupported.
-example : match Runner.run 1 (initial ⟨#[0x02]⟩ 0) with
-    | .unsupported _ .mul => True
+example : match Runner.run 1 (initial ⟨#[0x10]⟩ 0) with
+    | .unsupported _ .lt => True
     | _ => False := by cbv
 
 -- An unassigned instruction is exceptional.
@@ -139,7 +139,7 @@ example : match Runner.run 5 (initial ⟨#[0x00]⟩ 9) with
 example : match Runner.run 1 (initial ⟨#[0xfe]⟩ 9) with
     | .exception s e => s.gas = 9 ∧ Runner.settle (.exception s e) = some (.exceptional 0 e)
     | _ => False := by cbv
-example : Runner.settle (Runner.run 1 (initial ⟨#[0x02]⟩ 9)) = none := by cbv
+example : Runner.settle (Runner.run 1 (initial ⟨#[0x10]⟩ 9)) = none := by cbv
 example : Runner.settle (Runner.run 0 (initial ⟨#[0x00]⟩ 9)) = none := by cbv
 
 -- The first step exhausts, and resuming executes STOP.
@@ -162,3 +162,60 @@ example (s : EthLib.EVM.Frame.State) (gas : Nat) (output : ByteArray) :
 example : match EthLib.EVM.Runner.run 1 (initial ⟨#[0xfd]⟩ 10) with
     | .unsupported _ .revert => True
     | _ => False := by trivial
+
+-- Each arithmetic opcode checks both stack entries before charging gas.
+/-- info: true -/
+#guard_msgs in
+#eval ([0x02, 0x03, 0x04, 0x05, 0x06, 0x07] : List UInt8).all fun op =>
+  ([⟨[], by simp⟩, ⟨[9], by simp⟩] : List ((xs : List Word) ×' xs.length ≤ 1024)).all fun ⟨xs, bound⟩ =>
+    match Runner.run 1 (withStack ⟨#[op]⟩ 0 xs bound) with
+    | .exception _ .stackUnderflow => true
+    | _ => false
+
+-- The first-popped word is the left operand, including signed operations.
+/-- info: [[36], [5], [2], [2], [1], [1]] -/
+#guard_msgs in
+#eval ([0x02, 0x03, 0x04, 0x05, 0x06, 0x07] : List UInt8).map fun op =>
+  (Runner.run 1 (withStack ⟨#[op]⟩ 5 [9, 4] (by decide))).frame.stack.val.map BitVec.toNat
+
+-- Each opcode succeeds at exact gas and fails one unit short.
+/-- info: true -/
+#guard_msgs in
+#eval ([(0x02, 5), (0x03, 3), (0x04, 5), (0x05, 5), (0x06, 5), (0x07, 5)] :
+    List (UInt8 × Nat)).all fun (op, gas) =>
+  (match Runner.run 1 (withStack ⟨#[op]⟩ gas [9, 4] (by decide)) with
+    | .exhausted s => s.gas == 0 && s.pc == 1 && s.code == ⟨#[op]⟩ &&
+        decide (s.memory = Memory.Allocation.empty)
+    | _ => false) &&
+  (match Runner.run 1 (withStack ⟨#[op]⟩ (gas - 1) [9, 4] (by decide)) with
+    | .exception _ .outOfGas => true
+    | _ => false)
+
+-- Zero divisors produce zero for unsigned and signed division and remainder.
+/-- info: [0, 0, 0, 0] -/
+#guard_msgs in
+#eval ([0x04, 0x05, 0x06, 0x07] : List UInt8).map fun op =>
+  ((Runner.run 1 (withStack ⟨#[op]⟩ 5 [9, 0] (by decide))).frame.stack.val.head!).toNat
+
+-- Signed results preserve the dividend's remainder sign and wrap the division overflow.
+/-- info: [-2, -1, -2, -1, -57896044618658097711785492504343953926634992332820282019728792003956564819968] -/
+#guard_msgs in
+#eval ([(0x05, Word.ofSigned (-7), Word.ofSigned 3),
+        (0x07, Word.ofSigned (-7), Word.ofSigned 3),
+        (0x05, Word.ofSigned 7, Word.ofSigned (-3)),
+        (0x07, Word.ofSigned (-7), Word.ofSigned (-3)),
+        (0x05, BitVec.intMin 256, Word.ofSigned (-1))] : List (UInt8 × Word × Word)).map
+  fun (op, x, y) => Word.signed ((Runner.run 1 (withStack ⟨#[op]⟩ 5 [x, y] (by simp))).frame.stack.val.head!)
+
+-- MUL and SUB wrap modulo 2^256.
+/-- info: [0, 115792089237316195423570985008687907853269984665640564039457584007913129639935] -/
+#guard_msgs in
+#eval [((Runner.run 1 (withStack ⟨#[0x02]⟩ 5 [BitVec.ofNat 256 (2^255), 2] (by decide))).frame.stack.val.head!).toNat,
+       ((Runner.run 1 (withStack ⟨#[0x03]⟩ 3 [1, 2] (by decide))).frame.stack.val.head!).toNat]
+
+-- Composed bytecode pushes distinct operands, subtracts, multiplies and stops.
+/-- info: ([10], 0, 9) -/
+#guard_msgs in
+#eval match Runner.run 6 (initial ⟨#[0x60, 2, 0x60, 4, 0x60, 9, 0x03, 0x02, 0x00]⟩ 17) with
+  | .stopped s => (s.stack.val.map BitVec.toNat, s.gas, s.pc)
+  | _ => ([], 0, 0)
