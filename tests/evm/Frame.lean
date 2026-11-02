@@ -349,3 +349,77 @@ def indexedFailure (opcode : UInt8) (gas : Nat) (xs : List Word) (h : xs.length 
   some ([BitVec.ofNat 256 (2 ^ 255)], 0, 1)
 #guard indexedResult 0x1c 3 0 7 == some ([7], 0, 1)
 #guard indexedResult 0x1d 3 0 (Word.ofSigned (-3)) == some ([Word.ofSigned (-3)], 0, 1)
+
+-- PC observes its position before advancing; GAS observes its own charge.
+/-- info: ([3, 1, 0], 3, 3) -/
+#guard_msgs in
+#eval match Runner.run 3 (initial ⟨#[0x5f, 0x58, 0x5a]⟩ 9) with
+    | .exhausted s => (s.stack.val.map BitVec.toNat, s.gas, s.pc)
+    | _ => ([], 0, 0)
+
+-- Every observation checks gas before stack capacity.
+/-- info: [true, true, true, true, true, true] -/
+#guard_msgs in
+#eval [0x58, 0x59, 0x5a].flatMap fun op =>
+  [0, 1].map fun gas => match Runner.run 1 (full ⟨#[op]⟩ gas) with
+    | .exception _ .outOfGas => true | _ => false
+
+/-- info: [true, true, true] -/
+#guard_msgs in
+#eval [0x58, 0x59, 0x5a].map fun op =>
+  match Runner.run 1 (full ⟨#[op]⟩ 2) with
+  | .exception _ .stackOverflow => true | _ => false
+
+-- Exact gas succeeds, leaving zero, and empty memory has zero allocated bytes.
+/-- info: ([2, 2, 0], 0, 3) -/
+#guard_msgs in
+#eval match Runner.run 3 (initial ⟨#[0x59, 0x5a, 0x58]⟩ 6) with
+    | .exhausted s => (s.stack.val.map BitVec.toNat, s.gas, s.pc)
+    | _ => ([], 0, 0)
+
+def allocatedObservation : Frame.State :=
+  ⟨⟨#[0x59]⟩, 0, Stack.empty, 2,
+    Memory.Allocation.expand Memory.Allocation.empty 64 1,
+    Memory.Allocation.expand_valid _ _ _ Memory.Allocation.empty_valid⟩
+
+-- Expansion without writes is still visible to MSIZE.
+/-- info: [96] -/
+#guard_msgs in
+#eval match Frame.step allocatedObservation with
+  | .continue s => s.stack.val.map BitVec.toNat | _ => []
+
+def writtenObservation : Frame.State :=
+  ⟨⟨#[0x59]⟩, 0, Stack.empty, 2,
+    Memory.Allocation.write Memory.Allocation.empty 32 [7],
+    Memory.Allocation.write_valid _ _ _ Memory.Allocation.empty_valid⟩
+
+/-- info: [64] -/
+#guard_msgs in
+#eval match Frame.step writtenObservation with
+  | .continue s => s.stack.val.map BitVec.toNat | _ => []
+
+-- A stack with one free slot can accept the observation.
+/-- info: true -/
+#guard_msgs in
+#eval match Frame.step { (full ⟨#[0x58]⟩ 2) with
+    stack := ⟨List.replicate 1023 0, by simp⟩ } with
+  | .continue s => s.stack.val.length == 1024 | _ => false
+
+-- The largest representable observation is exact; the next wraps in the extension.
+/-- info: (true, true) -/
+#guard_msgs in
+#eval ((Frame.observationWord (Word.modulus - 1)).toNat == Word.modulus - 1,
+  (Frame.observationWord Word.modulus).toNat == 0)
+
+-- GAS with exactly its own cost pushes zero.
+/-- info: ([0], 0, 1) -/
+#guard_msgs in
+#eval match Frame.step (initial ⟨#[0x5a]⟩ 2) with
+  | .continue s => (s.stack.val.map BitVec.toNat, s.gas, s.pc)
+  | _ => ([], 1, 0)
+
+-- The extension handles oversized remaining gas without allocating memory.
+/-- info: [0] -/
+#guard_msgs in
+#eval match Frame.step (initial ⟨#[0x5a]⟩ (Word.modulus + 2)) with
+  | .continue s => s.stack.val.map BitVec.toNat | _ => []

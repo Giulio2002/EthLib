@@ -8,7 +8,8 @@ public import EthLib.EVM.Frame
 These rules state stack and gas conditions without invoking the executable step.
 The source is Cancun execution-specs revision
 `fd9298410ec7218838c8348f69c1eb633f1797dc`, `vm/interpreter.py`,
-`vm/instructions/stack.py`, `arithmetic.py`, `comparison.py`, `bitwise.py`, and `control_flow.py`.
+`vm/instructions/stack.py`, `arithmetic.py`, `comparison.py`, `bitwise.py`,
+`control_flow.py`, and `memory.py`.
 -/
 
 @[expose] public section
@@ -20,7 +21,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -41,6 +42,22 @@ inductive JumpBoundaryFrom (code : ByteArray) : Nat → Nat → Prop where
 /-- A valid target is a JUMPDEST byte at a source instruction boundary. -/
 def ValidJumpDest (code : ByteArray) (pc : Nat) : Prop :=
   JumpBoundaryFrom code 0 pc ∧ PushImmediate.byteAt code pc = 0x5b
+
+/-- The natural observation selected by an introspection opcode. -/
+inductive Observation where
+  | pc | msize | gas
+  deriving DecidableEq
+
+/-- Opcode corresponding to an observation. -/
+def Observation.opcode : Observation → Opcode
+  | .pc => .pc | .msize => .msize | .gas => .gas
+
+/-- Value observed after the instruction has paid its gas cost. -/
+def Observation.value (o : Observation) (s : State) : Nat :=
+  match o with
+  | .pc => s.pc
+  | .msize => Memory.Allocation.byteSize s.memory
+  | .gas => s.gas - 2
 
 /-- Source-oriented rules for one frame transition. -/
 inductive Rule : State → Outcome → Prop where
@@ -71,6 +88,14 @@ inductive Rule : State → Outcome → Prop where
   | jumpdestGas (s) : At s (some .jumpdest) → s.gas < 1 → Rule s (.exception s .outOfGas)
   | jumpdest (s t) : At s (some .jumpdest) → 1 ≤ s.gas →
       Advances s t (s.pc + 1) (s.gas - 1) s.stack.val → Rule s (.continue t)
+  | observationGas (s) (o : Observation) : At s (some o.opcode) → s.gas < 2 →
+      Rule s (.exception s .outOfGas)
+  | observationFull (s) (o : Observation) : At s (some o.opcode) → 2 ≤ s.gas →
+      s.stack.val.length = 1024 → Rule s (.exception s .stackOverflow)
+  | observation (s t) (o : Observation) : At s (some o.opcode) → 2 ≤ s.gas →
+      s.stack.val.length < 1024 →
+      Advances s t (s.pc + 1) (s.gas - 2)
+        (BitVec.ofNat 256 (o.value s) :: s.stack.val) → Rule s (.continue t)
   | pushGas (s n) : At s (some (.push n)) → s.gas < (if n.val = 0 then 2 else 3) →
       Rule s (.exception s .outOfGas)
   | pushFull (s n) : At s (some (.push n)) → (if n.val = 0 then 2 else 3) ≤ s.gas →

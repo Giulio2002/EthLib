@@ -271,7 +271,7 @@ The decoder and scanner do not model frames, gas, stack effects or instruction e
 
 # Restricted frame execution
 
-The frame runner supports STOP, JUMP, JUMPI, JUMPDEST, PUSH0 through PUSH32, POP, arithmetic, comparison and bitwise instructions, DUP1 through DUP16, and SWAP1 through SWAP16.
+The frame runner supports STOP, JUMP, JUMPI, JUMPDEST, PC, MSIZE, GAS, PUSH0 through PUSH32, POP, arithmetic, comparison and bitwise instructions, DUP1 through DUP16, and SWAP1 through SWAP16.
 The implemented arithmetic and bitwise instructions are ADD, MUL, SUB, DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD, EXP, LT, GT, SLT, SGT, EQ, ISZERO, AND, OR, XOR, NOT, SHL, SHR, SAR, BYTE and SIGNEXTEND.
 The arithmetic, comparison and bitwise instructions have independent success, underflow and out-of-gas rules.
 Operand checks precede charging gas.
@@ -286,6 +286,11 @@ JUMPI pops its condition second and checks the destination only when that condit
 A taken jump requires a JUMPDEST at an instruction boundary, outside PUSH data.
 An invalid destination has its own exceptional-halt reason.
 JUMPDEST charges one gas and advances one byte.
+PC, MSIZE and GAS charge two gas before checking stack capacity.
+PC pushes the current counter, MSIZE pushes allocated bytes, and GAS pushes the gas remaining after its own charge.
+The frame uses unbounded natural numbers for these values.
+The observation conversion reduces them modulo 2^256 outside the source U256 domain.
+Within that domain the conversion is exact.
 Other assigned Cancun opcodes return a distinct unsupported tooling result.
 Unassigned bytes and INVALID cause exceptional halts.
 Fuel exhaustion is a tooling result and is not an EVM exception.
