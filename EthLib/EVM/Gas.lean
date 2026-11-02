@@ -1,6 +1,7 @@
 module
 
 public import EthLib.EVM.Memory.Allocation
+public import EthLib.EVM.Word
 
 /-!
 # Gas and memory expansion
@@ -49,5 +50,15 @@ def chargeExpand (gas : Nat) (s : State) (offset length : Nat) : Except Error (N
   match charge gas (rangeCost s.words offset length) with
   | .error e => .error e
   | .ok remaining => .ok (remaining, expand s offset length)
+
+/-- The number of bytes in the shortest unsigned encoding of an EXP exponent.
+
+Cancun execution-specs `arithmetic.py`, `exp`, uses the exponent bit length.
+-/
+def expBytes (exponent : Word) : Nat :=
+  if exponent.toNat = 0 then 0 else (exponent.toNat.log2 + 8) / 8
+
+/-- Cancun execution-specs `arithmetic.py`, `exp`, and `gas.py`, `GasCosts`. -/
+def expCost (exponent : Word) : Nat := 10 + 50 * expBytes exponent
 
 end EthLib.EVM.Gas

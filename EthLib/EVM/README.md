@@ -181,7 +181,7 @@ The Yellow Paper Appendix H.2 gives the same result.
 `Word.exp` uses the MODEXP square-and-multiply algorithm with the entire word exponent.
 Its proof establishes the natural result, bounded reference refinement, corner cases and the 256-bit step bound.
 The correspondence between the sources and this model is a human interpretation.
-The Lean proofs concern the result, not opcode gas, stack or interpreter behavior.
+The frame contracts below cover the instruction as well as this result helper.
 
 ## Subtraction, multiplication and bitwise results
 
@@ -271,9 +271,11 @@ The decoder and scanner do not model frames, gas, stack effects or instruction e
 
 # Restricted frame execution
 
-The frame runner supports STOP, PUSH0 through PUSH32, POP, ADD, MUL, SUB, DIV, MOD, SDIV, SMOD, LT, GT, SLT, SGT, EQ, ISZERO, AND, OR, XOR, NOT, SHL, SHR, SAR, BYTE, SIGNEXTEND, DUP1 through DUP16, and SWAP1 through SWAP16.
+The frame runner supports STOP, PUSH0 through PUSH32, POP, ADD, MUL, SUB, DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD, EXP, LT, GT, SLT, SGT, EQ, ISZERO, AND, OR, XOR, NOT, SHL, SHR, SAR, BYTE, SIGNEXTEND, DUP1 through DUP16, and SWAP1 through SWAP16.
 The arithmetic, comparison and bitwise instructions have independent success, underflow and out-of-gas rules.
 Operand checks precede charging gas.
+ADDMOD and MULMOD pop their modulus third and use full-precision intermediates.
+EXP pops its base first and its exponent second.
 For shifts and byte operations, the first-popped word is the count or index.
 BYTE indexes from the most significant byte.
 SAR rounds a negative quotient down.
@@ -307,3 +309,14 @@ The source transcription is a human reading of the cited Python, not an automati
 It assumes at most 1022 initial stack entries and gas `9 + g`.
 The result leaves the modular sum above the original stack, retains gas `g`, and stops at counter six.
 `Runner.StraightLine.two_plus_three` specializes it to an empty stack and gas nine.
+
+## EXP gas
+
+`Gas.expBytes` counts the bytes in the shortest unsigned encoding of an exponent.
+`Gas.expCost` charges 10 gas plus 50 gas for each such byte.
+The source is Cancun execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`.
+The rules appear in `vm/instructions/arithmetic.py`, `exp`, and `vm/gas.py`, `GasCosts`.
+
+The proof characterizes the byte count using powers of two and proves it is unique.
+It also bounds the byte count by 32 and the cost by 1610.
+The EXP frame rule charges this cost after both stack checks.
