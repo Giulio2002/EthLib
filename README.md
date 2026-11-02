@@ -9,6 +9,10 @@ permanently if the performance of this library is sufficient.
 
 ## Primitives
 
+### EVM words
+
+- [256-bit words and result operations](EthLib/EVM/README.md)
+
 ### Cryptography
 
 - [BLS12-381 signatures](EthLib/Cryptography/Bls/)

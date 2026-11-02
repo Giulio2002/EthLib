@@ -32,7 +32,8 @@ They do not establish the contract by themselves.
 
 The machine-checked claim is refinement to this Lean mathematical model.
 Correspondence between that model and the cited paper is a human reading of the source.
-The contract covers representation, checked natural construction and the addition result.
+The contract covers representation, checked natural construction and addition.
+The sections below cover further word result contracts.
 It does not cover all inherited BitVec operations, an interpreter, gas, stack effects or other instructions.
 It makes no claim about compiled runtime correctness, cryptography or security.
 The precompile modules keep their existing paths and ownership.
@@ -43,7 +44,8 @@ The sparse store models byte contents independently of allocated memory size.
 The source is Cancun execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`, `vm/memory.py`, functions `memory_write` and `memory_read_bytes`.
 Those functions access an allocated bytearray.
 Interpreting unallocated addresses as zero in a total function is this module's abstraction, not a claim that the source reads outside the bytearray.
-Allocation, expansion, gas, ranges and instructions remain outside this contract.
+Allocation and ranges are modeled by separate modules.
+Gas and instructions remain outside this contract.
 
 Every finite list of address and byte pairs is a valid store.
 The first occurrence of an address determines its byte, and an absent address reads zero.
@@ -55,3 +57,170 @@ The kernel checks that empty reads zero, a write changes exactly its address, an
 It checks overwrite, write-back and commutation for distinct addresses as equality of total observed byte functions.
 These equalities do not assert equality of write histories.
 The source interpretation is a human reading; the proofs establish refinement to the stated Lean abstraction.
+## Unsigned division and remainder
+
+The first argument is the first-popped numerator.
+The second argument is the divisor.
+The Yellow Paper Appendix H.2 DIV and MOD equations return zero for a zero divisor.
+For a nonzero divisor they give the natural quotient and remainder.
+The pinned Cancun execution specification agrees with this order and zero case.
+Its source is [arithmetic.py at fd92984](https://github.com/ethereum/execution-specs/blob/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions/arithmetic.py).
+
+`Word.div` and `Word.mod` implement those result equations.
+`Reference.div` and `Reference.mod` model bounded natural values independently.
+The proofs establish both numeric equations and refinement for every pair of words.
+They also establish range, the remainder bound and quotient-remainder decomposition.
+The latter two laws assume a nonzero divisor.
+These helpers do not model instruction execution, stack effects or gas.
+
+## Signed division and remainder
+
+The Shanghai Yellow Paper revision linked above specifies SDIV and SMOD in Appendix H.2.
+The Cancun execution specification revision [fd92984](https://github.com/ethereum/execution-specs/blob/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions/arithmetic.py) gives the same result rules in `sdiv` and `smod`.
+The first operand is the first popped word and is the numerator.
+The second operand is the divisor.
+
+`Word.signed` interprets each word as a signed two's-complement integer.
+`Word.ofSigned` accepts any integer and wraps it modulo `2^256`.
+Unlike `Word.ofNat`, it does not reject out-of-range inputs.
+The `signed_ofSigned` theorem gives its signed result for every integer using balanced remainder.
+`Word.sdiv` truncates the quotient toward zero.
+`Word.smod` gives the remainder the numerator's sign.
+Both return zero for a zero divisor.
+The signed minimum divided by -1 returns the signed minimum word.
+
+`EthLib.EVM.Proofs.Word.SignedDivMod.Reference` defines integer quotient and remainder using natural magnitudes and signs.
+The kernel checks refinement for every pair of words, including zero divisors and overflow.
+The proofs also establish signed range and representation round trips, the remainder sign and magnitude, and the quotient and remainder identity outside the overflow case.
+The machine-checked result is refinement to this Lean model.
+Correspondence between the model and the cited sources is a human interpretation.
+These helpers do not execute instructions or model the stack, gas, or an interpreter.
+They make no claim about compiled runtime correctness or security.
+
+# Comparison results
+
+The Cancun execution specification revision [fd92984](https://github.com/ethereum/execution-specs/blob/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions/comparison.py) defines the comparison results.
+The Yellow Paper revision linked above gives the same equations in Appendix H.2.
+The left operand is the first popped word.
+Each helper returns 1 when its condition holds and 0 otherwise.
+
+`Word.ltResult` and `Word.gtResult` compare unsigned natural values.
+`Word.sltResult` and `Word.sgtResult` compare `Word.signed` integer values.
+`Word.eqResult` and `Word.iszeroResult` test equality and zero.
+The separate proof module establishes exact equations, result bounds, predicate equivalences, and ordering identities for all operands.
+The kernel checks refinement to these Lean mathematical predicates.
+Correspondence with the cited sources is a human interpretation.
+The helpers do not model instruction execution, stack effects, gas, or an interpreter.
+
+# Shift results
+
+The Cancun execution specification revision [fd92984](https://github.com/ethereum/execution-specs/blob/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions/bitwise.py) gives `bitwise_shl`, `bitwise_shr` and `bitwise_sar`.
+The Yellow Paper revision linked above gives SHL, SHR and SAR in Appendix H.2.
+[EIP-145, Specification](https://eips.ethereum.org/EIPS/eip-145#specification), gives their arithmetic equations.
+The shift count is the first popped word and the value is the second.
+The helpers take the full unsigned count.
+They guard counts at least 256 before computing powers.
+For such counts, SHL and SHR return zero.
+SAR returns the all-ones word for a negative value and zero otherwise.
+For smaller counts, SAR divides the signed value and rounds down.
+
+The kernel checks the piecewise equations, signed quotient range, sign preservation and zero-shift identities for all words.
+Boundary examples supplement those contracts.
+The correspondence between the Lean equations and the sources is a human interpretation.
+These helpers give word results only and do not model opcode execution, gas or stack effects.
+
+## BYTE and SIGNEXTEND results
+
+`Word.byte` and `Word.signextend` take the byte index first and the value second.
+Both inputs are full-width words.
+The index is checked before calculating a power.
+
+The sources are Cancun execution-specs revision
+[fd929841](https://github.com/ethereum/execution-specs/tree/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions),
+functions `get_byte` and `signextend`, and the Shanghai Yellow Paper revision
+[efc5f9a](https://github.com/ethereum/yellowpaper/blob/efc5f9a1f356cba376c978eedb63cb0363c2aa85/Paper.tex),
+Appendix H.2, BYTE and SIGNEXTEND.
+BYTE counts bytes from the most significant end.
+SIGNEXTEND selects low bytes and copies their sign bit into the upper bits.
+
+The proof module gives natural-number reference functions and proves equality for all word inputs.
+It proves the byte bound and extraction equation, including indices at least 32.
+It proves the exact unsigned sign-extension equation, low-bit preservation and upper-bit replication.
+It also proves index 31 and larger are identities, idempotence, and agreement with the signed interpretation of the selected low bytes.
+Boundary examples supplement these universal results.
+
+The kernel checks refinement to the Lean reference functions.
+Their correspondence to the pinned sources is a human reading of those sources.
+These contracts concern result helpers only.
+They do not cover byte codecs, instruction execution, gas, stack effects or compiled runtime correctness.
+
+## Modular addition and multiplication
+
+`Word.addmod` and `Word.mulmod` model the ADDMOD and MULMOD results.
+The first two arguments are arithmetic operands and the third is the modulus.
+The sum or product is formed in natural numbers before reduction.
+A zero modulus gives zero.
+
+The sources are Cancun execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`,
+`vm/instructions/arithmetic.py`, functions `addmod` and `mulmod`, and the cited
+Yellow Paper Appendix H.2 ADDMOD and MULMOD equations.
+The proof module gives independent natural-number reference equations, bounds,
+commutativity, identities and invariance under reducing the operands first.
+The exact equations have no residual reduction modulo `2^256`.
+Boundary examples include carries and high product bits.
+
+The source-to-model correspondence is a human interpretation of these sources.
+The kernel checks refinement of the word results to that model.
+These helpers make no claim about opcode execution, gas, stack or runtime behavior.
+
+## EXP result
+
+Cancun execution-specs `exp` at revision `fd9298410ec7218838c8348f69c1eb633f1797dc` pops the base first and exponent second.
+The operation computes the power modulo `2^256`.
+The Yellow Paper Appendix H.2 gives the same result.
+`Word.exp` uses the MODEXP square-and-multiply algorithm with the entire word exponent.
+Its proof establishes the natural result, bounded reference refinement, corner cases and the 256-bit step bound.
+The correspondence between the sources and this model is a human interpretation.
+The Lean proofs concern the result, not opcode gas, stack or interpreter behavior.
+
+## Subtraction, multiplication and bitwise results
+
+`Word.sub` and `Word.mul` reduce their results modulo `2^256`.
+`Word.bitwiseAnd`, `Word.bitwiseOr`, `Word.bitwiseXor` and `Word.bitwiseNot` operate on all 256 bits.
+The Yellow Paper Appendix H.2 gives SUB, MUL, AND, OR, XOR and NOT.
+The separate proofs establish arithmetic refinement and bitwise equations for all inputs.
+
+## Big-endian word codecs
+
+`Word.toBytesBE` encodes exactly 32 bytes in most-significant-byte-first order.
+`Word.ofBytesBE` rejects every other length.
+The proofs establish both round trips, exact length, byte positions and injectivity.
+The length check is a library boundary and does not model EVM memory padding.
+
+The codec reuses byte conversion from MODEXP, and EXP reuses its modular arithmetic.
+Neither uses the precompile's later-fork gas rules or input size restrictions.
+The current EXP import of `Modexp.Core` does transitively import its gas module; only `powMod` is called.
+The precompile remains in its existing domain, and shared cryptography remains separate.
+
+
+# Logical memory and word access
+
+`Memory.Allocation.State` tracks allocated 32-byte words separately from sparse contents.
+Range reads and writes expand this allocation to cover their nonempty ranges.
+Copies expand both ranges and read a snapshot before writing.
+The allocation proofs establish exact sizes and preservation of `Valid`.
+
+The Cancun execution specification revision [fd92984](https://github.com/ethereum/execution-specs/blob/fd9298410ec7218838c8348f69c1eb633f1797dc/src/ethereum/forks/cancun/vm/instructions/memory.py) defines `mload`, `mstore` and `mstore8`.
+`loadWord` reads 32 bytes in big-endian order and returns the expanded state.
+`storeWord` writes the 32-byte word encoding.
+`storeByte` writes the low byte.
+Natural addresses do not wrap.
+These helpers model memory contents and allocation, not opcode execution, gas, stack or errors.
+The separate proofs establish the numeric load, byte positions, round trip, allocation and validity laws.
+They also establish preservation outside writes, disjoint reads and copy-then-load consistency.
+
+A load entirely beyond valid allocation returns zero.
+For any prefix length `k <= 32`, a load whose remaining bytes are outside allocation
+is the prefix value multiplied by `256^(32-k)`.
+Disjoint word and byte stores commute as byte observations and allocated word counts.
+Their sparse write histories need not be equal.
