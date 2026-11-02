@@ -19,7 +19,7 @@ public import EthLib.EVM.Word.ByteSignExtend
 The instruction rules come from Cancun execution-specs revision
 `fd9298410ec7218838c8348f69c1eb633f1797dc`, `vm/interpreter.py`,
 `vm/instructions/stack.py`, `arithmetic.py`, `comparison.py`, `bitwise.py`,
-`control_flow.py`, and `vm/gas.py`.
+`control_flow.py`, `memory.py`, and `vm/gas.py`.
 An exception retains the input frame only as diagnostic context.
 Its gas is zero at the message boundary; its stack is not a protocol final state.
 Unsupported instructions are a tooling result and do not execute.
@@ -63,6 +63,24 @@ def charge (s : State) (cost : Nat) (k : Nat → Outcome) : Outcome :=
   | .error _ => .exception s .outOfGas
   | .ok gas => k gas
 
+/-- Total conversion for frame observations.
+
+Values at least `2^256` are an extension beyond the source U256 domain.
+-/
+def observationWord (n : Nat) : Word := BitVec.ofNat 256 n
+
+/-- Charge before pushing an observation.
+
+Cancun `control_flow.py`, `pc` and `gas_left`, and `memory.py`, `msize`,
+charge before calling `stack.py`, `push`.
+`gas.py` gives each instruction the cost `BASE`, or two gas.
+-/
+def observe (s : State) (value : Nat → Nat) : Outcome :=
+  charge s 2 fun gas =>
+    match Stack.push s.stack (observationWord (value gas)) with
+    | .error e => failStack s e
+    | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+
 /-- Execute one instruction or stop at the end of code. -/
 def step (s : State) : Outcome :=
   if h : s.pc < s.code.size then
@@ -100,6 +118,9 @@ def step (s : State) : Outcome :=
     -- Cancun `control_flow.py`, `jumpdest`: charge before advancing.
     | some .jumpdest =>
       charge s 1 fun gas => .continue { s with gas, pc := s.pc + 1 }
+    | some .pc => observe s (fun _ => s.pc)
+    | some .msize => observe s (fun _ => Memory.Allocation.byteSize s.memory)
+    | some .gas => observe s id
     | some .pop =>
       match Stack.pop s.stack with
       | .error e => failStack s e

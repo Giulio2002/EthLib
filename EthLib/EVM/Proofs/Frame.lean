@@ -1470,6 +1470,85 @@ theorem step_jumpdest (s t : State) (h : At s (some .jumpdest)) (gas : 1 ≤ s.g
   simp only [step, dite_eq_left bounds, decoded, charge, Gas.charge, ite_eq_left gas]
   rw [update]
 
+/-- Observation conversion is reduction modulo the word modulus on all inputs. -/
+theorem observationWord_toNat (n : Nat) :
+    (observationWord n).toNat = n % Word.modulus := by
+  simp [observationWord, Word.modulus]
+
+/-- Within the source U256 domain the conversion is exact. -/
+theorem observationWord_exact (n : Nat) (h : n < Word.modulus) :
+    (observationWord n).toNat = n := by
+  rw [observationWord_toNat, Nat.mod_eq_of_lt h]
+
+/-- The checked public constructor agrees in the source U256 domain. -/
+theorem observationWord_checked (n : Nat) (h : n < Word.modulus) :
+    Word.ofNat n = .ok (observationWord n) := by
+  simp only [Word.ofNat, dite_eq_left h, Except.ok.injEq]
+  apply BitVec.eq_of_toNat_eq
+  rw [observationWord_exact n h]
+  rfl
+
+/-- Every source-representable observation has its exact natural value. -/
+theorem observation_value_exact (o : Observation) (s : State)
+    (h : o.value s < Word.modulus) :
+    (observationWord (o.value s)).toNat = o.value s :=
+  observationWord_exact _ h
+
+/-- The observation helper checks gas before stack capacity for every value function. -/
+theorem observe_gas (s : State) (value : Nat → Nat) (h : s.gas < 2) :
+    observe s value = .exception s .outOfGas := by
+  simp [observe, charge, Gas.charge, Nat.not_le.mpr h]
+
+/-- The observation helper rejects a full stack after charging. -/
+theorem observe_full (s : State) (value : Nat → Nat) (gas : 2 ≤ s.gas)
+    (full : s.stack.val.length = 1024) : observe s value = .exception s .stackOverflow := by
+  have push : s.stack.push (observationWord (value (s.gas - 2))) = .error .overflow :=
+    (Proofs.Stack.push_overflow_iff _ _).mpr full
+  simp [observe, charge, Gas.charge, gas, push, failStack]
+
+/-- The observation helper pushes its value and preserves all other fields. -/
+theorem observe_success (s t : State) (value : Nat → Nat) (gas : 2 ≤ s.gas)
+    (room : s.stack.val.length < 1024)
+    (fields : Advances s t (s.pc + 1) (s.gas - 2)
+      (observationWord (value (s.gas - 2)) :: s.stack.val)) :
+    observe s value = .continue t := by
+  let stack : Stack := ⟨observationWord (value (s.gas - 2)) :: s.stack.val, by simp; omega⟩
+  have push : s.stack.push (observationWord (value (s.gas - 2))) = .ok stack :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨room, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 2) stack fields
+  simp only [observe, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
+/-- Gas is checked before the observation can overflow the stack. -/
+theorem step_observation_gas (s : State) (o : Observation)
+    (h : At s (some o.opcode)) (gas : s.gas < 2) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  cases o <;> simp_all [Observation.opcode, step, observe, charge, Gas.charge,
+    Nat.not_le.mpr gas]
+
+/-- A full stack overflows after the gas check. -/
+theorem step_observation_full (s : State) (o : Observation)
+    (h : At s (some o.opcode)) (gas : 2 ≤ s.gas) (full : s.stack.val.length = 1024) :
+    step s = .exception s .stackOverflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  have push (w : Word) : s.stack.push w = .error .overflow :=
+    (Proofs.Stack.push_overflow_iff _ _).mpr full
+  cases o <;> simp_all [Observation.opcode, step, observe, charge, Gas.charge, failStack]
+
+/-- An observation pushes its value and advances once. -/
+theorem step_observation (s t : State) (o : Observation)
+    (h : At s (some o.opcode)) (gas : 2 ≤ s.gas) (room : s.stack.val.length < 1024)
+    (fields : Advances s t (s.pc + 1) (s.gas - 2)
+      (BitVec.ofNat 256 (o.value s) :: s.stack.val)) : step s = .continue t := by
+  let stack : Stack := ⟨BitVec.ofNat 256 (o.value s) :: s.stack.val, by simp; omega⟩
+  have push : s.stack.push (BitVec.ofNat 256 (o.value s)) = .ok stack :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨room, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 2) stack fields
+  obtain ⟨bounds, decoded⟩ := h
+  cases o <;> simp_all [Observation.opcode, Observation.value, step, observe, charge,
+    Gas.charge, observationWord]
+
 /-- An assigned opcode outside this slice yields the tooling result. -/
 theorem step_unsupported (s : State) (op : Opcode) (h : At s (some op))
     (unsupported : Unsupported op) : step s = .unsupported s op := by
@@ -1494,6 +1573,9 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | jumpiTrue t x y xs at_ items gas cond valid fields => exact step_jumpi_true _ t x y xs at_ items gas cond valid fields
   | jumpdestGas at_ gas => exact step_jumpdest_gas _ at_ gas
   | jumpdest t at_ gas fields => exact step_jumpdest _ t at_ gas fields
+  | observationGas o at_ gas => exact step_observation_gas _ o at_ gas
+  | observationFull o at_ gas full => exact step_observation_full _ o at_ gas full
+  | observation t o at_ gas room fields => exact step_observation _ t o at_ gas room fields
   | pushGas n at_ gas => exact step_push_gas _ n at_ gas
   | pushFull n at_ gas full => exact step_push_full _ n at_ gas full
   | push t n at_ gas room fields => exact step_push _ t n at_ gas room fields
@@ -1593,6 +1675,39 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
       cases op with
       | stop => exact ⟨_, .stop s at_⟩
       | invalid => exact ⟨_, .invalid s (Or.inr at_)⟩
+      | pc =>
+        let o := Observation.pc
+        have atO : At s (some o.opcode) := at_
+        by_cases gas : 2 ≤ s.gas
+        · by_cases room : s.stack.val.length < 1024
+          · let stack : Stack := ⟨BitVec.ofNat 256 (o.value s) :: s.stack.val, by simp; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
+            exact ⟨_, .observation s t o atO gas room (by simp [Advances, t, stack])⟩
+          · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+            exact ⟨_, .observationFull s o atO gas full⟩
+        · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
+      | msize =>
+        let o := Observation.msize
+        have atO : At s (some o.opcode) := at_
+        by_cases gas : 2 ≤ s.gas
+        · by_cases room : s.stack.val.length < 1024
+          · let stack : Stack := ⟨BitVec.ofNat 256 (o.value s) :: s.stack.val, by simp; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
+            exact ⟨_, .observation s t o atO gas room (by simp [Advances, t, stack])⟩
+          · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+            exact ⟨_, .observationFull s o atO gas full⟩
+        · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
+      | gas =>
+        let o := Observation.gas
+        have atO : At s (some o.opcode) := at_
+        by_cases gas : 2 ≤ s.gas
+        · by_cases room : s.stack.val.length < 1024
+          · let stack : Stack := ⟨BitVec.ofNat 256 (o.value s) :: s.stack.val, by simp; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
+            exact ⟨_, .observation s t o atO gas room (by simp [Advances, t, stack])⟩
+          · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+            exact ⟨_, .observationFull s o atO gas full⟩
+        · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
       | push n =>
         by_cases gas : (if n.val = 0 then 2 else 3) ≤ s.gas
         · by_cases room : s.stack.val.length < 1024
