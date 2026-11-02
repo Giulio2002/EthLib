@@ -19,6 +19,7 @@ public import EthLib.EVM.Proofs.PushImmediate
 public import EthLib.EVM.Proofs.JumpDest
 public import EthLib.EVM.Proofs.Stack
 public import EthLib.EVM.Proofs.Frame
+public import EthLib.EVM.Proofs.FrameArithmetic
 public import EthLib.EVM.Proofs.Frame.Reference
 public import EthLib.EVM.Proofs.Runner
 public import EthLib.EVM.Proofs.Runner.StraightLine
