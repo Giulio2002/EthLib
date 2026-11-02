@@ -109,6 +109,113 @@ theorem pop_height (s t : Stack) (x : Word) (h : s.pop = .ok (x, t)) :
   change s.toList.length = t.toList.length + 1
   simp [eq]
 
+/-- DUP underflows exactly when the requested entry is absent. -/
+theorem dup_underflow_iff (s : Stack) (i : Fin 16) :
+    s.dup i = .error .underflow ↔ s.height ≤ i.val := by
+  by_cases h : i.val < s.val.length
+  · by_cases room : s.val.length < 1024 <;> simp [Stack.dup, Stack.height, h, room] <;> omega
+  · simp [Stack.dup, Stack.height, h]; omega
+
+/-- DUP overflows exactly when the stack is full. -/
+theorem dup_overflow_iff (s : Stack) (i : Fin 16) :
+    s.dup i = .error .overflow ↔ s.height = 1024 := by
+  have bound := s.property
+  have ib := i.isLt
+  by_cases h : i.val < s.val.length
+  · by_cases room : s.val.length < 1024 <;>
+      simp [Stack.dup, Stack.height, h, room] <;> omega
+  · simp [Stack.dup, Stack.height, h]
+    omega
+
+/-- A successful DUP copies the indexed entry and leaves the old list in order. -/
+theorem dup_ok_iff (s t : Stack) (i : Fin 16) :
+    s.dup i = .ok t ↔
+      ∃ h : i.val < s.height, s.height < 1024 ∧
+        t.toList = s.toList[i.val]'h :: s.toList := by
+  by_cases h : i.val < s.val.length
+  · by_cases room : s.val.length < 1024
+    · simp only [Stack.dup, h, room, dite_true, Except.ok.injEq,
+        Stack.height, Stack.toList, true_and]
+      constructor
+      · intro e; exact ⟨trivial, congrArg Subtype.val e.symm⟩
+      · rintro ⟨_, e⟩; exact Subtype.ext e.symm
+    · simp [Stack.dup, Stack.height, h, room]
+  · simp [Stack.dup, Stack.height, h]
+
+/-- SWAP underflows exactly when the requested entry is absent. -/
+theorem swap_underflow_iff (s : Stack) (i : Fin 16) :
+    s.swap i = .error .underflow ↔ s.height ≤ i.val + 1 := by
+  by_cases h : i.val + 1 < s.val.length <;>
+    simp [Stack.swap, Stack.height, h] <;> omega
+
+/-- A successful SWAP exchanges exactly the two specified entries. -/
+theorem swap_ok_iff (s t : Stack) (i : Fin 16) :
+    s.swap i = .ok t ↔
+      ∃ h : i.val + 1 < s.height,
+        t.toList = (s.toList.set 0 ((s.toList)[i.val + 1]'h)).set
+          (i.val + 1) ((s.toList)[0]'(by change 0 < s.height; omega)) := by
+  by_cases h : i.val + 1 < s.val.length
+  · simp only [Stack.swap, h, dite_true, Except.ok.injEq, Stack.height, Stack.toList]
+    constructor
+    · intro e; exact ⟨trivial, congrArg Subtype.val e.symm⟩
+    · rintro ⟨_, e⟩; exact Subtype.ext e.symm
+  · simp [Stack.swap, Stack.height, h]
+
+/-- SWAP preserves the height. -/
+theorem swap_height (s t : Stack) (i : Fin 16) (h : s.swap i = .ok t) :
+    t.height = s.height := by
+  obtain ⟨_, eq⟩ := (swap_ok_iff s t i).mp h
+  change t.toList.length = s.toList.length
+  simp [eq]
+
+/-- DUP increases the height by one. -/
+theorem dup_height (s t : Stack) (i : Fin 16) (h : s.dup i = .ok t) :
+    t.height = s.height + 1 := by
+  obtain ⟨_, _, eq⟩ := (dup_ok_iff s t i).mp h
+  change t.toList.length = s.toList.length + 1
+  simp [eq]
+
+/-- DUP succeeds exactly when the entry exists and there is room. -/
+theorem dup_success_iff (s : Stack) (i : Fin 16) :
+    (∃ t, s.dup i = .ok t) ↔ i.val < s.height ∧ s.height < 1024 := by
+  by_cases h : i.val < s.val.length
+  · by_cases room : s.val.length < 1024 <;> simp [Stack.dup, Stack.height, h, room]
+  · simp [Stack.dup, Stack.height, h]
+
+/-- SWAP succeeds exactly when both entries exist. -/
+theorem swap_success_iff (s : Stack) (i : Fin 16) :
+    (∃ t, s.swap i = .ok t) ↔ i.val + 1 < s.height := by
+  by_cases h : i.val + 1 < s.val.length <;> simp [Stack.swap, Stack.height, h]
+
+/-- SWAP never overflows. -/
+theorem swap_no_overflow (s : Stack) (i : Fin 16) :
+    s.swap i ≠ .error .overflow := by
+  by_cases h : i.val + 1 < s.val.length <;> simp [Stack.swap, h]
+
+/-- Entries outside the two exchanged positions are unchanged. -/
+theorem swap_unaffected (s t : Stack) (i : Fin 16) (h : s.swap i = .ok t)
+    (j : Nat) (hj : j < s.height) (h0 : j ≠ 0) (hi : j ≠ i.val + 1) :
+    t.toList[j]'(by have := swap_height s t i h; change j < t.height; omega) = s.toList[j]'hj := by
+  obtain ⟨_, eq⟩ := (swap_ok_iff s t i).mp h
+  simp only [eq, List.getElem_set, ite_eq_right (Ne.symm hi), ite_eq_right (Ne.symm h0)]
+  rfl
+/-- Repeating a successful SWAP restores the stack. -/
+theorem swap_involution (s t : Stack) (i : Fin 16) (h : s.swap i = .ok t) : t.swap i = .ok s := by
+  obtain ⟨idx, eq⟩ := (swap_ok_iff s t i).mp h
+  apply (swap_ok_iff t s i).mpr
+  have ht : t.height = s.height := swap_height s t i h
+  have valid : i.val + 1 < t.height := by omega
+  refine ⟨valid, ?_⟩
+  apply List.ext_getElem
+  · simp [eq]
+  · intro j hj hj'
+    simp only [eq, List.getElem_set]
+    by_cases h0 : j = 0
+    · subst j; simp <;> rfl
+    · by_cases hi : j = i.val + 1
+      · subst j; simp <;> rfl
+      · simp [Ne.symm h0, Ne.symm hi]
+
 /-! The reference list has the source's bottom-first order.
 
 These pure results model the inspected Python helper rules.
@@ -126,10 +233,74 @@ def pop (p : List Word) : Except StackError (Word × List Word) :=
   | [] => .error .underflow
   | x :: xs => .ok (x, xs.reverse)
 
+/-- Model Cancun `dup_n` on a bottom-first source list. -/
+def dup (p : List Word) (i : Fin 16) : Except StackError (List Word) :=
+  if h : i.val < p.length then
+    if p.length = 1024 then .error .overflow
+    else .ok (p ++ [p[p.length - 1 - i.val]'(by omega)])
+  else .error .underflow
+
+/-- Model Cancun `swap_n` on a bottom-first source list. -/
+def swap (p : List Word) (i : Fin 16) : Except StackError (List Word) :=
+  if h : i.val + 1 < p.length then
+    .ok ((p.set (p.length - 1) (p[p.length - 2 - i.val]'(by omega))).set
+      (p.length - 2 - i.val) (p[p.length - 1]'(by omega)))
+  else .error .underflow
+
+
 end Reference
 
 /-- The source list stores the top at its end. -/
 def Related (s : Stack) (p : List Word) : Prop := p = s.toList.reverse
+
+/-- Reversing a list moves an updated position to its reflected index. -/
+private theorem reverse_set_index {α : Type} (xs : List α) (k : Nat) (x : α) (hk : k < xs.length) :
+    (xs.set k x).reverse = xs.reverse.set (xs.length - 1 - k) x := by
+  apply List.ext_getElem
+  · simp
+  · intro j hj hj'
+    simp only [List.length_reverse, List.length_set] at hj hj'
+    simp only [List.getElem_reverse, List.getElem_set, List.length_set]
+    have key : (k = xs.length - 1 - j) ↔ (xs.length - 1 - k = j) := by omega
+    simp only [key]
+
+/-- SWAP agrees with the source order and source underflow. -/
+theorem swap_refines (s : Stack) (i : Fin 16) :
+    (s.swap i).map (fun t => t.toList.reverse) = Reference.swap s.toList.reverse i := by
+  by_cases h : i.val + 1 < s.val.length
+  · let t : Stack := ⟨(s.val.set 0 (s.val[i.val + 1])).set (i.val + 1) (s.val[0]'(by omega)), by simpa using s.property⟩
+    have ht : s.swap i = .ok t := by simp [Stack.swap, h, t]
+    simp only [ht, Except.map, Reference.swap, Stack.toList, List.length_reverse, h, dite_true, t]
+    rw [reverse_set_index, reverse_set_index] <;> try (simp only [List.length_set] at *; omega) <;> try omega
+    simp only [List.length_set]
+    have htop : s.val.reverse[s.val.length - 1]'(by simp; omega) = s.val[0]'(by omega) := by
+      rw [List.getElem_reverse]
+      congr 1 <;> omega
+    have hother : s.val.reverse[s.val.length - 2 - i.val]'(by simp; omega) = s.val[i.val + 1]'h := by
+      rw [List.getElem_reverse]
+      congr 1 <;> omega
+    simp only [htop, hother]
+    all_goals (try (congr 2)) <;> omega
+  · simp [Stack.swap, Reference.swap, Stack.toList, h, Except.map]
+
+/-- DUP agrees with the source order and both source errors. -/
+theorem dup_refines (s : Stack) (i : Fin 16) :
+    (s.dup i).map (fun t => t.toList.reverse) = Reference.dup s.toList.reverse i := by
+  have bound := s.property
+  have ib := i.isLt
+  by_cases h : i.val < s.val.length
+  · by_cases room : s.val.length < 1024
+    · have eq : s.toList.reverse[s.height - 1 - i.val]'(by simp [Stack.height, Stack.toList] at *; omega) = s.toList[i.val]'h := by
+        change i.val < s.val.length at h
+        rw [List.getElem_reverse]
+        simp only [Stack.height, Stack.toList]
+        congr 1 <;> omega
+      simp only [Stack.height, Stack.toList, List.getElem_reverse] at eq
+      simp [Stack.dup, Reference.dup, h, room, Nat.ne_of_lt room, Stack.toList, Except.map, eq]
+    · have full : s.val.length = 1024 := by omega
+      have ih : i.val < 1024 := by omega
+      simp [Stack.dup, Reference.dup, Stack.toList, full, ih, Except.map]
+  · simp [Stack.dup, Reference.dup, h, Stack.toList, Except.map]
 
 /-- Push agrees with append and preserves both success and overflow. -/
 theorem push_refines (s : Stack) (p : List Word) (x : Word) (h : Related s p) :
