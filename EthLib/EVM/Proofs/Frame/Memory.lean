@@ -30,7 +30,7 @@ theorem mload_output (s t : State) (x : Word) (xs : List Word)
       (Memory.Allocation.loadWord s.memory x.toNat).1.toNat =
         EthLib.Precompiles.Modexp.bytesToNat (readRange s.memory.store x.toNat 32) := by
   refine ⟨step_mload s t x xs at_ items gas fields, ?_⟩
-  rcases fields with ⟨code, mem, pc, remaining, stack⟩
+  rcases fields with ⟨code, mem, pc, remaining, stack, context⟩
   refine ⟨code, pc, remaining, stack, ?_, ?_, Memory.Allocation.loadWord_numeric _ _⟩
   · rw [mem]; rfl
   · rw [mem]; rfl
@@ -49,7 +49,7 @@ theorem mstore_output (s t : State) (x y : Word) (xs : List Word)
       (∀ i, i < 32 → readByte t.memory.store (x.toNat + i) =
         UInt8.ofNat ((y.toNat / 256 ^ (31 - i)) % 256)) := by
   refine ⟨step_mstore s t x y xs at_ items gas fields, ?_⟩
-  rcases fields with ⟨code, mem, pc, remaining, stack⟩
+  rcases fields with ⟨code, mem, pc, remaining, stack, context⟩
   refine ⟨code, pc, remaining, stack, ?_, ?_, ?_⟩
   · rw [mem]; exact Memory.Allocation.storeWord_words _ _ _
   · intro a outside; rw [mem]; exact Memory.Allocation.storeWord_outside _ _ _ _ outside
@@ -67,7 +67,7 @@ theorem mstore8_output (s t : State) (x y : Word) (xs : List Word)
       (readByte t.memory.store x.toNat).toNat = y.toNat % 256 ∧
       (∀ a, a ≠ x.toNat → readByte t.memory.store a = readByte s.memory.store a) := by
   refine ⟨step_mstore8 s t x y xs at_ items gas fields, ?_⟩
-  rcases fields with ⟨code, mem, pc, remaining, stack⟩
+  rcases fields with ⟨code, mem, pc, remaining, stack, context⟩
   refine ⟨code, pc, remaining, stack, ?_, ?_, ?_⟩
   · rw [mem]; exact Memory.Allocation.storeByte_words _ _ _
   · rw [mem]; exact Memory.Allocation.storeByte_value _ _ _
@@ -234,7 +234,7 @@ theorem mcopy_success_output (s t : State) (x y z : Word) (xs : List Word)
       readByte s.memory.store (y.toNat + i)) ∧
     (∀ a, ¬ (x.toNat ≤ a ∧ a < x.toNat + z.toNat) →
       readByte t.memory.store a = readByte s.memory.store a) := by
-  obtain ⟨_, code, mem, pc, gas, stack⟩ := mcopy_success_fields s t x y z xs at_ items run
+  obtain ⟨_, code, mem, pc, gas, stack, context⟩ := mcopy_success_fields s t x y z xs at_ items run
   refine ⟨code, pc, gas, stack, ?_, ?_, ?_⟩
   · rw [mem]; rfl
   · intro i hi

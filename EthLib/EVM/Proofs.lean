@@ -16,6 +16,7 @@ public import EthLib.EVM.Proofs.Word.AddMulMod
 public import EthLib.EVM.Proofs.Word.Exp
 public import EthLib.EVM.Proofs.Opcode
 public import EthLib.EVM.Proofs.PushImmediate
+public import EthLib.EVM.Proofs.CallData
 public import EthLib.EVM.Proofs.JumpDest
 public import EthLib.EVM.Proofs.Stack
 public import EthLib.EVM.Proofs.Frame
@@ -27,6 +28,7 @@ public import EthLib.EVM.Proofs.Runner
 public import EthLib.EVM.Proofs.Runner.StraightLine
 public import EthLib.EVM.Proofs.Runner.Mixed
 public import EthLib.EVM.Proofs.Runner.Memory
+public import EthLib.EVM.Proofs.Runner.CallData
 
 /-!
 # `EthLib.EVM.Proofs`

@@ -218,6 +218,28 @@ theorem run_code_unchanged (fuel : Nat) (s : Frame.State) :
       have same := Frame.outcome_code_unchanged ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
 
+/-- All bounded runs preserve context. -/
+theorem run_context_unchanged (fuel : Nat) (s : Frame.State) :
+    (run fuel s).frame.context = s.context := by
+  induction fuel generalizing s with
+  | zero => simp [run, Result.frame]
+  | succ fuel ih =>
+    cases hs : Frame.step s with
+    | «continue» next =>
+      have same := Frame.continue_context_unchanged hs
+      have rest := ih next
+      simpa [run, hs, same] using rest
+    | stop next =>
+      have same := Frame.outcome_context_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | revert input gas output => exact False.elim (Frame.step_not_revert s input gas output hs)
+    | exception input e =>
+      have same := Frame.outcome_context_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | unsupported input op =>
+      have same := Frame.outcome_context_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+
 /-- Every executed instruction in the bounded run is outside memory access. -/
 def PureMemoryRun : Nat → Frame.State → Prop
   | 0, _ => True

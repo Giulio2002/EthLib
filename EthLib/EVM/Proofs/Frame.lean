@@ -128,7 +128,7 @@ theorem step_swap_empty (s : State) (i : Fin 16) (h : At s (some (.swap i)))
 theorem advances_eq (s t : State) (pc gas : Nat) (stack : Stack)
     (h : Advances s t pc gas stack.val) :
     t = { s with pc, gas, stack } := by
-  rcases h with ⟨code, memory, pcEq, gasEq, stackEq⟩
+  rcases h with ⟨code, memory, pcEq, gasEq, stackEq, contextEq⟩
   have stackEq' : t.stack = stack := Subtype.ext stackEq
   cases s
   cases t
@@ -990,6 +990,37 @@ theorem step_xor (s t : State) (x y : Word) (xs : List Word)
   simp only [step, dite_eq_left bounds, decoded, p1, p2, charge, Gas.charge, ite_eq_left gas, push]
   rw [update]
 
+/-- CALLDATALOAD checks its operand before gas. -/
+theorem step_calldataload_empty (s : State) (h : At s (some .calldataload)) (empty : s.stack.val = []) :
+    step s = .exception s .stackUnderflow := by
+  obtain ⟨bounds, decoded⟩ := h
+  have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr empty
+  simp [step, bounds, decoded, pop, failStack]
+
+/-- CALLDATALOAD checks gas after popping its operand. -/
+theorem step_calldataload_gas (s : State) (x : Word) (xs : List Word)
+    (h : At s (some .calldataload)) (items : s.stack.val = x :: xs) (gas : s.gas < 3) :
+    step s = .exception s .outOfGas := by
+  obtain ⟨bounds, decoded⟩ := h
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  simp [step, bounds, decoded, pop, charge, Gas.charge, Nat.not_le.mpr gas]
+
+/-- CALLDATALOAD replaces its operand with the result. -/
+theorem step_calldataload (s t : State) (x : Word) (xs : List Word)
+    (h : At s (some .calldataload)) (items : s.stack.val = x :: xs) (gas : 3 ≤ s.gas)
+    (fields : Advances s t (s.pc + 1) (s.gas - 3) (CallData.load s.context x :: xs)) :
+    step s = .continue t := by
+  obtain ⟨bounds, decoded⟩ := h
+  let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+  let final : Stack := ⟨CallData.load s.context x :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+  have push : rest.push (CallData.load s.context x) = .ok final :=
+    (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨by change xs.length < 1024; have b := s.stack.property; rw [items] at b; simp at b; omega, rfl⟩
+  have update := advances_eq s t (s.pc + 1) (s.gas - 3) final fields
+  simp only [step, dite_eq_left bounds, decoded, pop, charge, Gas.charge, ite_eq_left gas, push]
+  rw [update]
+
 /-- ISZERO checks its operand before gas. -/
 theorem step_iszero_empty (s : State) (h : At s (some .iszero)) (empty : s.stack.val = []) :
     step s = .exception s .stackUnderflow := by
@@ -1579,6 +1610,34 @@ theorem step_observation_stack (s t : State) (o : Observation)
   have eq : t = target := Outcome.continue.inj ok
   rw [eq]
 
+/-- A successful observation determines the complete resulting frame. -/
+theorem step_observation_actual (s t : State) (o : Observation)
+    (at_ : At s (some o.opcode)) (run : step s = .continue t) :
+    2 ≤ s.gas ∧ s.stack.val.length < 1024 ∧
+      Advances s t (s.pc + 1) (s.gas - 2)
+        (observationWord (o.value s) :: s.stack.val) := by
+  have gas : 2 ≤ s.gas := by
+    by_cases h : 2 ≤ s.gas
+    · exact h
+    have bad := step_observation_gas s o at_ (by omega)
+    rw [run] at bad
+    cases bad
+  have room : s.stack.val.length < 1024 := by
+    by_cases h : s.stack.val.length < 1024
+    · exact h
+    have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+    have bad := step_observation_full s o at_ gas full
+    rw [run] at bad
+    cases bad
+  let stack : Stack := ⟨observationWord (o.value s) :: s.stack.val, by simp; omega⟩
+  let target : State := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
+  have fields : Advances s target (s.pc + 1) (s.gas - 2)
+      (observationWord (o.value s) :: s.stack.val) := by simp [Advances, target, stack]
+  have ok := step_observation s target o at_ gas room (by simpa [observationWord] using fields)
+  rw [run] at ok
+  have eq : t = target := Outcome.continue.inj ok
+  exact ⟨gas, room, eq ▸ fields⟩
+
 /-- The resulting stack head is the observation modulo the word modulus. -/
 theorem step_observation_stack_mod (s t : State) (o : Observation)
     (h : At s (some o.opcode)) (run : step s = .continue t) :
@@ -1603,7 +1662,7 @@ theorem advancesMemory_eq (s t : State) (memory : Memory.Allocation.State)
     (valid : Memory.Allocation.Valid memory) (pc gas : Nat) (stack : Stack)
     (h : AdvancesMemory s t memory pc gas stack.val) :
     t = { s with memory, memoryValid := valid, pc, gas, stack } := by
-  rcases h with ⟨code, mem, pcEq, gasEq, stackEq⟩
+  rcases h with ⟨code, mem, pcEq, gasEq, stackEq, contextEq⟩
   have stackEq' : t.stack = stack := Subtype.ext stackEq
   cases s
   cases t
@@ -1806,6 +1865,9 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | stop at_ => exact step_stop _ at_
   | invalid at_ => rcases at_ with h | h; exact step_unassigned _ h; exact step_invalid _ h
   | unsupported op at_ unsupported => exact step_unsupported _ op at_ unsupported
+  | calldataloadEmpty at_ empty => exact step_calldataload_empty _ at_ empty
+  | calldataloadGas x xs at_ items gas => exact step_calldataload_gas _ x xs at_ items gas
+  | calldataload t x xs at_ items gas fields => exact step_calldataload _ t x xs at_ items gas fields
   | mcopyEmpty at_ empty => exact step_mcopy_empty _ at_ empty
   | mcopyGas x y z xs at_ items gas => exact step_mcopy_gas _ x y z xs at_ items gas
   | mcopy t x y z xs at_ items gas fields => exact step_mcopy _ t x y z xs at_ items gas fields
@@ -1931,6 +1993,28 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
       cases op with
       | stop => exact ⟨_, .stop s at_⟩
       | invalid => exact ⟨_, .invalid s (Or.inr at_)⟩
+      | calldatasize =>
+        let o := Observation.calldatasize
+        have atO : At s (some o.opcode) := at_
+        by_cases gas : 2 ≤ s.gas
+        · by_cases room : s.stack.val.length < 1024
+          · let stack : Stack := ⟨BitVec.ofNat 256 (o.value s) :: s.stack.val, by simp; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
+            exact ⟨_, .observation s t o atO gas room (by simp [Advances, t, stack])⟩
+          · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+            exact ⟨_, .observationFull s o atO gas full⟩
+        · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
+      | codesize =>
+        let o := Observation.codesize
+        have atO : At s (some o.opcode) := at_
+        by_cases gas : 2 ≤ s.gas
+        · by_cases room : s.stack.val.length < 1024
+          · let stack : Stack := ⟨BitVec.ofNat 256 (o.value s) :: s.stack.val, by simp; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 2 }
+            exact ⟨_, .observation s t o atO gas room (by simp [Advances, t, stack])⟩
+          · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+            exact ⟨_, .observationFull s o atO gas full⟩
+        · exact ⟨_, .observationGas s o atO (Nat.lt_of_not_ge gas)⟩
       | pc =>
         let o := Observation.pc
         have atO : At s (some o.opcode) := at_
@@ -2298,6 +2382,15 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
               let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
               exact ⟨_, .xor s t x y ys at_ items gas (by simp [Advances, t, stack])⟩
             · exact ⟨_, .xorGas s x y ys at_ items (Nat.lt_of_not_ge gas)⟩
+      | calldataload =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .calldataloadEmpty s at_ items⟩
+        | cons x xs =>
+          by_cases gas : 3 ≤ s.gas
+          · let stack : Stack := ⟨CallData.load s.context x :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
+            exact ⟨_, .calldataload s t x xs at_ items gas (by simp [Advances, t, stack])⟩
+          · exact ⟨_, .calldataloadGas s x xs at_ items (Nat.lt_of_not_ge gas)⟩
       | iszero =>
         cases items : s.stack.val with
         | nil => exact ⟨_, .iszeroEmpty s at_ items⟩
@@ -2421,6 +2514,53 @@ theorem continue_code_unchanged {s t : State} (h : step s = .continue t) :
 theorem outcome_code_unchanged {s : State} {out : Outcome} (h : Rule s out) :
     out.frame.code = s.code := by
   cases h <;> simp_all [Outcome.frame, Advances, AdvancesMemory]
+
+/-- Every independent outcome retains the immutable message context. -/
+theorem outcome_context_unchanged {s : State} {out : Outcome} (h : Rule s out) :
+    out.frame.context = s.context := by
+  cases h <;> simp_all [Outcome.frame, Advances, AdvancesMemory]
+
+/-- Every continuing step retains the immutable message context. -/
+theorem continue_context_unchanged {s t : State} (h : step s = .continue t) :
+    t.context = s.context :=
+  outcome_context_unchanged ((step_iff_rule s _).mp h)
+
+/-- A successful load determines its gas, stack, and all unchanged fields. -/
+theorem calldataload_actual (s t : State) (x : Word) (xs : List Word)
+    (at_ : At s (some .calldataload)) (items : s.stack.val = x :: xs)
+    (run : step s = .continue t) :
+    3 ≤ s.gas ∧ Advances s t (s.pc + 1) (s.gas - 3)
+      (CallData.load s.context x :: xs) := by
+  have gas : 3 ≤ s.gas := by
+    by_cases h : 3 ≤ s.gas
+    · exact h
+    have bad := step_calldataload_gas s x xs at_ items (by omega)
+    rw [run] at bad
+    cases bad
+  let stack : Stack := ⟨CallData.load s.context x :: xs, by
+    have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
+  let target : State := { s with stack, pc := s.pc + 1, gas := s.gas - 3 }
+  have fields : Advances s target (s.pc + 1) (s.gas - 3)
+      (CallData.load s.context x :: xs) := by simp [Advances, target, stack]
+  have ok := step_calldataload s target x xs at_ items gas fields
+  rw [run] at ok
+  have eq : t = target := Outcome.continue.inj ok
+  exact ⟨gas, eq ▸ fields⟩
+
+/-- Consecutive successful load and size steps expose both observations. -/
+theorem load_then_calldatasize_actual (s t u : State) (x : Word) (xs : List Word)
+    (loadAt : At s (some .calldataload)) (items : s.stack.val = x :: xs)
+    (loadRun : step s = .continue t)
+    (sizeAt : At t (some .calldatasize)) (sizeRun : step t = .continue u) :
+    t.stack.val = CallData.load s.context x :: xs ∧ t.context = s.context ∧
+      u.stack.val = observationWord s.context.data.size :: t.stack.val ∧
+      u.context = s.context := by
+  have load := (calldataload_actual s t x xs loadAt items loadRun).2
+  have size := step_observation_stack t u .calldatasize sizeAt sizeRun
+  have context : t.context = s.context := load.2.2.2.2.2
+  have context2 : u.context = t.context := continue_context_unchanged sizeRun
+  exact ⟨load.2.2.2.2.1, context, by simpa [Observation.value, context] using size,
+    context2.trans context⟩
 
 /-- A frame whose current instruction is outside the memory access subset. -/
 def PureMemoryStep (s : State) : Prop :=

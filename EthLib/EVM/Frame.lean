@@ -1,5 +1,6 @@
 module
 
+public import EthLib.EVM.CallData
 public import EthLib.EVM.Stack
 public import EthLib.EVM.PushImmediate
 public import EthLib.EVM.JumpDest
@@ -37,6 +38,7 @@ structure State where
   gas : Nat
   memory : Memory.Allocation.State
   memoryValid : Memory.Allocation.Valid memory
+  context : CallData.Context
 
 /-- Exceptional halts distinguished by their first failing check. -/
 inductive Exception where
@@ -119,6 +121,18 @@ def step (s : State) : Outcome :=
     -- Cancun `control_flow.py`, `jumpdest`: charge before advancing.
     | some .jumpdest =>
       charge s 1 fun gas => .continue { s with gas, pc := s.pc + 1 }
+    -- Cancun `environment.py`, `calldataload`: pop before charging.
+    | some .calldataload =>
+      match Stack.pop s.stack with
+      | .error e => failStack s e
+      | .ok (offset, stack) =>
+        charge s 3 fun gas =>
+          match Stack.push stack (CallData.load s.context offset) with
+          | .error e => failStack s e
+          | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    -- Cancun `environment.py`, `calldatasize` and `codesize`: charge before push.
+    | some .calldatasize => observe s (fun _ => s.context.data.size)
+    | some .codesize => observe s (fun _ => s.code.size)
     | some .pc => observe s (fun _ => s.pc)
     | some .msize => observe s (fun _ => Memory.Allocation.byteSize s.memory)
     | some .gas => observe s id
