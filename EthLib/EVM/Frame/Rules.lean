@@ -25,7 +25,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .log _ | .extcodecopy | .extcodesize | .extcodehash | .tload | .tstore | .sstore | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .return | .revert | .log _ | .extcodecopy | .extcodesize | .extcodehash | .tload | .tstore | .sstore | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -373,6 +373,21 @@ def TransientWriteFields (s t : TransactionState.State) (a : World.Address) (key
     (if value = 0 then [] else [((a, key), value)]) ++
       s.writes.transientStorage.filter (fun entry => entry.1 != (a, key))
 
+/-- The two frame-local terminal memory instructions. -/
+inductive FinishKind where
+  | return_ | revert_
+  deriving DecidableEq
+
+/-- Opcode corresponding to a terminal memory instruction. -/
+def FinishKind.opcode : FinishKind → Opcode
+  | .return_ => .return
+  | .revert_ => .revert
+
+/-- Result corresponding to a terminal memory instruction. -/
+def FinishKind.outcome : FinishKind → State → ByteArray → Outcome
+  | .return_, frame, output => .returned frame output
+  | .revert_, frame, output => .revert frame frame.gas output
+
 inductive Rule : State → Outcome → Prop where
   | endCode (s) : s.code.size ≤ s.pc → Rule s (.stop s)
   | stop (s) : At s (some .stop) → Rule s (.stop { s with pc := s.pc + 1 })
@@ -513,6 +528,27 @@ inductive Rule : State → Outcome → Prop where
         t (Memory.Allocation.write (Memory.Allocation.expand s.memory destination.toNat length.toNat) destination.toNat
           (CallData.readRange code source.toNat length.toNat)) (s.pc + 1)
         (s.gas - ExtCodeCopyCost s (BalanceAddress x) destination length) rest.val → Rule s (.continue t)
+  | finishEmpty (s : State) (kind : FinishKind) : At s (some kind.opcode) → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | finishSecond (s : State) (kind : FinishKind) (first : Stack) (offset : Word) :
+      At s (some kind.opcode) → s.stack.val = offset :: first.val → first.val = [] →
+      Rule s (.exception { s with stack := first } .stackUnderflow)
+  | finishGas (s : State) (kind : FinishKind) (first rest : Stack) (offset length : Word) :
+      At s (some kind.opcode) → s.stack.val = offset :: first.val → first.val = length :: rest.val →
+      s.gas < Gas.rangeCost s.memory.words offset.toNat length.toNat →
+      Rule s (.exception { s with stack := rest } .outOfGas)
+  | finishReturn (s t : State) (first rest : Stack) (offset length : Word) :
+      At s (some .return) → s.stack.val = offset :: first.val → first.val = length :: rest.val →
+      Gas.rangeCost s.memory.words offset.toNat length.toNat ≤ s.gas →
+      AdvancesMemory s t (Memory.Allocation.expand s.memory offset.toNat length.toNat) s.pc
+        (s.gas - Gas.rangeCost s.memory.words offset.toNat length.toNat) rest.val →
+      Rule s (.returned t ⟨(Memory.readRange s.memory.store offset.toNat length.toNat).toArray⟩)
+  | finishRevert (s t : State) (first rest : Stack) (offset length : Word) :
+      At s (some .revert) → s.stack.val = offset :: first.val → first.val = length :: rest.val →
+      Gas.rangeCost s.memory.words offset.toNat length.toNat ≤ s.gas →
+      AdvancesMemory s t (Memory.Allocation.expand s.memory offset.toNat length.toNat) s.pc
+        (s.gas - Gas.rangeCost s.memory.words offset.toNat length.toNat) rest.val →
+      Rule s (.revert t t.gas ⟨(Memory.readRange s.memory.store offset.toNat length.toNat).toArray⟩)
   | logEmpty (s : State) (count : Fin 5) : At s (some (.log count)) → s.stack.val = [] →
       Rule s (.exception s .stackUnderflow)
   | logSecond (s : State) (count : Fin 5) (first : Stack) (offset : Word) :

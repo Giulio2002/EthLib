@@ -45,13 +45,16 @@ theorem stops_of_run {fuel : Nat} {s t : Frame.State}
       simp [run, hs] at h
       subst next
       exact ⟨1, by omega, .stop hs⟩
-    | revert input gas output => exact False.elim (Frame.step_not_revert s input gas output hs)
+    | returned input output => simp [run, hs] at h
+    | revert input gas output => simp [run, hs] at h
     | exception input reason => simp [run, hs] at h
     | unsupported input op => simp [run, hs] at h
 
 /-- A finite trace ending in any terminal EVM or tooling result. -/
 inductive Terminates : Frame.State → Nat → Result → Prop where
   | stop {s t} : Frame.Rule s (.stop t) → Terminates s 1 (.stopped t)
+  | returned {s input output} : Frame.Rule s (.returned input output) → Terminates s 1 (.returned input output)
+  | reverted {s input gas output} : Frame.Rule s (.revert input gas output) → Terminates s 1 (.reverted input gas output)
   | exception {s input e} : Frame.Rule s (.exception input e) →
       Terminates s 1 (.exception input e)
   | unsupported {s input op} : Frame.Rule s (.unsupported input op) →
@@ -64,6 +67,8 @@ theorem run_of_terminates {s : Frame.State} {n : Nat} {result : Result}
     (h : Terminates s n result) : ∀ extra, run (n + extra) s = result := by
   induction h with
   | stop hs => intro extra; simp [Nat.one_add, run, Frame.rule_sound hs]
+  | returned hs => intro extra; simp [Nat.one_add, run, Frame.rule_sound hs]
+  | reverted hs => intro extra; simp [Nat.one_add, run, Frame.rule_sound hs]
   | exception hs => intro extra; simp [Nat.one_add, run, Frame.rule_sound hs]
   | unsupported hs => intro extra; simp [Nat.one_add, run, Frame.rule_sound hs]
   | next hs _ ih =>
@@ -87,7 +92,14 @@ theorem terminates_of_run {fuel : Nat} {s : Frame.State} {result : Result}
       simp [run, hs] at h
       subst result
       exact ⟨1, by omega,  .stop ((Frame.step_iff_rule _ _).mp hs)⟩
-    | revert input gas output => exact False.elim (Frame.step_not_revert s input gas output hs)
+    | returned input output =>
+      simp [run, hs] at h
+      subst result
+      exact ⟨1, by omega, .returned ((Frame.step_iff_rule _ _).mp hs)⟩
+    | revert input gas output =>
+      simp [run, hs] at h
+      subst result
+      exact ⟨1, by omega, .reverted ((Frame.step_iff_rule _ _).mp hs)⟩
     | exception input e =>
       simp [run, hs] at h
       subst result
@@ -117,7 +129,8 @@ theorem run_exhausted_iff (fuel : Nat) (s t : Frame.State) :
       | «continue» next =>
         exact .next ((Frame.step_iff_rule _ _).mp hs) ((ih next).mp (by simpa [run, hs] using h))
       | stop next => simp [run, hs] at h
-      | revert input gas output => exact False.elim (Frame.step_not_revert s input gas output hs)
+      | returned input output => simp [run, hs] at h
+      | revert input gas output => simp [run, hs] at h
       | exception input e => simp [run, hs] at h
       | unsupported input op => simp [run, hs] at h
     · intro h
@@ -134,6 +147,7 @@ theorem run_characterization (fuel : Nat) (s : Frame.State) (r : Result) :
   · intro h
     cases r with
     | exhausted t => exact .inl ⟨t, rfl, (run_exhausted_iff _ _ _).mp h⟩
+    | returned t output => exact .inr (terminates_of_run h (by intros; simp))
     | reverted t gas output => exact .inr (terminates_of_run h (by intros; simp))
     | stopped t => exact .inr (terminates_of_run h (by intros; simp))
     | exception t e => exact .inr (terminates_of_run h (by intros; simp))
@@ -143,22 +157,38 @@ theorem run_characterization (fuel : Nat) (s : Frame.State) (r : Result) :
     · obtain ⟨extra, rfl⟩ := Nat.exists_eq_add_of_le hn
       exact run_of_terminates ht extra
 
-/-- No finite terminal trace in this slice ends in a revert. -/
-theorem terminates_not_reverted {s : Frame.State} {n : Nat} {input : Frame.State}
-    {gas : Nat} {output : ByteArray} (h : Terminates s n (.reverted input gas output)) : False := by
-  generalize hr : Result.reverted input gas output = r at h
-  induction h with
-  | stop _ => cases hr
-  | exception _ => cases hr
-  | unsupported _ => cases hr
-  | next _ _ ih => exact ih hr
+/-- The executed bounded trace excludes the REVERT opcode. -/
+def NoRevertRun : Nat → Frame.State → Prop
+  | 0, _ => True
+  | fuel + 1, s => ¬ Frame.At s (some .revert) ∧
+      match Frame.step s with
+      | .continue t => NoRevertRun fuel t
+      | _ => True
 
-/-- The restricted runner cannot produce a revert for any fuel or input. -/
+/-- A trace with no REVERT opcode cannot produce a reverted result. -/
 theorem run_not_reverted (fuel : Nat) (s input : Frame.State) (gas : Nat)
-    (output : ByteArray) : run fuel s ≠ .reverted input gas output := by
-  intro h
-  obtain ⟨_, _, trace⟩ := terminates_of_run h (by intros; simp)
-  exact terminates_not_reverted trace
+    (output : ByteArray) (trace : NoRevertRun fuel s) :
+    run fuel s ≠ .reverted input gas output := by
+  induction fuel generalizing s with
+  | zero => simp [run]
+  | succ fuel ih =>
+    cases hs : Frame.step s with
+    | «continue» next =>
+      have tail : NoRevertRun fuel next := by simpa [NoRevertRun, hs] using trace.2
+      simpa [run, hs] using ih next tail
+    | stop next => simp [run, hs]
+    | returned next data => simp [run, hs]
+    | revert next remaining data =>
+      exact False.elim (Frame.step_not_revert s next remaining data trace.1 hs)
+    | exception next e => simp [run, hs]
+    | unsupported next op => simp [run, hs]
+
+/-- A terminal trace without REVERT cannot end in a reverted result. -/
+theorem terminates_not_reverted {s : Frame.State} {n : Nat} {input : Frame.State}
+    {gas : Nat} {output : ByteArray} (h : Terminates s n (.reverted input gas output))
+    (trace : NoRevertRun n s) : False := by
+  apply run_not_reverted n s input gas output trace
+  simpa using run_of_terminates h 0
 
 /-- A terminal result remains the same with additional fuel. -/
 theorem run_terminal_stable {fuel : Nat} {s : Frame.State} {r : Result}
@@ -191,6 +221,7 @@ theorem run_add (fuel extra : Nat) (s : Frame.State) :
 theorem settle_cases (r : Result) :
     settle r = match r with
       | .stopped s => some (.stopped s.gas)
+      | .returned s output => some (.returned s.gas output)
       | .reverted _ gas output => some (.reverted gas output)
       | .exception _ e => some (.exceptional 0 e)
       | .unsupported _ _ | .exhausted _ => none := by
@@ -210,7 +241,12 @@ theorem run_code_unchanged (fuel : Nat) (s : Frame.State) :
     | stop next =>
       have same := Frame.outcome_code_unchanged ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
-    | revert input gas output => exact False.elim (Frame.step_not_revert s input gas output hs)
+    | returned input output =>
+      have same := Frame.outcome_code_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | revert input gas output =>
+      have same := Frame.outcome_code_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
     | exception input e =>
       have same := Frame.outcome_code_unchanged ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
@@ -232,7 +268,12 @@ theorem run_context_unchanged (fuel : Nat) (s : Frame.State) :
     | stop next =>
       have same := Frame.outcome_context_unchanged ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
-    | revert input gas output => exact False.elim (Frame.step_not_revert s input gas output hs)
+    | returned input output =>
+      have same := Frame.outcome_context_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | revert input gas output =>
+      have same := Frame.outcome_context_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
     | exception input e =>
       have same := Frame.outcome_context_unchanged ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
@@ -254,7 +295,12 @@ theorem run_returnData_unchanged (fuel : Nat) (s : Frame.State) :
     | stop next =>
       have same := Frame.outcome_returnData_unchanged ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
-    | revert input gas output => exact False.elim (Frame.step_not_revert s input gas output hs)
+    | returned input output =>
+      have same := Frame.outcome_returnData_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | revert input gas output =>
+      have same := Frame.outcome_returnData_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
     | exception input e =>
       have same := Frame.outcome_returnData_unchanged ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
@@ -285,7 +331,12 @@ theorem run_memory_unchanged_of_pure (fuel : Nat) (s : Frame.State)
     | stop next =>
       have same := Frame.outcome_memory_unchanged_of_pure current ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
-    | revert input gas output => exact False.elim (Frame.step_not_revert s input gas output hs)
+    | returned input output =>
+      have same := Frame.outcome_memory_unchanged_of_pure current ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | revert input gas output =>
+      have same := Frame.outcome_memory_unchanged_of_pure current ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
     | exception input e =>
       have same := Frame.outcome_memory_unchanged_of_pure current ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same

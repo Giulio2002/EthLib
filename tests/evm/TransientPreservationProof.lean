@@ -75,8 +75,8 @@ theorem unsupported (fuel : Nat) (s t : Frame.State) (op : Opcode)
   simpa [run, Runner.Result.frame] using h
 
 theorem no_revert (fuel : Nat) (s t : Frame.State) (gas : Nat) (data : ByteArray)
-    (run : Runner.run fuel s = .reverted t gas data) : False :=
-  Runner.run_not_reverted fuel s t gas data run
+    (trace : Runner.NoRevertRun fuel s) (run : Runner.run fuel s = .reverted t gas data) : False :=
+  Runner.run_not_reverted fuel s t gas data trace run
 
 -- A decoded TSTORE can be the actual first step of a trace satisfying the restriction.
 theorem tstore_trace (s t : Frame.State) (at_ : Frame.At s (some .tstore))

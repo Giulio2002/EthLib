@@ -180,8 +180,9 @@ theorem metadata_retained (fuel : Nat) (s : Frame.State) :
     (Runner.run fuel s).frame.tracker.snapshots = s.tracker.snapshots :=
   Runner.SelfBalanceProgram.run_tracker_metadata_retained fuel s
 
-theorem unreachable_revert (fuel : Nat) (s t : Frame.State) (gas : Nat) (output : ByteArray) :
-    Runner.run fuel s ≠ .reverted t gas output := Runner.run_not_reverted fuel s t gas output
+theorem unreachable_revert (fuel : Nat) (s t : Frame.State) (gas : Nat) (output : ByteArray)
+    (trace : Runner.NoRevertRun fuel s) :
+    Runner.run fuel s ≠ .reverted t gas output := Runner.run_not_reverted fuel s t gas output trace
 
 #print axioms balance_step
 #print axioms selfbalance_step

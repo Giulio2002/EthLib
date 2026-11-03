@@ -27,6 +27,7 @@ theorem run_logs_unchanged_of_noLog (fuel : Nat) (s : Frame.State)
       have tail : NoLogRun fuel t := by simpa [NoLogRun, h] using trace.2
       exact (ih t tail).trans (by simpa [h, Frame.Outcome.frame] using preserved)
     | stop t => simpa [run, h, Frame.Outcome.frame, Result.frame] using preserved
+    | returned input output => simpa [run, h, Frame.Outcome.frame, Result.frame] using preserved
     | revert input gas output => simpa [run, h, Frame.Outcome.frame, Result.frame] using preserved
     | exception input error => simpa [run, h, Frame.Outcome.frame, Result.frame] using preserved
     | unsupported input op => simpa [run, h, Frame.Outcome.frame, Result.frame] using preserved
@@ -46,6 +47,7 @@ theorem run_logs_prefix (fuel : Nat) (s : Frame.State) :
       refine ⟨a ++ b, ?_⟩
       simpa [run, h, ha', List.append_assoc] using hb
     | stop t => simpa [run, h, Frame.Outcome.frame, Result.frame] using retained
+    | returned input output => simpa [run, h, Frame.Outcome.frame, Result.frame] using retained
     | revert input gas output => simpa [run, h, Frame.Outcome.frame, Result.frame] using retained
     | exception input error => simpa [run, h, Frame.Outcome.frame, Result.frame] using retained
     | unsupported input op => simpa [run, h, Frame.Outcome.frame, Result.frame] using retained

@@ -2343,6 +2343,39 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | stop at_ => exact step_stop _ at_
   | invalid at_ => rcases at_ with h | h; exact step_unassigned _ h; exact step_invalid _ h
   | unsupported op at_ unsupported => exact step_unsupported _ op at_ unsupported
+  | finishEmpty kind at_ empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    cases kind <;> simp [FinishKind.opcode] at decoded <;>
+      simp [step, bounds, decoded, returnOp, revertOp, finish, p, failStack]
+  | finishSecond kind first offset at_ items empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    cases kind <;> simp [FinishKind.opcode] at decoded <;>
+      simp [step, bounds, decoded, returnOp, revertOp, finish, p, q, failStack]
+  | finishGas kind first rest offset length at_ items items' gas =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    cases kind <;> simp [FinishKind.opcode] at decoded <;>
+      simp [step, bounds, decoded, returnOp, revertOp, finish, p, q, charge, Gas.charge, Nat.not_le_of_gt gas]
+  | finishReturn t first rest offset length at_ items items' gas fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    have eq := advancesMemory_eq s t _ (Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid)
+      s.pc (s.gas - Gas.rangeCost s.memory.words offset.toNat length.toNat) rest fields
+    subst t
+    simp [step, bounds, decoded, returnOp, finish, p, q, charge, Gas.charge, gas]
+  | finishRevert t first rest offset length at_ items items' gas fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    have eq := advancesMemory_eq s t _ (Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid)
+      s.pc (s.gas - Gas.rangeCost s.memory.words offset.toNat length.toNat) rest fields
+    subst t
+    simp [step, bounds, decoded, revertOp, finish, p, q, charge, Gas.charge, gas]
   | logEmpty count at_ empty =>
     obtain ⟨bounds, decoded⟩ := at_
     have p := (Proofs.Stack.pop_underflow_iff _).mpr empty
@@ -2947,7 +2980,26 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | swapEmpty i at_ gas empty => exact step_swap_empty _ i at_ gas empty
   | swap t i depth at_ gas fields => exact step_swap _ t i at_ depth gas fields
 
-/-- Every input frame has a source-oriented rule. -/
+/-- Source-shaped rules cover either terminal memory opcode. -/
+theorem finish_rule_total (s : State) (kind : FinishKind) (at_ : At s (some kind.opcode)) :
+    ∃ out, Rule s out := by
+  cases items : s.stack.val with
+  | nil => exact ⟨_, .finishEmpty s kind at_ items⟩
+  | cons offset xs =>
+    let first : Stack := ⟨xs, by have h := s.stack.property; rw [items] at h; simp at h; omega⟩
+    have items' : s.stack.val = offset :: first.val := items
+    cases second : first.val with
+    | nil => exact ⟨_, .finishSecond s kind first offset at_ items' second⟩
+    | cons length ys =>
+      let rest : Stack := ⟨ys, by have h := first.property; rw [second] at h; simp at h; omega⟩
+      have second' : first.val = length :: rest.val := second
+      by_cases gas : Gas.rangeCost s.memory.words offset.toNat length.toNat ≤ s.gas
+      · let t := { s with stack := rest, gas := s.gas - Gas.rangeCost s.memory.words offset.toNat length.toNat, memory := Memory.Allocation.expand s.memory offset.toNat length.toNat, memoryValid := Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid }
+        cases kind with
+        | return_ => exact ⟨_, .finishReturn s t first rest offset length at_ items' second' gas (by simp [AdvancesMemory, t])⟩
+        | revert_ => exact ⟨_, .finishRevert s t first rest offset length at_ items' second' gas (by simp [AdvancesMemory, t])⟩
+      · exact ⟨_, .finishGas s kind first rest offset length at_ items' second' (Nat.lt_of_not_ge gas)⟩
+
 theorem rule_total (s : State) : ∃ out, Rule s out := by
   by_cases bounds : s.pc < s.code.size
   · cases decoded : Opcode.decode s.code[s.pc] with
@@ -3054,6 +3106,8 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
             let t := { s with tracker := SloadRead s key, warmSlots := SloadWarm s key, stack, pc := s.pc + 1, gas := s.gas - SloadCost s key }
             exact ⟨_, .sload s t rest key at_ items' gas (by simp [Advances, t, stack, rest])⟩
           · exact ⟨_, .sloadGas s rest key at_ items' (Nat.lt_of_not_ge gas)⟩
+      | «return» => exact finish_rule_total s .return_ at_
+      | revert => exact finish_rule_total s .revert_ at_
       | log count =>
         cases items : s.stack.val with
         | nil => exact ⟨_, .logEmpty s count at_ items⟩
@@ -3957,17 +4011,18 @@ theorem step_iff_rule (s : State) (out : Outcome) : step s = out ↔ Rule s out 
     exact rule
   · exact rule_sound
 
-/-- No rule in the restricted frame semantics produces a revert. -/
-theorem rule_not_revert (s input : State) (gas : Nat) (output : ByteArray) :
-    ¬ Rule s (.revert input gas output) := by
+/-- A step whose opcode is not REVERT cannot produce a revert outcome. -/
+theorem rule_not_revert (s input : State) (gas : Nat) (output : ByteArray)
+    (noRevert : ¬ At s (some .revert)) : ¬ Rule s (.revert input gas output) := by
   intro h
   cases h
+  simp_all
 
-/-- The restricted step cannot produce a revert for any input. -/
-theorem step_not_revert (s input : State) (gas : Nat) (output : ByteArray) :
-    step s ≠ .revert input gas output := by
+/-- The executable step cannot revert when its opcode is not REVERT. -/
+theorem step_not_revert (s input : State) (gas : Nat) (output : ByteArray)
+    (noRevert : ¬ At s (some .revert)) : step s ≠ .revert input gas output := by
   intro h
-  exact rule_not_revert s input gas output ((step_iff_rule s _).mp h)
+  exact rule_not_revert s input gas output noRevert ((step_iff_rule s _).mp h)
 
 /-- Every continuing instruction preserves code. -/
 theorem continue_code_unchanged {s t : State} (h : step s = .continue t) :
@@ -4071,7 +4126,7 @@ theorem load_then_calldatasize_actual (s t u : State) (x : Word) (xs : List Word
 /-- A frame whose current instruction is outside the memory access subset. -/
 def PureMemoryStep (s : State) : Prop :=
   ¬ At s (some .mload) ∧ ¬ At s (some .mstore) ∧ ¬ At s (some .mstore8) ∧ ¬ At s (some .mcopy) ∧
-  ¬ At s (some .calldatacopy) ∧ ¬ At s (some .codecopy) ∧ ¬ At s (some .returndatacopy) ∧ ¬ At s (some .keccak) ∧ ¬ At s (some .extcodecopy) ∧ (∀ n, ¬ At s (some (.log n)))
+  ¬ At s (some .calldatacopy) ∧ ¬ At s (some .codecopy) ∧ ¬ At s (some .returndatacopy) ∧ ¬ At s (some .keccak) ∧ ¬ At s (some .extcodecopy) ∧ (∀ n, ¬ At s (some (.log n))) ∧ ¬ At s (some .return) ∧ ¬ At s (some .revert)
 
 /-- A pure instruction preserves memory for every outcome. -/
 theorem outcome_memory_unchanged_of_pure {s : State} {out : Outcome}

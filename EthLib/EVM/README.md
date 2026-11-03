@@ -357,11 +357,9 @@ Unassigned bytes and INVALID cause exceptional halts.
 Fuel exhaustion is a tooling result and is not an EVM exception.
 The runner is fuel bounded and makes no claim that every program terminates.
 The frame holds code, a natural program counter, a bounded stack, gas, valid allocated memory, immutable message input, return data, and a transaction tracker.
-It does not execute REVERT, calls, or rollback.
-A manually constructed revert carries remaining gas and output bytes as scaffolding.
-The restricted step and runner cannot produce that constructor for any input or fuel.
-World-state rollback and REVERT execution belong to milestone 12.
-Exhaustive matches on `Frame.Outcome`, `Runner.Result`, or `Frame.Boundary` must handle the new revert constructor.
+RETURN and REVERT stop with output bytes and remaining gas.
+The diagnostic frame retains its writes and logs; this frame-local model does not implement world rollback or calls.
+Exhaustive matches on `Frame.Outcome`, `Runner.Result`, and `Frame.Boundary` must handle returned output as well as revert.
 
 The source is Cancun execution-specs revision `fd9298410ec7218838c8348f69c1eb633f1797dc`.
 `vm/instructions/control_flow.py`, `stop`, increments the program counter.
@@ -447,7 +445,7 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The augmented 256-byte dispatch regression covers 144 supported instructions and 9 assigned but unsupported instructions.
+The augmented 256-byte dispatch regression covers 146 supported instructions and 7 assigned but unsupported instructions.
 It also covers 102 unassigned bytes and INVALID.
 The historical Cancun subset has 125 supported instructions and 107 unassigned bytes.
 The Cancun-plus-CLZ subset has 126 supported instructions and 106 unassigned bytes.
@@ -762,7 +760,7 @@ Storage reads remain unchanged when execution reaches neither SLOAD nor SSTORE.
 `Runner.NoSloadRun` excludes SLOAD at each instruction actually executed within the fuel bound.
 `Runner.NoSstoreRun` excludes SSTORE at each executed instruction.
 `Runner.run_storageReads_unchanged_of_no_sload` takes both trace predicates and preserves the full storage-read list for exhausted, stopped, exceptional and unsupported results.
-The restricted runner cannot return a revert.
+`Runner.NoRevertRun` restricts traces whose steps exclude REVERT; only such traces satisfy `run_not_reverted`.
 A successful SLOAD records its target and key, so the unconditional tracker-retention claims cannot include storage-read equality.
 
 ## Amsterdam state-gas meter foundation
@@ -852,3 +850,21 @@ Its success case binds the data observation to the original memory and popped ra
 `PureMemoryStep` excludes all five LOG opcodes because they may expand memory.
 Existing positional `Frame.State` constructors and quantified runner programs take an additional log list.
 Child-call log merge and discard, transaction receipts and bloom construction are outside this frame-local slice.
+
+## RETURN and REVERT
+
+Amsterdam `instructions/system.py`, `return_` and `revert`, pop a memory offset and length before charging expansion gas.
+Both expand memory, read output bytes and halt without advancing PC.
+RETURN produces a returned result; REVERT produces a reverted result carrying the remaining gas and output.
+Both are allowed in static mode.
+The frame diagnostic carries its tracker, writes, reads, logs, context and prior call return-data buffer; it does not perform world rollback.
+
+`Frame.FinishLocal` characterizes both helpers for arbitrary code and PC.
+`FinishBytes` specifies the output as observations of the input memory, tied to the popped range.
+The independent global rules and `step_iff_rule` cover both opcodes, and terminal runner traces, fuel composition and extra-fuel stability include their results.
+`PureMemoryStep` excludes RETURN and REVERT because they may expand memory.
+`NoRevertRun` gives the restricted replacement for the former unconditional no-revert theorem.
+`Runner.terminates_not_reverted` takes a `Terminates s n (.reverted input gas output)` proof and a `NoRevertRun n s` proof and derives `False`.
+RETURN remains allowed by this restriction.
+The output is distinct from the frame's prior call return-data buffer.
+Child calls, world rollback and transaction settlement are outside this frame-local slice.

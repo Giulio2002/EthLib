@@ -151,16 +151,16 @@ example : Runner.settle (Runner.run 0 (initial ⟨#[0x00]⟩ 9)) = none := by cb
       | _ => (0, 0)
     | _ => (0, 0)
 
--- Manual revert values are boundary scaffolding, not REVERT execution.
+-- A revert retains its remaining gas and output at the modeled boundary.
 example (s : EthLib.EVM.Frame.State) (gas : Nat) (output : ByteArray) :
     EthLib.EVM.Frame.settle (.revert s gas output) = some (.reverted gas output) := rfl
 
 example (s : EthLib.EVM.Frame.State) (gas : Nat) (output : ByteArray) :
     EthLib.EVM.Runner.settle (.reverted s gas output) = some (.reverted gas output) := rfl
 
--- The REVERT byte remains an unsupported assigned instruction.
+-- An empty-stack REVERT fails at its first stack pop.
 example : match EthLib.EVM.Runner.run 1 (initial ⟨#[0xfd]⟩ 10) with
-    | .unsupported _ .revert => True
+    | .exception _ .stackUnderflow => True
     | _ => False := by trivial
 
 -- Each arithmetic opcode checks both stack entries before charging gas.

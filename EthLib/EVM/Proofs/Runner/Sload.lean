@@ -71,7 +71,13 @@ theorem run_slots_monotone (fuel : Nat) (s : Frame.State) (slot : World.Address 
     | stop next =>
       have same := Frame.outcome_slots_monotone ((Frame.step_iff_rule _ _).mp hs) slot warm
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
-    | revert input gas output => exact False.elim (Frame.step_not_revert s input gas output hs)
+    | returned input output =>
+      have same := Frame.outcome_slots_monotone ((Frame.step_iff_rule _ _).mp hs) slot warm
+      simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
+    | revert input gas output =>
+      have same := Frame.outcome_slots_monotone ((Frame.step_iff_rule _ _).mp hs) slot warm
+      simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
+
     | exception input e =>
       have same := Frame.outcome_slots_monotone ((Frame.step_iff_rule _ _).mp hs) slot warm
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same

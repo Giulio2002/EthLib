@@ -55,6 +55,8 @@ public import EthLib.EVM.Proofs.Frame.Memory
 public import EthLib.EVM.Proofs.Runner
 public import EthLib.EVM.Proofs.Runner.StraightLine
 public import EthLib.EVM.Proofs.Runner.Sload
+public import EthLib.EVM.Proofs.Frame.Finish
+public import EthLib.EVM.Proofs.Runner.Finish
 public import EthLib.EVM.Proofs.Frame.LogLocal
 public import EthLib.EVM.Proofs.Runner.Log
 public import EthLib.EVM.Proofs.Runner.LogPreservation

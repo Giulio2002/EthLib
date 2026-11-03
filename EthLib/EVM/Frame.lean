@@ -82,12 +82,12 @@ inductive Exception where
 
 /-- Frame outcomes include a typed revert for future semantics.
 
-The restricted step never constructs a revert.
 The carried frame is diagnostic and does not represent world-state rollback.
 Unsupported instructions are tooling outcomes. -/
 inductive Outcome where
   | continue (state : State)
   | stop (state : State)
+  | returned (state : State) (output : ByteArray)
   | revert (input : State) (gas : Nat) (output : ByteArray)
   | exception (input : State) (reason : Exception)
   | unsupported (input : State) (opcode : Opcode)
@@ -100,6 +100,30 @@ def charge (s : State) (cost : Nat) (k : Nat → Outcome) : Outcome :=
   match Gas.charge s.gas cost with
   | .error _ => .exception s .outOfGas
   | .ok gas => k gas
+
+/-- Amsterdam `instructions/system.py`, `return_` and `revert`, at revision
+`fd9298410ec7218838c8348f69c1eb633f1797dc`.
+The diagnostic frame retains the expansion and the charged gas. -/
+def finish (s : State) (reverting : Bool) : Outcome :=
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (offset, first) =>
+    match Stack.pop first with
+    | .error e => failStack { s with stack := first } e
+    | .ok (length, stack) =>
+      let input := { s with stack }
+      charge input (Gas.rangeCost s.memory.words offset.toNat length.toNat) fun gas =>
+        let memory := Memory.Allocation.expand s.memory offset.toNat length.toNat
+        let frame := { input with gas, memory, memoryValid :=
+          Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid }
+        let output : ByteArray := ⟨(Memory.readRange s.memory.store offset.toNat length.toNat).toArray⟩
+        if reverting then .revert frame gas output else .returned frame output
+
+/-- Execute RETURN at any code position. -/
+def returnOp (s : State) : Outcome := finish s false
+
+/-- Execute REVERT at any code position. -/
+def revertOp (s : State) : Outcome := finish s true
 
 /-- Interpret the 32 digest bytes as a big-endian word. -/
 def digestWord (digest : Vector UInt8 32) : Word :=
@@ -561,6 +585,8 @@ def step (s : State) : Outcome :=
     | some .extcodesize => extCodeSize s
     | some .extcodehash => extCodeHash s
     | some .extcodecopy => extCodeCopy s
+    | some .return => returnOp s
+    | some .revert => revertOp s
     | some (.log count) => logN s count
     | some .selfbalance => selfBalance s
     | some .address => observe s (fun _ => s.context.environment.currentTarget.val)
@@ -946,11 +972,12 @@ def step (s : State) : Outcome :=
 
 /-- The frame carried by an outcome, including diagnostic input for failures. -/
 def Outcome.frame : Outcome → State
-  | .continue s | .stop s | .revert s _ _ | .exception s _ | .unsupported s _ => s
+  | .continue s | .stop s | .returned s _ | .revert s _ _ | .exception s _ | .unsupported s _ => s
 
 /-- Message-boundary observations modeled by this subset. -/
 inductive Boundary where
   | stopped (gas : Nat)
+  | returned (gas : Nat) (output : ByteArray)
   | reverted (gas : Nat) (output : ByteArray)
   | exceptional (gas : Nat) (reason : Exception)
 
@@ -958,11 +985,12 @@ inductive Boundary where
 
 Cancun `vm/interpreter.py`, `process_message`, burns all remaining gas on
 `ExceptionalHalt` and clears output.
-A manually supplied revert retains its gas and output.
+RETURN and REVERT retain their gas and output.
 World rollback is outside this subset.
 -/
 def settle : Outcome → Option Boundary
   | .stop s => some (.stopped s.gas)
+  | .returned s output => some (.returned s.gas output)
   | .revert _ gas output => some (.reverted gas output)
   | .exception _ reason => some (.exceptional 0 reason)
   | .continue _ | .unsupported _ _ => none

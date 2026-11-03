@@ -84,6 +84,7 @@ theorem program_memory (fuel : Nat) (s : Frame.State) (code : s.code = program) 
     cases h : Frame.step s with
     | «continue» t => exact ih t ((Frame.continue_code_unchanged h).trans code)
     | stop t => trivial
+    | returned t output => trivial
     | revert input gas output => trivial
     | exception input e => trivial
     | unsupported input op => trivial
