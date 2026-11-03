@@ -760,3 +760,18 @@ Storage reads remain unchanged when execution does not reach SLOAD.
 `Runner.run_storageReads_unchanged_of_no_sload` preserves the full storage-read list for exhausted, stopped, exceptional and unsupported results.
 The restricted runner cannot return a revert.
 A successful SLOAD records its target and key, so the unconditional tracker-retention claims cannot include storage-read equality.
+
+## Amsterdam state-gas meter foundation
+
+Amsterdam `vm/gas.py`, `charge_state_gas_from_meter` and `credit_state_gas_refund`, at revision
+`fd9298410ec7218838c8348f69c1eb633f1797dc`, charge the state reservoir before spilling into execution gas.
+A credit pays outstanding spill first and then restores the state reservoir.
+`Gas.StateMeter.Meter` exposes both pools, the baseline, signed refund counter, outstanding spill and committed spill.
+`chargeState`, `creditState` and `adjustRefund` are pure operations on an explicitly supplied meter.
+The operations accept arbitrary natural-number meter fields and a signed refund counter; no frame or transaction invariant is assumed.
+`ChargeEffect`, `CreditEffect` and `RefundEffect` state their fieldwise arithmetic contracts in the proof library.
+
+This is a standalone foundation for SSTORE; it is not integrated into `Frame.State` or opcode dispatch.
+SSTORE, its static-context check, pricing and state updates, refund settlement and cap, transaction initialization, and child rollback are not implemented by this foundation.
+The pinned `vm/gas.py` SHA-256 is `67973191c49234387186ad17316c556adab73723f782e95104dd3a949132367c`.
+The pinned `vm/instructions/storage.py` SHA-256 is `c55f677ab99d2c9147d807d0b57bd616d5401d13c8fa92db0afa3f64d7376615`.

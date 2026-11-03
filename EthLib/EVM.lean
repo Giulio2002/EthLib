@@ -6,6 +6,7 @@ public import EthLib.EVM.TransactionAccount
 public import EthLib.EVM.TransactionTransfer
 public import EthLib.EVM.Memory.WordAccess
 public import EthLib.EVM.Gas
+public import EthLib.EVM.Gas.StateMeter
 public import EthLib.EVM.BlobFee
 
 public import EthLib.EVM.Word
