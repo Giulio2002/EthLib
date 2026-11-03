@@ -145,9 +145,10 @@ theorem balance_cost_cases (s : State) (a : World.Address) :
     (a ∉ s.warmAddresses → BalanceCost s a = 3000) := by
   simp [BalanceCost]
 
-/-- Instructions other than BALANCE preserve the entire warm list. -/
+/-- Instructions other than BALANCE, EXTCODESIZE and EXTCODEHASH preserve the warm list. -/
 theorem outcome_warm_unchanged_of_not_balance {s : State} {out : Outcome}
-    (notBalance : ¬ At s (some .balance)) (rule : Rule s out) :
+    (notBalance : ¬ At s (some .balance)) (notSize : ¬ At s (some .extcodesize))
+    (notHash : ¬ At s (some .extcodehash)) (rule : Rule s out) :
     out.frame.warmAddresses = s.warmAddresses := by
   cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SstoreReady, SstoreReadFields,
     SstoreCreditFields, SstoreExecutionFields, SstoreChargeFields, SstoreMeterRetained, SstoreWriteFields] <;> aesop

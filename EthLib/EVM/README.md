@@ -447,7 +447,7 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The augmented 256-byte dispatch regression covers 136 supported instructions and 17 assigned but unsupported instructions.
+The augmented 256-byte dispatch regression covers 138 supported instructions and 15 assigned but unsupported instructions.
 It also covers 102 unassigned bytes and INVALID.
 The historical Cancun subset has 125 supported instructions and 107 unassigned bytes.
 The Cancun-plus-CLZ subset has 126 supported instructions and 106 unassigned bytes.
@@ -718,7 +718,8 @@ The list represents a set by membership and may contain duplicates.
 Frame constructors and quantified runner theorems must supply this new argument.
 `Advances` and `AdvancesMemory` now include warm-list equality.
 `outcome_tracker_read` allows one account or storage read when SSTORE and TSTORE are excluded.
-`outcome_tracker_unchanged_of_not_selfBalance` also excludes BALANCE, SLOAD, SSTORE and TSTORE.
+`outcome_tracker_unchanged_of_not_selfBalance` also excludes BALANCE, EXTCODESIZE, EXTCODEHASH, SLOAD, SSTORE and TSTORE.
+`outcome_warm_unchanged_of_not_balance` excludes BALANCE, EXTCODESIZE and EXTCODEHASH.
 The tracker account-read list is separate and survives tracker snapshot rollback.
 The source copies warm sets for child frames and merges them only after successful child execution; this instruction subset does not execute calls or implement that merge.
 No transaction initialization or full Amsterdam execution is claimed.
@@ -805,3 +806,17 @@ These operations do not initialize transaction state or implement child calls an
 Callers that only need persistent writes can instead use `Frame.outcome_persistent_writes_unchanged_of_not_sstore` or `Frame.step_persistent_writes_unchanged_of_not_sstore`.
 These retain account writes, storage writes, code writes and storage clears while allowing TSTORE.
 For bounded runs, `Runner.SelfBalanceProgram.run_persistent_writes_unchanged_of_no_sstore` needs only `NoSstoreRun` and covers every result.
+
+## External code queries
+
+Amsterdam `environment.py` defines EXTCODESIZE at `0x3b` and EXTCODEHASH at `0x3f`.
+Both truncate the operand to 160 bits, warm a cold address before charging, and record the account read after charging.
+EXTCODESIZE charges 200 gas for warm and 3100 for cold access, including the separate code-reading charge.
+EXTCODEHASH charges 100 gas for warm and 3000 for cold access.
+
+EXTCODESIZE reads the account's own code bytes, including delegation designators, through the empty-hash sentinel, transaction code overlay and parent store.
+An incomplete supplied code store produces the typed `missingCode` diagnostic after charging and recording the account read.
+EXTCODEHASH returns zero when the selected account equals the source empty account; otherwise it returns the stored code hash.
+`ExtCodeSizeLocal` specifies source-order outcomes, while `extCodeHash_success_iff` and `extCodeHash_exception_iff` describe all helper outcomes.
+The pinned source is inspected independently; Lean checks the stated reference and implementation relation.
+This slice does not implement EXTCODECOPY or child calls.

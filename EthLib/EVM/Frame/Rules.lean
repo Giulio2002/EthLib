@@ -25,7 +25,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .tload | .tstore | .sstore | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .extcodesize | .extcodehash | .tload | .tstore | .sstore | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -177,6 +177,22 @@ def BalanceAccount (s : State) (a : World.Address) : World.Account :=
 /-- Record the account read after a successful gas charge. -/
 def BalanceRead (s : State) (a : World.Address) : TransactionState.State :=
   { s.tracker with accountReads := a :: s.tracker.accountReads }
+
+/-- EXTCODESIZE adds Amsterdam's separate code-reading charge. -/
+def ExtCodeSizeCost (s : State) (a : World.Address) : Nat := BalanceCost s a + 100
+
+/-- Code lookup follows the empty sentinel, transaction overlay and parent store. -/
+def ExtCodeBytes (s : State) (a : World.Address) : Option ByteArray :=
+  let hash := (BalanceAccount s a).codeHash
+  if hash = World.emptyCodeHash then some ByteArray.empty else
+  match s.tracker.writes.codeWrites.lookup hash with
+  | some code => some code
+  | none => s.tracker.parent.codes.lookup hash
+
+/-- EXTCODEHASH returns zero for the source's empty account. -/
+def ExtCodeHashValue (s : State) (a : World.Address) : Word :=
+  let account := BalanceAccount s a
+  if account = World.emptyAccount then 0 else account.codeHash
 
 /-- Slot warming is independent of tracker reads and account warmth. -/
 def SloadWarm (s : State) (key : Word) : List (World.Address × Word) :=
@@ -437,6 +453,31 @@ inductive Rule : State → Outcome → Prop where
       Advances { s with warmAddresses := BalanceWarm s (BalanceAddress x), tracker := BalanceRead s (BalanceAddress x) } t (s.pc + 1)
         (s.gas - BalanceCost s (BalanceAddress x))
         ((BalanceAccount s (BalanceAddress x)).balance :: rest.val) → Rule s (.continue t)
+  | extCodeSizeUnderflow (s) : At s (some .extcodesize) → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | extCodeSizeGas (s : State) (rest : Stack) (x : Word) : At s (some .extcodesize) →
+      s.stack.val = x :: rest.val → s.gas < ExtCodeSizeCost s (BalanceAddress x) →
+      Rule s (.exception { s with stack := rest, warmAddresses := BalanceWarm s (BalanceAddress x) } .outOfGas)
+  | extCodeSizeMissing (s : State) (rest : Stack) (x : Word) : At s (some .extcodesize) →
+      s.stack.val = x :: rest.val → ExtCodeSizeCost s (BalanceAddress x) ≤ s.gas →
+      ExtCodeBytes s (BalanceAddress x) = none →
+      Rule s (.exception { s with stack := rest, warmAddresses := BalanceWarm s (BalanceAddress x), tracker := BalanceRead s (BalanceAddress x), gas := s.gas - ExtCodeSizeCost s (BalanceAddress x) } .missingCode)
+  | extCodeSize (s t : State) (rest : Stack) (x : Word) (code : ByteArray) : At s (some .extcodesize) →
+      s.stack.val = x :: rest.val → ExtCodeSizeCost s (BalanceAddress x) ≤ s.gas →
+      ExtCodeBytes s (BalanceAddress x) = some code →
+      Advances { s with warmAddresses := BalanceWarm s (BalanceAddress x), tracker := BalanceRead s (BalanceAddress x) }
+        t (s.pc + 1) (s.gas - ExtCodeSizeCost s (BalanceAddress x)) (BitVec.ofNat 256 code.size :: rest.val) →
+      Rule s (.continue t)
+  | extCodeHashUnderflow (s) : At s (some .extcodehash) → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | extCodeHashGas (s : State) (rest : Stack) (x : Word) : At s (some .extcodehash) →
+      s.stack.val = x :: rest.val → s.gas < BalanceCost s (BalanceAddress x) →
+      Rule s (.exception { s with stack := rest, warmAddresses := BalanceWarm s (BalanceAddress x) } .outOfGas)
+  | extCodeHash (s t : State) (rest : Stack) (x : Word) : At s (some .extcodehash) →
+      s.stack.val = x :: rest.val → BalanceCost s (BalanceAddress x) ≤ s.gas →
+      Advances { s with warmAddresses := BalanceWarm s (BalanceAddress x), tracker := BalanceRead s (BalanceAddress x) }
+        t (s.pc + 1) (s.gas - BalanceCost s (BalanceAddress x)) (ExtCodeHashValue s (BalanceAddress x) :: rest.val) →
+      Rule s (.continue t)
   | selfBalanceGas (s) : At s (some .selfbalance) → s.gas < 5 →
       Rule s (.exception s .outOfGas)
   | selfBalanceFull (s) : At s (some .selfbalance) → 5 ≤ s.gas →

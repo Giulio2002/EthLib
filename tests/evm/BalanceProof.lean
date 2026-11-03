@@ -29,9 +29,10 @@ example (s : Frame.State) (a : World.Address) :
   Frame.balance_cost_cases s a
 
 example (s : Frame.State) (out : Frame.Outcome)
-    (notBalance : ¬ Frame.At s (some .balance)) (rule : Frame.Rule s out) :
+    (notBalance : ¬ Frame.At s (some .balance)) (notSize : ¬ Frame.At s (some .extcodesize))
+    (notHash : ¬ Frame.At s (some .extcodehash)) (rule : Frame.Rule s out) :
     out.frame.warmAddresses = s.warmAddresses :=
-  Frame.outcome_warm_unchanged_of_not_balance notBalance rule
+  Frame.outcome_warm_unchanged_of_not_balance notBalance notSize notHash rule
 
 example (x : Word) (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)

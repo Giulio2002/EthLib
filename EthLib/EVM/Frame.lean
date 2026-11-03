@@ -1,6 +1,7 @@
 module
 
 public import EthLib.EVM.TransactionTracker
+public import EthLib.EVM.TransactionAccount
 public import EthLib.EVM.CallData
 public import EthLib.EVM.ReturnData
 public import EthLib.EVM.Stack
@@ -66,7 +67,7 @@ structure State where
 /-- Exceptional halts distinguished by their first failing check. -/
 inductive Exception where
   | invalidOpcode | invalidJumpDestination | outOfGas | stackUnderflow | stackOverflow | outOfBoundsRead | invalidParameter
-  | writeInStaticContext | missingStorageAccount
+  | writeInStaticContext | missingStorageAccount | missingCode
   deriving DecidableEq, Repr
 
 /-- Frame outcomes include a typed revert for future semantics.
@@ -156,6 +157,44 @@ def balance (s : State) : Outcome :=
     charge input (if warm then 100 else 3000) fun gas =>
       let result := TransactionTracker.getAccount s.tracker address
       match Stack.push stack result.1.balance with
+      | .error e => failStack { input with tracker := result.2, gas } e
+      | .ok stack => .continue { input with stack, gas, pc := s.pc + 1, tracker := result.2 }
+
+/-- Amsterdam `environment.py`, `extcodesize`, at revision
+`fd9298410ec7218838c8348f69c1eb633f1797dc`.
+Missing code is explicit for a supplied incomplete code store. -/
+def extCodeSize (s : State) : Outcome :=
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (word, stack) =>
+    let address := balanceAddress word
+    let warm := s.warmAddresses.contains address
+    let touched := if warm then s.warmAddresses else address :: s.warmAddresses
+    let input := { s with stack, warmAddresses := touched }
+    charge input (if warm then 200 else 3100) fun gas =>
+      let result := TransactionTracker.getAccount s.tracker address
+      let read := { input with tracker := result.2, gas }
+      match TransactionAccount.getCode result.2 result.1.codeHash with
+      | none => .exception read .missingCode
+      | some code =>
+        match Stack.push stack (BitVec.ofNat 256 code.size) with
+        | .error e => failStack read e
+        | .ok stack => .continue { read with stack, pc := s.pc + 1 }
+
+/-- Amsterdam `environment.py`, `extcodehash`, at the same revision.
+The empty account returns zero, even when explicitly present. -/
+def extCodeHash (s : State) : Outcome :=
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (word, stack) =>
+    let address := balanceAddress word
+    let warm := s.warmAddresses.contains address
+    let touched := if warm then s.warmAddresses else address :: s.warmAddresses
+    let input := { s with stack, warmAddresses := touched }
+    charge input (if warm then 100 else 3000) fun gas =>
+      let result := TransactionTracker.getAccount s.tracker address
+      let value := if result.1 == World.emptyAccount then 0 else result.1.codeHash
+      match Stack.push stack value with
       | .error e => failStack { input with tracker := result.2, gas } e
       | .ok stack => .continue { input with stack, gas, pc := s.pc + 1, tracker := result.2 }
 
@@ -432,6 +471,8 @@ def step (s : State) : Outcome :=
     | some .tload => tload s
     | some .tstore => tstore s
     | some .balance => balance s
+    | some .extcodesize => extCodeSize s
+    | some .extcodehash => extCodeHash s
     | some .selfbalance => selfBalance s
     | some .address => observe s (fun _ => s.context.environment.currentTarget.val)
     | some .origin => observe s (fun _ => s.context.environment.origin.val)

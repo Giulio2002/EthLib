@@ -2325,6 +2325,17 @@ theorem transient_write_fields (s : TransactionState.State) (a : World.Address) 
     TransientWriteFields s (TransactionTracker.setTransientStorage s a key value) a key value := by
   by_cases zero : value = 0#256 <;> simp [TransientWriteFields, TransactionTracker.setTransientStorage, zero]
 
+theorem extCodeBytes_eq (s : State) (a : World.Address) :
+    TransactionAccount.getCode (TransactionTracker.getAccount s.tracker a).2
+      (TransactionTracker.getAccount s.tracker a).1.codeHash = ExtCodeBytes s a := by
+  have account : (TransactionTracker.getAccount s.tracker a).1 = BalanceAccount s a := rfl
+  have read : (TransactionTracker.getAccount s.tracker a).2 = BalanceRead s a := rfl
+  rw [account, read]
+  by_cases empty : (BalanceAccount s a).codeHash = World.emptyCodeHash
+  · simp [TransactionAccount.getCode, ExtCodeBytes, empty]
+  · simp [TransactionAccount.getCode, ExtCodeBytes, World.getCode, BalanceRead, empty]
+    cases s.tracker.writes.codeWrites.lookup (BalanceAccount s a).codeHash <;> simp
+
 theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out := by
   cases h with
   | endCode end_ => exact step_end _ end_
@@ -2474,6 +2485,70 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
     obtain ⟨bounds, decoded⟩ := at_
     have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr empty
     simp [step, bounds, decoded, balance, pop, failStack]
+  | extCodeSizeUnderflow at_ empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    simp [step, bounds, decoded, extCodeSize, pop, failStack]
+  | extCodeHashUnderflow at_ empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    simp [step, bounds, decoded, extCodeHash, pop, failStack]
+  | extCodeSizeGas rest x at_ items gas =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    by_cases warm : BalanceAddress x ∈ s.warmAddresses <;>
+      simp_all [step, extCodeSize, balanceAddress, BalanceAddress, BalanceWarm, BalanceCost,
+        ExtCodeSizeCost, charge, Gas.charge, Nat.not_le_of_gt]
+  | extCodeHashGas rest x at_ items gas =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    by_cases warm : BalanceAddress x ∈ s.warmAddresses <;>
+      simp_all [step, extCodeHash, balanceAddress, BalanceAddress, BalanceWarm, BalanceCost,
+        charge, Gas.charge, Nat.not_le_of_gt]
+  | extCodeSizeMissing rest x at_ items gas missing =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have addr : balanceAddress x = BalanceAddress x := rfl
+    have cost : (if s.warmAddresses.contains (BalanceAddress x) then 200 else 3100) = ExtCodeSizeCost s (BalanceAddress x) := by simp [ExtCodeSizeCost, BalanceCost]; split <;> simp_all
+    have warms : (if s.warmAddresses.contains (BalanceAddress x) then s.warmAddresses else BalanceAddress x :: s.warmAddresses) = BalanceWarm s (BalanceAddress x) := by simp [BalanceWarm]
+    have bytes := extCodeBytes_eq s (BalanceAddress x)
+    simp only [step, dite_eq_left bounds, decoded, extCodeSize, pop, addr, cost, warms, charge,
+      Gas.charge, ite_eq_left gas, bytes, missing]
+    rfl
+  | extCodeSize t rest x code at_ items gas present fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have room : rest.val.length < 1024 := by have b := s.stack.property; rw [items] at b; simp at b; omega
+    let stack : Stack := ⟨BitVec.ofNat 256 code.size :: rest.val, by simp; omega⟩
+    have push : rest.push (BitVec.ofNat 256 code.size) = .ok stack :=
+      (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨room, rfl⟩
+    have eq := advances_eq { s with warmAddresses := BalanceWarm s (BalanceAddress x), tracker := BalanceRead s (BalanceAddress x) }
+      t (s.pc + 1) (s.gas - ExtCodeSizeCost s (BalanceAddress x)) stack fields
+    subst t
+    have addr : balanceAddress x = BalanceAddress x := rfl
+    have cost : (if s.warmAddresses.contains (BalanceAddress x) then 200 else 3100) = ExtCodeSizeCost s (BalanceAddress x) := by simp [ExtCodeSizeCost, BalanceCost]; split <;> simp_all
+    have warms : (if s.warmAddresses.contains (BalanceAddress x) then s.warmAddresses else BalanceAddress x :: s.warmAddresses) = BalanceWarm s (BalanceAddress x) := by simp [BalanceWarm]
+    have bytes := extCodeBytes_eq s (BalanceAddress x)
+    simp only [step, dite_eq_left bounds, decoded, extCodeSize, pop, addr, cost, warms, charge,
+      Gas.charge, ite_eq_left gas, bytes, present, push]
+    rfl
+  | extCodeHash t rest x at_ items gas fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have room : rest.val.length < 1024 := by have b := s.stack.property; rw [items] at b; simp at b; omega
+    let stack : Stack := ⟨ExtCodeHashValue s (BalanceAddress x) :: rest.val, by simp; omega⟩
+    have push : rest.push (ExtCodeHashValue s (BalanceAddress x)) = .ok stack :=
+      (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨room, rfl⟩
+    have eq := advances_eq { s with warmAddresses := BalanceWarm s (BalanceAddress x), tracker := BalanceRead s (BalanceAddress x) }
+      t (s.pc + 1) (s.gas - BalanceCost s (BalanceAddress x)) stack fields
+    subst t
+    have addr : balanceAddress x = BalanceAddress x := rfl
+    have cost : (if s.warmAddresses.contains (BalanceAddress x) then 100 else 3000) = BalanceCost s (BalanceAddress x) := by simp [BalanceCost]
+    have warms : (if s.warmAddresses.contains (BalanceAddress x) then s.warmAddresses else BalanceAddress x :: s.warmAddresses) = BalanceWarm s (BalanceAddress x) := by simp [BalanceWarm]
+    have value : (if (TransactionTracker.getAccount s.tracker (BalanceAddress x)).1 == World.emptyAccount then 0 else (TransactionTracker.getAccount s.tracker (BalanceAddress x)).1.codeHash) = ExtCodeHashValue s (BalanceAddress x) := by simp [ExtCodeHashValue, BalanceAccount, TransactionTracker.getAccount, TransactionTracker.getAccountOptional, World.getAccountOptional]; rfl
+    have read : (TransactionTracker.getAccount s.tracker (BalanceAddress x)).2 = BalanceRead s (BalanceAddress x) := rfl
+    simp only [step, dite_eq_left bounds, decoded, extCodeHash, pop, addr, cost, warms, charge,
+      Gas.charge, ite_eq_left gas, value, read, push]
   | balanceGas rest x at_ items gas =>
     obtain ⟨bounds, decoded⟩ := at_
     have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
@@ -2866,6 +2941,33 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
             let t := { s with tracker := SloadRead s key, warmSlots := SloadWarm s key, stack, pc := s.pc + 1, gas := s.gas - SloadCost s key }
             exact ⟨_, .sload s t rest key at_ items' gas (by simp [Advances, t, stack, rest])⟩
           · exact ⟨_, .sloadGas s rest key at_ items' (Nat.lt_of_not_ge gas)⟩
+      | extcodesize =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .extCodeSizeUnderflow s at_ items⟩
+        | cons x xs =>
+          let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+          have items' : s.stack.val = x :: rest.val := items
+          by_cases gas : ExtCodeSizeCost s (BalanceAddress x) ≤ s.gas
+          · cases bytes : ExtCodeBytes s (BalanceAddress x) with
+            | none => exact ⟨_, .extCodeSizeMissing s rest x at_ items' gas bytes⟩
+            | some code =>
+              let stack : Stack := ⟨BitVec.ofNat 256 code.size :: xs, by
+                have b := s.stack.property; rw [items] at b; simp at b; simp; omega⟩
+              let t := { s with tracker := BalanceRead s (BalanceAddress x), warmAddresses := BalanceWarm s (BalanceAddress x), stack, pc := s.pc + 1, gas := s.gas - ExtCodeSizeCost s (BalanceAddress x) }
+              exact ⟨_, .extCodeSize s t rest x code at_ items' gas bytes (by simp [Advances, t, stack, rest])⟩
+          · exact ⟨_, .extCodeSizeGas s rest x at_ items' (Nat.lt_of_not_ge gas)⟩
+      | extcodehash =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .extCodeHashUnderflow s at_ items⟩
+        | cons x xs =>
+          let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+          have items' : s.stack.val = x :: rest.val := items
+          by_cases gas : BalanceCost s (BalanceAddress x) ≤ s.gas
+          · let stack : Stack := ⟨ExtCodeHashValue s (BalanceAddress x) :: xs, by
+              have b := s.stack.property; rw [items] at b; simp at b; simp; omega⟩
+            let t := { s with tracker := BalanceRead s (BalanceAddress x), warmAddresses := BalanceWarm s (BalanceAddress x), stack, pc := s.pc + 1, gas := s.gas - BalanceCost s (BalanceAddress x) }
+            exact ⟨_, .extCodeHash s t rest x at_ items' gas (by simp [Advances, t, stack, rest])⟩
+          · exact ⟨_, .extCodeHashGas s rest x at_ items' (Nat.lt_of_not_ge gas)⟩
       | balance =>
         cases items : s.stack.val with
         | nil => exact ⟨_, .balanceUnderflow s at_ items⟩

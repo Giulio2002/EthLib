@@ -41,9 +41,9 @@ example (s : Frame.State) :
   Frame.selfBalance_account_value s
 
 example (s : Frame.State) (out : Frame.Outcome)
-    (notSelf : ¬ Frame.At s (some .selfbalance)) (notBalance : ¬ Frame.At s (some .balance)) (notSload : ¬ Frame.At s (some .sload)) (notSstore : ¬ Frame.At s (some .sstore)) (notTstore : ¬ Frame.At s (some .tstore)) (rule : Frame.Rule s out) :
+    (notSelf : ¬ Frame.At s (some .selfbalance)) (notBalance : ¬ Frame.At s (some .balance)) (notSload : ¬ Frame.At s (some .sload)) (notSstore : ¬ Frame.At s (some .sstore)) (notTstore : ¬ Frame.At s (some .tstore)) (notSize : ¬ Frame.At s (some .extcodesize)) (notHash : ¬ Frame.At s (some .extcodehash)) (rule : Frame.Rule s out) :
     out.frame.tracker = s.tracker :=
-  Frame.outcome_tracker_unchanged_of_not_selfBalance notSelf notBalance notSload notSstore notTstore rule
+  Frame.outcome_tracker_unchanged_of_not_selfBalance notSelf notBalance notSload notSstore notTstore notSize notHash rule
 
 example (fuel : Nat) (s : Frame.State) (trace : Runner.NoSstoreRun fuel s) (noTransient : Runner.NoTstoreRun fuel s) :
     (Runner.run fuel s).frame.tracker.parent = s.tracker.parent ∧
