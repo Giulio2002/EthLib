@@ -21,14 +21,14 @@ def program : ByteArray := ⟨#[0x01, 0x15, 0x58, 0x5a, 0x00]⟩
 The GAS word is reduced modulo `2^256`, as required by the frame's total extension.
 -/
 theorem add_iszero_pc_gas (x y : Word) (xs : List Word) (room : xs.length ≤ 1021)
-    (g : Nat) (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) :
+    (g : Nat) (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) :
     ∃ t, Runner.run 5 ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩,
-      10 + g, mem, valid, context, returnData, tracker⟩ = .stopped t ∧
+      10 + g, mem, valid, context, returnData, tracker, warmAddresses⟩ = .stopped t ∧
       t.pc = 5 ∧ t.gas = g ∧ t.code = program ∧ t.memory = mem ∧
       t.stack.val = BitVec.ofNat 256 g :: 2 :: Word.iszeroResult (Word.add x y) :: xs := by
   -- Name each intermediate frame to state its exact stack and gas.
   let z := Word.iszeroResult (Word.add x y)
-  let s : Frame.State := ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩, 10 + g, mem, valid, context, returnData, tracker⟩
+  let s : Frame.State := ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩, 10 + g, mem, valid, context, returnData, tracker, warmAddresses⟩
   let s1 : Frame.State := { s with pc := 1, gas := 7 + g, stack := ⟨Word.add x y :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s with pc := 2, gas := 4 + g, stack := ⟨z :: xs, by simp; omega⟩ }
   let s3 : Frame.State := { s with pc := 3, gas := 2 + g, stack := ⟨2 :: z :: xs, by simp; omega⟩ }

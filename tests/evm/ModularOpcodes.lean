@@ -7,7 +7,7 @@ set_option maxRecDepth 10000
 set_option maxHeartbeats 2000000
 
 def state (op : UInt8) (gas : Nat) (xs : List Word) (bound : xs.length ≤ 1024) : Frame.State :=
-  ⟨⟨#[op]⟩, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty, { parent := {} }⟩
+  ⟨⟨#[op]⟩, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty, { parent := {} }, []⟩
 
 def result (op : UInt8) (gas : Nat) (xs : List Word) (bound : xs.length ≤ 1024) :
     Option (List Word × Nat × Nat) :=
@@ -75,7 +75,7 @@ def failure (op : UInt8) (gas : Nat) (xs : List Word) (bound : xs.length ≤ 102
 -- PUSH values feed ADDMOD, EXP, and MULMOD; STOP retains code and memory.
 def program : ByteArray := ⟨#[0x60, 7, 0x60, 5, 0x60, 7, 0x60, 5, 0x60, 9, 0x08, 0x60, 2, 0x0a, 0x09, 0x00]⟩
 def start : Frame.State :=
-  ⟨program, 0, Stack.empty, 44, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty, { parent := {} }⟩
+  ⟨program, 0, Stack.empty, 44, Memory.Allocation.empty, Memory.Allocation.empty_valid, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty, { parent := {} }, []⟩
 #guard match Runner.run 10 start with
   | .stopped s => s.stack.val == [5] && s.pc == 16 && s.gas == 0 &&
       s.code == program && decide (s.memory = start.memory)

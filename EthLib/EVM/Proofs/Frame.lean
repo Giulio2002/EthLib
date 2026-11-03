@@ -129,7 +129,7 @@ theorem step_swap_empty (s : State) (i : Fin 16) (h : At s (some (.swap i)))
 theorem advances_eq (s t : State) (pc gas : Nat) (stack : Stack)
     (h : Advances s t pc gas stack.val) :
     t = { s with pc, gas, stack } := by
-  rcases h with ⟨code, memory, pcEq, gasEq, stackEq, contextEq, returnDataEq, trackerEq⟩
+  rcases h with ⟨code, memory, pcEq, gasEq, stackEq, contextEq, returnDataEq, trackerEq, warmEq⟩
   have stackEq' : t.stack = stack := Subtype.ext stackEq
   cases s
   cases t
@@ -2133,7 +2133,7 @@ theorem returnDataCopy_helper_actual (s t : State) (x y z : Word) (xs : List Wor
   · by_cases bounds : y.toNat + z.toNat ≤ s.returnData.size
     · simp only [ite_eq_left gas, ite_eq_left bounds] at run
       cases run
-      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
     · simp [gas, bounds] at run
   · simp [gas] at run
 
@@ -2273,7 +2273,7 @@ theorem keccak_helper_actual (s t : State) (x y : Word) (xs : List Word)
   by_cases gas : Gas.keccakCost s.memory.words x.toNat y.toNat ≤ s.gas
   · simp only [ite_eq_left gas, Outcome.continue.injEq] at run
     subst t
-    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   · simp [gas] at run
 
 /-- Expansion performed by a successful hash preserves every raw store byte. -/
@@ -2311,6 +2311,35 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | stop at_ => exact step_stop _ at_
   | invalid at_ => rcases at_ with h | h; exact step_unassigned _ h; exact step_invalid _ h
   | unsupported op at_ unsupported => exact step_unsupported _ op at_ unsupported
+  | balanceUnderflow at_ empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    simp [step, bounds, decoded, balance, pop, failStack]
+  | balanceGas rest x at_ items gas =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have address : balanceAddress x = BalanceAddress x := rfl
+    have cost : (if s.warmAddresses.contains (BalanceAddress x) then 100 else 3000) = BalanceCost s (BalanceAddress x) := by simp [BalanceCost]
+    have warms : (if s.warmAddresses.contains (BalanceAddress x) then s.warmAddresses else BalanceAddress x :: s.warmAddresses) = BalanceWarm s (BalanceAddress x) := by simp [BalanceWarm]
+    simp only [step, dite_eq_left bounds, decoded, balance, pop, address, cost, warms,
+      charge, Gas.charge, ite_eq_right (Nat.not_le_of_gt gas)]
+  | balance t rest x at_ items gas fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop : s.stack.pop = .ok (x, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have room : rest.val.length < 1024 := by have bound := s.stack.property; rw [items] at bound; simp at bound; omega
+    let stack : Stack := ⟨(BalanceAccount s (BalanceAddress x)).balance :: rest.val, by simp; omega⟩
+    have push : rest.push (BalanceAccount s (BalanceAddress x)).balance = .ok stack :=
+      (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨room, rfl⟩
+    have eq := advances_eq { s with warmAddresses := BalanceWarm s (BalanceAddress x), tracker := BalanceRead s (BalanceAddress x) } t
+      (s.pc + 1) (s.gas - BalanceCost s (BalanceAddress x)) stack fields
+    subst t
+    have value : (TransactionTracker.getAccount s.tracker (BalanceAddress x)).1 = BalanceAccount s (BalanceAddress x) := rfl
+    have read : (TransactionTracker.getAccount s.tracker (BalanceAddress x)).2 = BalanceRead s (BalanceAddress x) := rfl
+    have address : balanceAddress x = BalanceAddress x := rfl
+    have cost : (if s.warmAddresses.contains (BalanceAddress x) then 100 else 3000) = BalanceCost s (BalanceAddress x) := by simp [BalanceCost]
+    have warms : (if s.warmAddresses.contains (BalanceAddress x) then s.warmAddresses else BalanceAddress x :: s.warmAddresses) = BalanceWarm s (BalanceAddress x) := by simp [BalanceWarm]
+    simp only [step, dite_eq_left bounds, decoded, balance, pop, address, cost, warms,
+      charge, Gas.charge, ite_eq_left gas, value, read, push]
   | selfBalanceGas at_ gas =>
     obtain ⟨bounds, decoded⟩ := at_
     simp [step, bounds, decoded, selfBalance, charge, Gas.charge, Nat.not_le_of_gt gas]
@@ -2581,6 +2610,18 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
       cases op with
       | stop => exact ⟨_, .stop s at_⟩
       | invalid => exact ⟨_, .invalid s (Or.inr at_)⟩
+      | balance =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .balanceUnderflow s at_ items⟩
+        | cons x xs =>
+          let rest : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+          have items' : s.stack.val = x :: rest.val := items
+          by_cases gas : BalanceCost s (BalanceAddress x) ≤ s.gas
+          · let stack : Stack := ⟨(BalanceAccount s (BalanceAddress x)).balance :: xs, by
+              have bound := s.stack.property; rw [items] at bound; simp at bound; simp; omega⟩
+            let t := { s with tracker := BalanceRead s (BalanceAddress x), warmAddresses := BalanceWarm s (BalanceAddress x), stack, pc := s.pc + 1, gas := s.gas - BalanceCost s (BalanceAddress x) }
+            exact ⟨_, .balance s t rest x at_ items' gas (by simp [Advances, t, stack, rest])⟩
+          · exact ⟨_, .balanceGas s rest x at_ items' (Nat.lt_of_not_ge gas)⟩
       | selfbalance =>
         by_cases gas : 5 ≤ s.gas
         · by_cases room : s.stack.val.length < 1024
@@ -3442,7 +3483,7 @@ theorem returnDataCopy_actual (s t : State) (x y z : Word) (xs : List Word)
   · by_cases bounds : y.toNat + z.toNat ≤ s.returnData.size
     · simp only [ite_eq_left gas, ite_eq_left bounds] at run
       cases run
-      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
     · simp [gas, bounds] at run
   · simp [gas] at run
 

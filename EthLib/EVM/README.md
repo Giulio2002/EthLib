@@ -447,7 +447,7 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The augmented 256-byte dispatch regression covers 131 supported instructions and 22 assigned but unsupported instructions.
+The augmented 256-byte dispatch regression covers 132 supported instructions and 21 assigned but unsupported instructions.
 It also covers 102 unassigned bytes and INVALID.
 The historical Cancun subset has 125 supported instructions and 107 unassigned bytes.
 The Cancun-plus-CLZ subset has 126 supported instructions and 106 unassigned bytes.
@@ -704,3 +704,27 @@ The source file `environment.py` has SHA-256
 The source files `vm/gas.py` and `vm/stack.py` have SHA-256
 `67973191c49234387186ad17316c556adab73723f782e95104dd3a949132367c` and
 `20cdb907098ae500c47abc6a1437cb9e4cdb5809f6c40b7d8935038aedd57b2a`.
+
+## BALANCE and warm addresses
+
+Amsterdam `vm/instructions/environment.py`, `balance`, at execution-specs revision
+`fd9298410ec7218838c8348f69c1eb633f1797dc` pops a word and keeps its low 160 bits.
+A warm account costs 100 gas; a cold account is added to the frame's warm list before a 3000 gas charge.
+A failed charge retains the popped stack and, for a cold access, the new warm address in its diagnostic frame.
+The transaction tracker records the account read only after the charge succeeds.
+
+`Frame.State` now takes an explicit `warmAddresses` list; callers supply the initial access state.
+The list represents a set by membership and may contain duplicates.
+Frame constructors and quantified runner theorems must supply this new argument.
+`Advances` and `AdvancesMemory` now include warm-list equality.
+`outcome_tracker_read` allows a read at any address, and `outcome_tracker_unchanged_of_not_selfBalance` also requires that the instruction is not BALANCE.
+The tracker account-read list is separate and survives tracker snapshot rollback.
+The source copies warm sets for child frames and merges them only after successful child execution; this instruction subset does not execute calls or implement that merge.
+No transaction initialization or full Amsterdam execution is claimed.
+
+The source `environment.py`, `gas.py`, `vm/__init__.py`, `instructions/system.py`, and `utils/address.py` SHA-256 values are respectively
+`8c57bd699b99ff8b4d8e41e6a9c89cd1a03dda8160bf1d6dffe091932ec03657`,
+`67973191c49234387186ad17316c556adab73723f782e95104dd3a949132367c`,
+`72bc02de1fc03a5a7ec70725cc8b8dd18241eb1a4b6e598f059505399cbefdab`,
+`d6d4df0e26882b26da44c535d4a29d2e8ef61d76da407290be51d403a5356c4b`, and
+`79fa8c0e46894536aea01ff9874a40e4e1bf7f862af8bf0be3e1d7a3bc3c163a`.

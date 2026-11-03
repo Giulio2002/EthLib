@@ -5,7 +5,7 @@ open EthLib.EVM
 private def env : Environment.Context := ⟨1, 2, 3, BitVec.ofNat 256 (2^255), BitVec.ofNat 256 (2^255 + 7), 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩
 private def frame (op : UInt8) (gas : Nat) (xs : List Word) (h : xs.length ≤ 1024) : Frame.State :=
   ⟨⟨#[op]⟩, 0, ⟨xs, h⟩, gas, Memory.Allocation.empty,
-    by intro a _; rfl, ⟨⟨#[7]⟩, env⟩, ⟨#[8]⟩, { parent := {} }⟩
+    by intro a _; rfl, ⟨⟨#[7]⟩, env⟩, ⟨#[8]⟩, { parent := {} }, []⟩
 
 private def read (op : UInt8) : Option Nat :=
   match Frame.step (frame op 2 [] (by decide)) with
@@ -44,6 +44,6 @@ example (fuel : Nat) (s : Frame.State) :
 /-- info: (true, true) -/
 #guard_msgs in
 #eval let bad := frame 0xfe 2 [] (by decide)
-  let unknown := frame 0x31 2 [] (by decide)
+  let unknown := frame 0x3b 2 [] (by decide)
   (match Runner.run 1 bad with | .exception t _ => t.context.environment.origin == env.origin | _ => false,
    match Runner.run 1 unknown with | .unsupported t _ => t.context.environment.caller == env.caller | _ => false)

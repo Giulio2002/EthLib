@@ -25,17 +25,17 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
 def Advances (s t : State) (pc gas : Nat) (xs : List Word) : Prop :=
-  t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker
+  t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧ t.warmAddresses = s.warmAddresses
 
 /-- Exact fields after a memory instruction. -/
 def AdvancesMemory (s t : State) (memory : Memory.Allocation.State)
     (pc gas : Nat) (xs : List Word) : Prop :=
-  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker
+  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧ t.warmAddresses = s.warmAddresses
 
 /-- A successful MCOPY with observed pops determines the resulting frame. -/
 theorem mcopy_actual_fields (s t : State) (destination source length : Word)
@@ -52,7 +52,7 @@ theorem mcopy_actual_fields (s t : State) (destination source length : Word)
   · simp only [step, dite_eq_left bounds, decoded, p1, p2, p3, charge, Gas.charge,
       ite_eq_left gas] at run
     cases run
-    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   · simp [step, bounds, decoded, p1, p2, p3, charge, Gas.charge, gas] at run
 
 /-- Cancun `runtime.py`: the source byte length at an instruction boundary. -/
@@ -156,12 +156,44 @@ def SelfBalanceAccount (s : State) : World.Account :=
 def SelfBalanceRead (s : State) : TransactionState.State :=
   { s.tracker with accountReads := s.context.environment.currentTarget :: s.tracker.accountReads }
 
+/-- A BALANCE operand denotes its low 160 bits. -/
+def BalanceAddress (word : Word) : World.Address :=
+  ⟨word.toNat % (2 ^ 160), Nat.mod_lt _ (by decide)⟩
+
+/-- Warm membership is separate from transaction tracker reads. -/
+def BalanceWarm (s : State) (a : World.Address) : List World.Address :=
+  if a ∈ s.warmAddresses then s.warmAddresses else a :: s.warmAddresses
+
+/-- Amsterdam account-access gas depends on prior warm membership. -/
+def BalanceCost (s : State) (a : World.Address) : Nat :=
+  if a ∈ s.warmAddresses then 100 else 3000
+
+/-- The overlay shadows the immutable parent, including tombstones. -/
+def BalanceAccount (s : State) (a : World.Address) : World.Account :=
+  (match s.tracker.writes.accountWrites.lookup a with
+   | some value => value
+   | none => s.tracker.parent.accounts.lookup a).getD World.emptyAccount
+
+/-- Record the account read after a successful gas charge. -/
+def BalanceRead (s : State) (a : World.Address) : TransactionState.State :=
+  { s.tracker with accountReads := a :: s.tracker.accountReads }
+
 /-- Source-oriented rules for one frame transition. -/
 inductive Rule : State → Outcome → Prop where
   | endCode (s) : s.code.size ≤ s.pc → Rule s (.stop s)
   | stop (s) : At s (some .stop) → Rule s (.stop { s with pc := s.pc + 1 })
   | invalid (s) : At s none ∨ At s (some .invalid) → Rule s (.exception s .invalidOpcode)
   | unsupported (s op) : At s (some op) → Unsupported op → Rule s (.unsupported s op)
+  | balanceUnderflow (s) : At s (some .balance) → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | balanceGas (s : State) (rest : Stack) (x : Word) : At s (some .balance) → s.stack.val = x :: rest.val →
+      s.gas < BalanceCost s (BalanceAddress x) →
+      Rule s (.exception { s with stack := rest, warmAddresses := BalanceWarm s (BalanceAddress x) } .outOfGas)
+  | balance (s t : State) (rest : Stack) (x : Word) : At s (some .balance) → s.stack.val = x :: rest.val →
+      BalanceCost s (BalanceAddress x) ≤ s.gas →
+      Advances { s with warmAddresses := BalanceWarm s (BalanceAddress x), tracker := BalanceRead s (BalanceAddress x) } t (s.pc + 1)
+        (s.gas - BalanceCost s (BalanceAddress x))
+        ((BalanceAccount s (BalanceAddress x)).balance :: rest.val) → Rule s (.continue t)
   | selfBalanceGas (s) : At s (some .selfbalance) → s.gas < 5 →
       Rule s (.exception s .outOfGas)
   | selfBalanceFull (s) : At s (some .selfbalance) → 5 ≤ s.gas →

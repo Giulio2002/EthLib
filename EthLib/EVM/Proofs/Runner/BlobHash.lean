@@ -12,18 +12,18 @@ namespace EthLib.EVM.Runner.BlobHashProgram
 def program : ByteArray := ⟨#[0x49, 0x90, 0x49]⟩
 
 /-- The bounded result selects both hashes for arbitrary context and indices. -/
-theorem run (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (x y : Word)
+theorem run (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (x y : Word)
     (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) :
     ∃ t, Runner.run 3 ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩,
-        9 + g, mem, valid, context, returnData, tracker⟩ = .exhausted t ∧
+        9 + g, mem, valid, context, returnData, tracker, warmAddresses⟩ = .exhausted t ∧
       t.stack.val = Environment.blobHash context.environment y ::
         Environment.blobHash context.environment x :: xs ∧
       t.context = context ∧ t.memory = mem ∧ t.returnData = returnData ∧
       t.gas = g ∧ t.pc = 3 := by
   let a := Environment.blobHash context.environment x
   let b := Environment.blobHash context.environment y
-  let s : Frame.State := ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩, 9 + g, mem, valid, context, returnData, tracker⟩
+  let s : Frame.State := ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩, 9 + g, mem, valid, context, returnData, tracker, warmAddresses⟩
   let s1 : Frame.State := { s with pc := 1, gas := 6 + g, stack := ⟨a :: y :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s1 with pc := 2, gas := 3 + g, stack := ⟨y :: a :: xs, by simp; omega⟩ }
   let s3 : Frame.State := { s2 with pc := 3, gas := g, stack := ⟨b :: a :: xs, by simp; omega⟩ }
@@ -49,18 +49,18 @@ theorem run (context : CallData.Context) (returnData : ByteArray) (tracker : Tra
   exact ⟨s3, by simpa [s] using result, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 /-- The same actual runner result contains an in-range hash and an out-of-range zero. -/
-theorem run_in_out (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (x y : Word)
+theorem run_in_out (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (x y : Word)
     (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
     (inside : x.toNat < context.environment.blobVersionedHashes.length)
     (outside : context.environment.blobVersionedHashes.length ≤ y.toNat) :
     ∃ t, Runner.run 3 ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩,
-        9 + g, mem, valid, context, returnData, tracker⟩ = .exhausted t ∧
+        9 + g, mem, valid, context, returnData, tracker, warmAddresses⟩ = .exhausted t ∧
       t.stack.val = 0 :: context.environment.blobVersionedHashes[x.toNat] :: xs ∧
       t.context = context ∧ t.memory = mem ∧ t.returnData = returnData ∧
       t.gas = g ∧ t.pc = 3 := by
   obtain ⟨t, result, stack, contextEq, memoryEq, retEq, gasEq, pcEq⟩ :=
-    run context returnData tracker x y xs room g mem valid
+    run context returnData tracker warmAddresses x y xs room g mem valid
   refine ⟨t, result, ?_, contextEq, memoryEq, retEq, gasEq, pcEq⟩
   simpa [Environment.blobHash_in_range context.environment x inside,
     Environment.blobHash_out_of_range context.environment y outside] using stack

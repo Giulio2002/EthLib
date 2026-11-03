@@ -11,14 +11,14 @@ namespace EthLib.EVM.Runner.CallDataProgram
 def program : ByteArray := ⟨#[0x35, 0x36]⟩
 
 /-- The program observes arbitrary message bytes and an arbitrary full-width offset. -/
-theorem load_size (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (x : Word) (xs : List Word)
+theorem load_size (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (x : Word) (xs : List Word)
     (room : xs.length ≤ 1022) (g : Nat) (mem : Memory.Allocation.State)
     (valid : Memory.Allocation.Valid mem) :
-    ∃ t, run 2 ⟨program, 0, ⟨x :: xs, by simp; omega⟩, 5 + g, mem, valid, context, returnData, tracker⟩ =
+    ∃ t, run 2 ⟨program, 0, ⟨x :: xs, by simp; omega⟩, 5 + g, mem, valid, context, returnData, tracker, warmAddresses⟩ =
       .exhausted t ∧ t.stack.val =
         Frame.observationWord context.data.size :: CallData.load context x :: xs ∧
       t.context = context ∧ t.memory = mem ∧ t.gas = g := by
-  let s : Frame.State := ⟨program, 0, ⟨x :: xs, by simp; omega⟩, 5 + g, mem, valid, context, returnData, tracker⟩
+  let s : Frame.State := ⟨program, 0, ⟨x :: xs, by simp; omega⟩, 5 + g, mem, valid, context, returnData, tracker, warmAddresses⟩
   let s1 : Frame.State := { s with pc := 1, gas := 2 + g, stack := ⟨CallData.load context x :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s1 with pc := 2, gas := g, stack := ⟨Frame.observationWord context.data.size :: CallData.load context x :: xs, by simp; omega⟩ }
   have h1 : Frame.Rule s (.continue s1) := by

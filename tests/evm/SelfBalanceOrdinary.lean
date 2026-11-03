@@ -47,7 +47,7 @@ private theorem memoryValid : Memory.Allocation.Valid initialMemory :=
 
 private def frame : Frame.State :=
   ⟨⟨#[0xfe]⟩, 99, ⟨[11], by decide⟩, 8, initialMemory,
-    memoryValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, tracker⟩
+    memoryValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, tracker, [41, 42]⟩
 
 -- Expected memory and environment are written out independently of the operation.
 private def expected (code : ByteArray) (pc : Nat) (stack : Stack) (gas : Nat)
@@ -55,14 +55,15 @@ private def expected (code : ByteArray) (pc : Nat) (stack : Stack) (gas : Nat)
   ⟨code, pc, stack, gas, ⟨[(2, 0xa1), (3, 0xb2)], 1⟩,
     (by change Memory.Allocation.Valid initialMemory; exact memoryValid),
     ⟨⟨#[4]⟩, ⟨7, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-      [25, 26], [27, 28], ⟨⟨11684671, by decide⟩⟩⟩⟩, ⟨#[6]⟩, tx⟩
+      [25, 26], [27, 28], ⟨⟨11684671, by decide⟩⟩⟩⟩, ⟨#[6]⟩, tx, [41, 42]⟩
 
 -- Validity proofs are propositions; all data fields are compared exactly.
 private def sameFrame (actual expected : Frame.State) : Bool :=
   decide (actual.code = expected.code ∧ actual.pc = expected.pc ∧
     actual.stack.val = expected.stack.val ∧ actual.gas = expected.gas ∧
     actual.memory = expected.memory ∧ actual.context = expected.context ∧
-    actual.returnData = expected.returnData ∧ actual.tracker = expected.tracker)
+    actual.returnData = expected.returnData ∧ actual.tracker = expected.tracker ∧
+    actual.warmAddresses = expected.warmAddresses)
 
 private def check (ok : Bool) : IO Unit :=
   if ok then pure () else throw (IO.userError "SELFBALANCE full-frame assertion failed")

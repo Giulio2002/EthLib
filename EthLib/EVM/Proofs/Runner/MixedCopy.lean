@@ -56,7 +56,7 @@ theorem copied_bytes (mem : Memory.Allocation.State) (a b : List UInt8)
     rw [Memory.writeRange_outside _ _ _ _ (by omega), Memory.writeRange_outside _ _ _ _ (by omega)]
 
 /-- Execute both copies and loads from arbitrary valid initial memory. -/
-theorem run_mixed (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State)
+theorem run_mixed (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address)
     (co ro : Word) (xs : List Word) (room : xs.length ≤ 1016)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
     (bounds : ro.toNat + 32 ≤ returnData.size) (g : Nat) :
@@ -71,7 +71,7 @@ theorem run_mixed (context : CallData.Context) (returnData : ByteArray) (tracker
     let c3 := 3 + Gas.rangeCost m2.words 0 32
     let c4 := 3 + Gas.rangeCost m3.words 32 32
     ∃ t, run 5 ⟨program, 0, ⟨[0, co, 32, 32, ro, 32, 0, 32] ++ xs, by simp; omega⟩,
-        c1 + c2 + c3 + 3 + c4 + g, mem, valid, context, returnData, tracker⟩ = .exhausted t ∧
+        c1 + c2 + c3 + 3 + c4 + g, mem, valid, context, returnData, tracker, warmAddresses⟩ = .exhausted t ∧
       t.stack.val = (Memory.Allocation.loadWord m3 32).1 :: (Memory.Allocation.loadWord m2 0).1 :: xs ∧
       t.pc = 5 ∧ t.gas = g ∧ t.memory = m4 ∧ t.memory.words = max mem.words 2 ∧ t.code = program ∧
       t.context = context ∧ t.returnData = returnData ∧
@@ -93,7 +93,7 @@ theorem run_mixed (context : CallData.Context) (returnData : ByteArray) (tracker
   let c4 := 3 + Gas.rangeCost m3.words 32 32
   let w1 := (Memory.Allocation.loadWord m2 0).1
   let w2 := (Memory.Allocation.loadWord m3 32).1
-  let s : Frame.State := ⟨program, 0, ⟨[0, co, 32, 32, ro, 32, 0, 32] ++ xs, by simp; omega⟩, c1+c2+c3+3+c4+g, mem, valid, context, returnData, tracker⟩
+  let s : Frame.State := ⟨program, 0, ⟨[0, co, 32, 32, ro, 32, 0, 32] ++ xs, by simp; omega⟩, c1+c2+c3+3+c4+g, mem, valid, context, returnData, tracker, warmAddresses⟩
   let s1 : Frame.State := { s with pc := 1, gas := c2+c3+3+c4+g, stack := ⟨[32, ro, 32, 0, 32] ++ xs, by simp; omega⟩, memory := m1, memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ valid }
   let s2 : Frame.State := { s1 with pc := 2, gas := c3+3+c4+g, stack := ⟨[0, 32] ++ xs, by simp; omega⟩, memory := m2, memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ s1.memoryValid }
   let s3 : Frame.State := { s2 with pc := 3, gas := 3+c4+g, stack := ⟨w1 :: 32 :: xs, by simp; omega⟩, memory := m3, memoryValid := Memory.Allocation.expand_valid_for_frame _ _ _ s2.memoryValid }

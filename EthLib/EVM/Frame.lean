@@ -48,6 +48,7 @@ structure State where
   context : CallData.Context
   returnData : ByteArray
   tracker : TransactionState.State
+  warmAddresses : List World.Address
 
 /-- Exceptional halts distinguished by their first failing check. -/
 inductive Exception where
@@ -124,6 +125,25 @@ def selfBalance (s : State) : Outcome :=
     match Stack.push s.stack result.1.balance with
     | .error e => failStack { s with tracker := result.2 } e
     | .ok stack => .continue { s with stack, gas, pc := s.pc + 1, tracker := result.2 }
+
+/-- Amsterdam `utils/address.py`, `to_address_masked`, keeps the low 160 bits. -/
+def balanceAddress (word : Word) : World.Address :=
+  ⟨word.toNat % (2 ^ 160), Nat.mod_lt _ (by decide)⟩
+
+/-- Amsterdam `environment.py`, `balance`, warms a cold address before charging. -/
+def balance (s : State) : Outcome :=
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (word, stack) =>
+    let address := balanceAddress word
+    let warm := s.warmAddresses.contains address
+    let touched := if warm then s.warmAddresses else address :: s.warmAddresses
+    let input := { s with stack, warmAddresses := touched }
+    charge input (if warm then 100 else 3000) fun gas =>
+      let result := TransactionTracker.getAccount s.tracker address
+      match Stack.push stack result.1.balance with
+      | .error e => failStack { input with tracker := result.2, gas } e
+      | .ok stack => .continue { input with stack, gas, pc := s.pc + 1, tracker := result.2 }
 
 /-- Amsterdam `environment.py`, `blob_base_fee`, charges before computing and pushing. -/
 def blobBaseFee (s : State) : Outcome :=
@@ -292,6 +312,7 @@ def step (s : State) : Outcome :=
     | some .keccak => keccak s
     -- Cancun `environment.py`, `calldatasize` and `codesize`: charge before push.
     -- Cancun `environment.py`: charge before pushing supplied metadata.
+    | some .balance => balance s
     | some .selfbalance => selfBalance s
     | some .address => observe s (fun _ => s.context.environment.currentTarget.val)
     | some .origin => observe s (fun _ => s.context.environment.origin.val)

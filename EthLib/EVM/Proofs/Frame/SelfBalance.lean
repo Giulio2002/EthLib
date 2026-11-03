@@ -107,16 +107,16 @@ theorem outcome_tracker_retained {s : State} {out : Outcome} (rule : Rule s out)
     out.frame.tracker.storageReads = s.tracker.storageReads ∧
     out.frame.tracker.createdAccounts = s.tracker.createdAccounts ∧
     out.frame.tracker.snapshots = s.tracker.snapshots := by
-  cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SelfBalanceRead]
+  cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SelfBalanceRead, BalanceRead]
 
 /-- Each rule either preserves the whole tracker or records the current target read. -/
 theorem outcome_tracker_read {s : State} {out : Outcome} (rule : Rule s out) :
-    out.frame.tracker = s.tracker ∨ out.frame.tracker = SelfBalanceRead s := by
-  cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SelfBalanceRead]
+    out.frame.tracker = s.tracker ∨ ∃ a, out.frame.tracker = BalanceRead s a := by
+  cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SelfBalanceRead, BalanceRead]
 
 /-- A rule at any other instruction preserves the whole transaction tracker. -/
 theorem outcome_tracker_unchanged_of_not_selfBalance {s : State} {out : Outcome}
-    (notSelf : ¬ At s (some .selfbalance)) (rule : Rule s out) :
+    (notSelf : ¬ At s (some .selfbalance)) (notBalance : ¬ At s (some .balance)) (rule : Rule s out) :
     out.frame.tracker = s.tracker := by
   cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory]
 

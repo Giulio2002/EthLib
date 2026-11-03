@@ -21,14 +21,14 @@ example (s : Frame.State) (at_ : Frame.At s (some .selfbalance)) :
 
 example (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
-    (context : CallData.Context) (data : ByteArray) (tracker : TransactionState.State) :
+    (context : CallData.Context) (data : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) :
     let s : Frame.State := ⟨Runner.SelfBalanceProgram.program, 0, ⟨xs, by omega⟩,
-      7 + g, mem, valid, context, data, tracker⟩
+      7 + g, mem, valid, context, data, tracker, warmAddresses⟩
     ∃ t, Runner.run 3 s = .stopped t ∧ t.pc = 3 ∧ t.gas = g ∧
       t.stack.val = 1 :: (Frame.SelfBalanceAccount s).balance :: xs ∧
       t.tracker = Frame.SelfBalanceRead s ∧ t.memory = mem ∧ t.context = context ∧
       t.returnData = data ∧ t.code = Runner.SelfBalanceProgram.program :=
-  Runner.SelfBalanceProgram.run xs room g mem valid context data tracker
+  Runner.SelfBalanceProgram.run xs room g mem valid context data tracker warmAddresses
 
 example (s : Frame.State) :
     (∀ x, (TransactionState.Reference.observe s.tracker).writes.accounts
@@ -41,9 +41,9 @@ example (s : Frame.State) :
   Frame.selfBalance_account_value s
 
 example (s : Frame.State) (out : Frame.Outcome)
-    (notSelf : ¬ Frame.At s (some .selfbalance)) (rule : Frame.Rule s out) :
+    (notSelf : ¬ Frame.At s (some .selfbalance)) (notBalance : ¬ Frame.At s (some .balance)) (rule : Frame.Rule s out) :
     out.frame.tracker = s.tracker :=
-  Frame.outcome_tracker_unchanged_of_not_selfBalance notSelf rule
+  Frame.outcome_tracker_unchanged_of_not_selfBalance notSelf notBalance rule
 
 example (fuel : Nat) (s : Frame.State) :
     (Runner.run fuel s).frame.tracker.parent = s.tracker.parent ∧
@@ -63,7 +63,7 @@ example (s t : Frame.State) (run : Frame.selfBalance s = .continue t) :
     t.tracker.storageReads = s.tracker.storageReads ∧
     t.tracker.createdAccounts = s.tracker.createdAccounts ∧
     t.tracker.snapshots = s.tracker.snapshots := by
-  obtain ⟨gas, _, code, memory, pc, left, stack, context, ret, tracker⟩ :=
+  obtain ⟨gas, _, code, memory, pc, left, stack, context, ret, tracker, warmAddresses⟩ :=
     (Frame.selfBalance_success_iff s t).mp run
   rw [tracker]
   exact ⟨gas, pc, left, stack, code, memory, context, ret, rfl, rfl, rfl, rfl, rfl, rfl⟩

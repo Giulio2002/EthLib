@@ -17,13 +17,13 @@ def program (a b : UInt8) : ByteArray := ⟨#[0x60, a, 0x60, b, 0x01, 0x00]⟩
 
 /-- Arbitrary immediate bytes execute with two stack slots and nine gas. -/
 theorem push_push_add_stop (a b : UInt8) (xs : List Word) (room : xs.length ≤ 1022)
-    (g : Nat) (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) :
-    ∃ t, Runner.run 4 ⟨program a b, 0, ⟨xs, by omega⟩, 9 + g, mem, valid, context, returnData, tracker⟩ = .stopped t ∧
+    (g : Nat) (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) :
+    ∃ t, Runner.run 4 ⟨program a b, 0, ⟨xs, by omega⟩, 9 + g, mem, valid, context, returnData, tracker, warmAddresses⟩ = .stopped t ∧
       t.pc = 6 ∧ t.gas = g ∧
       t.stack.val = Word.add (BitVec.ofNat 256 b.toNat) (BitVec.ofNat 256 a.toNat) :: xs := by
   let wa : Word := BitVec.ofNat 256 a.toNat
   let wb : Word := BitVec.ofNat 256 b.toNat
-  let s : Frame.State := ⟨program a b, 0, ⟨xs, by omega⟩, 9 + g, mem, valid, context, returnData, tracker⟩
+  let s : Frame.State := ⟨program a b, 0, ⟨xs, by omega⟩, 9 + g, mem, valid, context, returnData, tracker, warmAddresses⟩
   let s1 : Frame.State := { s with pc := 2, gas := 6 + g, stack := ⟨wa :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s with pc := 4, gas := 3 + g, stack := ⟨wb :: wa :: xs, by simp; omega⟩ }
   let s3 : Frame.State := { s with pc := 5, gas := g, stack := ⟨Word.add wb wa :: xs, by simp; omega⟩ }
@@ -69,10 +69,10 @@ theorem push_push_add_stop (a b : UInt8) (xs : List Word) (room : xs.length ≤ 
   · rfl
 
 /-- PUSH1 2, PUSH1 3, ADD and STOP leave five on an empty stack. -/
-theorem two_plus_three (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) :
-    ∃ t, Runner.run 4 ⟨program 2 3, 0, Stack.empty, 9, mem, valid, context, returnData, tracker⟩ = .stopped t ∧
+theorem two_plus_three (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) :
+    ∃ t, Runner.run 4 ⟨program 2 3, 0, Stack.empty, 9, mem, valid, context, returnData, tracker, warmAddresses⟩ = .stopped t ∧
       t.pc = 6 ∧ t.gas = 0 ∧ t.stack.val = [5] := by
-  have h := push_push_add_stop 2 3 [] (by simp) 0 mem valid context returnData tracker
+  have h := push_push_add_stop 2 3 [] (by simp) 0 mem valid context returnData tracker warmAddresses
   simpa [Stack.empty, Word.add] using h
 
 end EthLib.EVM.Runner.StraightLine

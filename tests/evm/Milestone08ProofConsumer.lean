@@ -17,11 +17,11 @@ example (s t : Frame.State) (o : Frame.Observation)
 
 -- The runner proof is quantified over both bytes, the old stack, gas and memory.
 example (a b : UInt8) (xs : List Word) (room : xs.length ≤ 1022)
-    (g : Nat) (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) :
+    (g : Nat) (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) :
     ∃ t, Runner.run 4 ⟨Runner.StraightLine.program a b, 0, ⟨xs, by omega⟩,
-      9 + g, mem, valid, context, returnData, tracker⟩ = .stopped t ∧ t.pc = 6 ∧ t.gas = g ∧
+      9 + g, mem, valid, context, returnData, tracker, warmAddresses⟩ = .stopped t ∧ t.pc = 6 ∧ t.gas = g ∧
       t.stack.val = Word.add (BitVec.ofNat 256 b.toNat) (BitVec.ofNat 256 a.toNat) :: xs :=
-  Runner.StraightLine.push_push_add_stop a b xs room g mem valid context returnData tracker
+  Runner.StraightLine.push_push_add_stop a b xs room g mem valid context returnData tracker warmAddresses
 
 #print axioms Frame.step_observation_stack
 #print axioms Frame.step_observation_stack_mod
@@ -30,11 +30,11 @@ example (a b : UInt8) (xs : List Word) (room : xs.length ≤ 1022)
 #print axioms Runner.StraightLine.push_push_add_stop
 
 example (x y : Word) (xs : List Word) (room : xs.length ≤ 1021)
-    (g : Nat) (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) :
+    (g : Nat) (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) :
     ∃ t, Runner.run 5 ⟨Runner.Mixed.program, 0, ⟨x :: y :: xs, by simp; omega⟩,
-      10 + g, mem, valid, context, returnData, tracker⟩ = .stopped t ∧
+      10 + g, mem, valid, context, returnData, tracker, warmAddresses⟩ = .stopped t ∧
       t.pc = 5 ∧ t.gas = g ∧ t.code = Runner.Mixed.program ∧ t.memory = mem ∧
       t.stack.val = BitVec.ofNat 256 g :: 2 :: Word.iszeroResult (Word.add x y) :: xs :=
-  Runner.Mixed.add_iszero_pc_gas x y xs room g mem valid context returnData tracker
+  Runner.Mixed.add_iszero_pc_gas x y xs room g mem valid context returnData tracker warmAddresses
 
 #print axioms Runner.Mixed.add_iszero_pc_gas

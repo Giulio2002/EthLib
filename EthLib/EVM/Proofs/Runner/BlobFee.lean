@@ -12,18 +12,18 @@ namespace EthLib.EVM.Runner.BlobFeeProgram
 def program : ByteArray := ⟨#[0x49, 0x4a]⟩
 
 /-- The actual bounded run preserves arbitrary context and memory. -/
-theorem run (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (x : Word)
+theorem run (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (x : Word)
     (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) :
     ∃ t, Runner.run 2 ⟨program, 0, ⟨x :: xs, by simp; omega⟩,
-        5 + g, mem, valid, context, returnData, tracker⟩ = .exhausted t ∧
+        5 + g, mem, valid, context, returnData, tracker, warmAddresses⟩ = .exhausted t ∧
       t.stack.val = Frame.observationWord (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas) ::
         Environment.blobHash context.environment x :: xs ∧
       t.context = context ∧ t.memory = mem ∧ t.returnData = returnData ∧
       t.gas = g ∧ t.pc = 2 := by
   let a := Environment.blobHash context.environment x
   let b := Frame.observationWord (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas)
-  let s : Frame.State := ⟨program, 0, ⟨x :: xs, by simp; omega⟩, 5 + g, mem, valid, context, returnData, tracker⟩
+  let s : Frame.State := ⟨program, 0, ⟨x :: xs, by simp; omega⟩, 5 + g, mem, valid, context, returnData, tracker, warmAddresses⟩
   let s1 : Frame.State := { s with pc := 1, gas := 2 + g, stack := ⟨a :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s1 with pc := 2, gas := g, stack := ⟨b :: a :: xs, by simp; omega⟩ }
   have h1 : Frame.Rule s (.continue s1) := by
