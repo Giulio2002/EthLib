@@ -14,13 +14,13 @@ def program : ByteArray := ⟨#[0x47, 0x58, 0x00]⟩
 /-- The real runner preserves the tracker except for the current-target read. -/
 theorem run (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
-    (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) :
-    let s : Frame.State := ⟨program, 0, ⟨xs, by omega⟩, 7 + g, mem, valid, context, returnData, tracker, warmAddresses⟩
+    (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) :
+    let s : Frame.State := ⟨program, 0, ⟨xs, by omega⟩, 7 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots⟩
     ∃ t, Runner.run 3 s = .stopped t ∧ t.pc = 3 ∧ t.gas = g ∧
       t.stack.val = 1 :: (Frame.SelfBalanceAccount s).balance :: xs ∧
       t.tracker = Frame.SelfBalanceRead s ∧ t.memory = mem ∧ t.context = context ∧
       t.returnData = returnData ∧ t.code = program := by
-  let s : Frame.State := ⟨program, 0, ⟨xs, by omega⟩, 7 + g, mem, valid, context, returnData, tracker, warmAddresses⟩
+  let s : Frame.State := ⟨program, 0, ⟨xs, by omega⟩, 7 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots⟩
   let s1 : Frame.State := { s with tracker := Frame.SelfBalanceRead s, pc := 1, gas := 2 + g, stack := ⟨(Frame.SelfBalanceAccount s).balance :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s1 with pc := 2, gas := g, stack := ⟨1 :: (Frame.SelfBalanceAccount s).balance :: xs, by simp; omega⟩ }
   let s3 : Frame.State := { s2 with pc := 3 }
@@ -43,11 +43,10 @@ theorem run (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
   have result := Runner.run_of_terminates trace 0
   exact ⟨s3, by simpa [s] using result, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-/-- Every bounded outcome preserves the tracker fields other than account reads. -/
+/-- Every bounded outcome preserves the tracker parent, writes, created accounts and snapshots. -/
 theorem run_tracker_retained (fuel : Nat) (s : Frame.State) :
     (Runner.run fuel s).frame.tracker.parent = s.tracker.parent ∧
     (Runner.run fuel s).frame.tracker.writes = s.tracker.writes ∧
-    (Runner.run fuel s).frame.tracker.storageReads = s.tracker.storageReads ∧
     (Runner.run fuel s).frame.tracker.createdAccounts = s.tracker.createdAccounts ∧
     (Runner.run fuel s).frame.tracker.snapshots = s.tracker.snapshots := by
   induction fuel generalizing s with
@@ -60,8 +59,7 @@ theorem run_tracker_retained (fuel : Nat) (s : Frame.State) :
       simp only [Frame.Outcome.frame] at same
       simp only [Runner.run, hs]
       exact ⟨rest.1.trans same.1, rest.2.1.trans same.2.1,
-        rest.2.2.1.trans same.2.2.1, rest.2.2.2.1.trans same.2.2.2.1,
-        rest.2.2.2.2.trans same.2.2.2.2⟩
+        rest.2.2.1.trans same.2.2.1, rest.2.2.2.trans same.2.2.2⟩
     | stop next =>
       have same := Frame.outcome_tracker_retained ((Frame.step_iff_rule _ _).mp hs)
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
@@ -74,3 +72,40 @@ theorem run_tracker_retained (fuel : Nat) (s : Frame.State) :
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
 
 end EthLib.EVM.Runner.SelfBalanceProgram
+
+namespace EthLib.EVM.Runner
+
+/-- Each executed instruction in this bounded trace is not SLOAD. -/
+def NoSloadRun : Nat → Frame.State → Prop
+  | 0, _ => True
+  | fuel + 1, s => ¬ Frame.At s (some .sload) ∧
+      match Frame.step s with
+      | .continue t => NoSloadRun fuel t
+      | _ => True
+
+/-- Every outcome of a bounded run without SLOAD preserves storage reads. -/
+theorem run_storageReads_unchanged_of_no_sload (fuel : Nat) (s : Frame.State)
+    (trace : NoSloadRun fuel s) :
+    (run fuel s).frame.tracker.storageReads = s.tracker.storageReads := by
+  induction fuel generalizing s with
+  | zero => rfl
+  | succ fuel ih =>
+    have current := trace.1
+    cases hs : Frame.step s with
+    | «continue» next =>
+      have same := Frame.outcome_storageReads_unchanged_of_not_sload current ((Frame.step_iff_rule _ _).mp hs)
+      simp only [Frame.Outcome.frame] at same
+      have rest := ih next (by simpa [NoSloadRun, hs] using trace.2)
+      simpa [run, hs, same] using rest
+    | stop next =>
+      have same := Frame.outcome_storageReads_unchanged_of_not_sload current ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | revert input gas output => exact False.elim (Frame.step_not_revert s input gas output hs)
+    | exception input e =>
+      have same := Frame.outcome_storageReads_unchanged_of_not_sload current ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | unsupported input op =>
+      have same := Frame.outcome_storageReads_unchanged_of_not_sload current ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+
+end EthLib.EVM.Runner

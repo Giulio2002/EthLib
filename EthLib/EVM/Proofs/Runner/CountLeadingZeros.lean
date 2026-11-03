@@ -14,15 +14,15 @@ def program : ByteArray := ⟨#[0x01, 0x1e, 0x58, 0x00]⟩
 /-- The program has exact stack and gas for arbitrary context and valid memory. -/
 theorem run (x y : Word) (xs : List Word) (room : xs.length ≤ 1022)
     (g : Nat) (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
-    (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) :
+    (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) :
     ∃ t, Runner.run 4 ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩,
-      10 + g, mem, valid, context, returnData, tracker, warmAddresses⟩ = .stopped t ∧
+      10 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots⟩ = .stopped t ∧
       t.pc = 4 ∧ t.gas = g ∧ t.code = program ∧ t.memory = mem ∧
       t.context = context ∧ t.returnData = returnData ∧
       t.stack.val = 2 :: Word.countLeadingZeros (Word.add x y) :: xs := by
   let z := Word.countLeadingZeros (Word.add x y)
   let s : Frame.State := ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩,
-    10 + g, mem, valid, context, returnData, tracker, warmAddresses⟩
+    10 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots⟩
   let s1 : Frame.State := { s with pc := 1, gas := 7 + g, stack := ⟨Word.add x y :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s with pc := 2, gas := 2 + g, stack := ⟨z :: xs, by simp; omega⟩ }
   let s3 : Frame.State := { s with pc := 3, gas := g, stack := ⟨2 :: z :: xs, by simp; omega⟩ }

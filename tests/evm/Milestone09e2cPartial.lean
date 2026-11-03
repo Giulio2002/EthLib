@@ -7,7 +7,7 @@ private def env : Environment.Context :=
 
 private def input (xs : List Word) (bound : xs.length ≤ 1024) (gas : Nat) : Frame.State :=
   ⟨⟨#[0]⟩, 10, ⟨xs, bound⟩, gas, Memory.Allocation.empty,
-    (by intro a _; rfl), ⟨ByteArray.empty, env⟩, ByteArray.empty, { parent := {} }, []⟩
+    (by intro a _; rfl), ⟨ByteArray.empty, env⟩, ByteArray.empty, { parent := {} }, [], []⟩
 
 /-- info: (true, true, true, true, true) -/
 #guard_msgs in

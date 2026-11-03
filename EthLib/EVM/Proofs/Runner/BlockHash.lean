@@ -12,18 +12,18 @@ namespace EthLib.EVM.Runner.BlockHashProgram
 def program : ByteArray := ⟨#[0x40, 0x90, 0x40]⟩
 
 /-- The bounded result selects both hashes for arbitrary context and indices. -/
-theorem run (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (x y : Word)
+theorem run (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (x y : Word)
     (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) :
     ∃ t, Runner.run 3 ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩,
-        43 + g, mem, valid, context, returnData, tracker, warmAddresses⟩ = .exhausted t ∧
+        43 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots⟩ = .exhausted t ∧
       t.stack.val = Environment.blockHash context.environment.blockHashes context.environment.number y ::
         Environment.blockHash context.environment.blockHashes context.environment.number x :: xs ∧
       t.context = context ∧ t.memory = mem ∧ t.returnData = returnData ∧
       t.gas = g ∧ t.pc = 3 := by
   let a := Environment.blockHash context.environment.blockHashes context.environment.number x
   let b := Environment.blockHash context.environment.blockHashes context.environment.number y
-  let s : Frame.State := ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩, 43 + g, mem, valid, context, returnData, tracker, warmAddresses⟩
+  let s : Frame.State := ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩, 43 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots⟩
   let s1 : Frame.State := { s with pc := 1, gas := 23 + g, stack := ⟨a :: y :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s1 with pc := 2, gas := 20 + g, stack := ⟨y :: a :: xs, by simp; omega⟩ }
   let s3 : Frame.State := { s2 with pc := 3, gas := g, stack := ⟨b :: a :: xs, by simp; omega⟩ }

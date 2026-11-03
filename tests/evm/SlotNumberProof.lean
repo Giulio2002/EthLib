@@ -65,15 +65,15 @@ example (s : Frame.State) (gas : 2 ≤ s.gas) (full : s.stack.val.length = 1024)
   Frame.observe_full s _ gas full
 
 -- A consumer recovers the complete runner result for arbitrary supplied metadata.
-example (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (xs : List Word)
+example (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (xs : List Word)
     (room : xs.length ≤ 1022) (g : Nat) (mem : Memory.Allocation.State)
     (valid : Memory.Allocation.Valid mem) :
     ∃ t, Runner.run 3 ⟨Runner.SlotNumber.program, 0, ⟨xs, by omega⟩,
-        4 + g, mem, valid, context, returnData, tracker, warmAddresses⟩ = .stopped t ∧
+        4 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots⟩ = .stopped t ∧
       t.pc = 3 ∧ t.gas = g ∧ t.code = Runner.SlotNumber.program ∧ t.memory = mem ∧
       t.context = context ∧ t.returnData = returnData ∧
       t.stack.val = context.environment.number ::
         BitVec.ofNat 256 context.environment.slotNumber.val :: xs := by
   obtain ⟨t, execution, pc, gas, code, memory, preserved, returndata, stack⟩ :=
-    Runner.SlotNumber.run context returnData tracker warmAddresses xs room g mem valid
+    Runner.SlotNumber.run context returnData tracker warmAddresses warmSlots xs room g mem valid
   exact ⟨t, execution, pc, gas, code, memory, preserved, returndata, stack⟩

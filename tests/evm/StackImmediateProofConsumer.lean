@@ -62,14 +62,14 @@ example (s input : Frame.State) (e : Frame.Exception) (h : Frame.exchange s = .e
 
 example (a b c z : Word) (xs : List Word) (room : xs.length ≤ 1006)
     (g : Nat) (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
-    (context : CallData.Context) (ret : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) :
+    (context : CallData.Context) (ret : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) :
     ∃ t, Runner.run 4 ⟨Runner.StackImmediate.program, 0,
       ⟨a :: b :: c :: List.replicate 14 z ++ xs, by simp; omega⟩,
-      9 + g, mem, valid, context, ret, tracker, warmAddresses⟩ = .stopped t ∧
+      9 + g, mem, valid, context, ret, tracker, warmAddresses, warmSlots⟩ = .stopped t ∧
       t.pc = 7 ∧ t.gas = g ∧ t.code = Runner.StackImmediate.program ∧ t.memory = mem ∧
       t.context = context ∧ t.returnData = ret ∧
       t.stack.val = z :: a :: c :: b :: List.replicate 14 z ++ xs :=
-  Runner.StackImmediate.run a b c z xs room g mem valid context ret tracker warmAddresses
+  Runner.StackImmediate.run a b c z xs room g mem valid context ret tracker warmAddresses warmSlots
 
 -- Actual opcode successes expose the fields derived from execution.
 example (s t : Frame.State) (at_ : Frame.At s (some .dupn))

@@ -6,7 +6,7 @@ open EthLib.EVM
 private def frame (code data : ByteArray) (gas : Nat) (xs : List Word)
     (bound : xs.length ≤ 1024) : Frame.State :=
   ⟨code, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty,
-    Memory.Allocation.empty_valid, ⟨data, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty, { parent := {} }, []⟩
+    Memory.Allocation.empty_valid, ⟨data, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty, { parent := {} }, [], []⟩
 
 -- Data and code are distinct, and each copy starts at source offset one.
 /-- info: ([34, 51, 0, 0], [170, 187, 0, 0]) -/
@@ -85,7 +85,7 @@ example (s t : Frame.State) (x y z : Word) (xs : List Word)
   let run := fun (src : Word) =>
     let s : Frame.State := ⟨⟨#[0x37]⟩, 0, ⟨[1, src, 3], by simp⟩, 6,
       memory, Memory.Allocation.write_valid_for_frame _ _ _ Memory.Allocation.empty_valid,
-      ⟨⟨#[1, 2, 3]⟩, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty, { parent := {} }, []⟩
+      ⟨⟨#[1, 2, 3]⟩, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty, { parent := {} }, [], []⟩
     match Frame.step s with
     | .continue t => ((Memory.readRange t.memory.store 0 5).map UInt8.toNat,
       t.code == s.code && t.context.data == s.context.data)

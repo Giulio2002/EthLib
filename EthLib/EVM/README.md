@@ -447,7 +447,7 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The augmented 256-byte dispatch regression covers 132 supported instructions and 21 assigned but unsupported instructions.
+The augmented 256-byte dispatch regression covers 133 supported instructions and 20 assigned but unsupported instructions.
 It also covers 102 unassigned bytes and INVALID.
 The historical Cancun subset has 125 supported instructions and 107 unassigned bytes.
 The Cancun-plus-CLZ subset has 126 supported instructions and 106 unassigned bytes.
@@ -717,7 +717,7 @@ The transaction tracker records the account read only after the charge succeeds.
 The list represents a set by membership and may contain duplicates.
 Frame constructors and quantified runner theorems must supply this new argument.
 `Advances` and `AdvancesMemory` now include warm-list equality.
-`outcome_tracker_read` allows a read at any address, and `outcome_tracker_unchanged_of_not_selfBalance` also requires that the instruction is not BALANCE.
+`outcome_tracker_read` allows one account or storage read, and `outcome_tracker_unchanged_of_not_selfBalance` excludes BALANCE and SLOAD as well.
 The tracker account-read list is separate and survives tracker snapshot rollback.
 The source copies warm sets for child frames and merges them only after successful child execution; this instruction subset does not execute calls or implement that merge.
 No transaction initialization or full Amsterdam execution is claimed.
@@ -728,3 +728,35 @@ The source `environment.py`, `gas.py`, `vm/__init__.py`, `instructions/system.py
 `72bc02de1fc03a5a7ec70725cc8b8dd18241eb1a4b6e598f059505399cbefdab`,
 `d6d4df0e26882b26da44c535d4a29d2e8ef61d76da407290be51d403a5356c4b`, and
 `79fa8c0e46894536aea01ff9874a40e4e1bf7f862af8bf0be3e1d7a3bc3c163a`.
+
+## SLOAD and warm storage slots
+
+Amsterdam `vm/instructions/storage.py`, `sload`, at execution-specs revision
+`fd9298410ec7218838c8348f69c1eb633f1797dc` pops a full 256-bit key and pairs it with the current target address.
+A warm slot costs 100 gas; a cold slot is added to the frame's warm list before a 2100 gas charge.
+A failed charge retains the popped stack and, for a cold slot, the new warm entry in its diagnostic frame.
+The tracker records the storage read only after the charge succeeds.
+Effective storage uses the first matching write, then an address clear, then the immutable parent.
+Transaction-original storage remains a separate tracker observation.
+
+`Frame.State` requires an explicit `warmSlots` list; callers supply the initial slot access state.
+The list is a set by membership and may contain duplicates; it is separate from warm addresses and retained tracker storage reads.
+Frame constructors and quantified runner theorems take this additional argument, and `Advances` and `AdvancesMemory` include warm-slot equality.
+`outcome_tracker_read` includes storage reads, `outcome_tracker_retained` and `run_tracker_retained` no longer claim storage reads remain unchanged, and `outcome_tracker_unchanged_of_not_selfBalance` additionally excludes SLOAD.
+The source initializes the set from transaction access-list storage keys, copies it into child frames and merges a child's set only on success.
+This instruction subset leaves initialization, child calls and that merge to the caller.
+SSTORE and refunds are outside this subset.
+
+The source files `instructions/storage.py`, `vm/gas.py`, `state_tracker.py`, `vm/interpreter.py`, and `vm/__init__.py` have SHA-256 values respectively
+`c55f677ab99d2c9147d807d0b57bd616d5401d13c8fa92db0afa3f64d7376615`,
+`67973191c49234387186ad17316c556adab73723f782e95104dd3a949132367c`,
+`b8a6082a210bcfdfc51e1487589a0b3ddfdd3b36ceee9dab6783f6bfca1f6229`,
+`8dd244e747b1b1516ba90de947f9f0d5db84bab4dc51256af0db8dd7a051fd7c`, and
+`72bc02de1fc03a5a7ec70725cc8b8dd18241eb1a4b6e598f059505399cbefdab`.
+
+Storage reads remain unchanged when execution does not reach SLOAD.
+`Frame.step_storageReads_unchanged_of_not_sload` covers every step outcome, including BALANCE and SELFBALANCE.
+`Runner.NoSloadRun` excludes SLOAD at each instruction actually executed within the fuel bound.
+`Runner.run_storageReads_unchanged_of_no_sload` preserves the full storage-read list for exhausted, stopped, exceptional and unsupported results.
+The restricted runner cannot return a revert.
+A successful SLOAD records its target and key, so the unconditional tracker-retention claims cannot include storage-read equality.

@@ -49,6 +49,7 @@ structure State where
   returnData : ByteArray
   tracker : TransactionState.State
   warmAddresses : List World.Address
+  warmSlots : List (World.Address × Word)
 
 /-- Exceptional halts distinguished by their first failing check. -/
 inductive Exception where
@@ -142,6 +143,22 @@ def balance (s : State) : Outcome :=
     charge input (if warm then 100 else 3000) fun gas =>
       let result := TransactionTracker.getAccount s.tracker address
       match Stack.push stack result.1.balance with
+      | .error e => failStack { input with tracker := result.2, gas } e
+      | .ok stack => .continue { input with stack, gas, pc := s.pc + 1, tracker := result.2 }
+
+/-- Amsterdam `instructions/storage.py`, `sload`, warms a cold slot before charging. -/
+def sload (s : State) : Outcome :=
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (key, stack) =>
+    let address := s.context.environment.currentTarget
+    let slot := (address, key)
+    let warm := s.warmSlots.contains slot
+    let touched := if warm then s.warmSlots else slot :: s.warmSlots
+    let input := { s with stack, warmSlots := touched }
+    charge input (if warm then 100 else 2100) fun gas =>
+      let result := TransactionTracker.getStorage s.tracker address key
+      match Stack.push stack result.1 with
       | .error e => failStack { input with tracker := result.2, gas } e
       | .ok stack => .continue { input with stack, gas, pc := s.pc + 1, tracker := result.2 }
 
@@ -312,6 +329,7 @@ def step (s : State) : Outcome :=
     | some .keccak => keccak s
     -- Cancun `environment.py`, `calldatasize` and `codesize`: charge before push.
     -- Cancun `environment.py`: charge before pushing supplied metadata.
+    | some .sload => sload s
     | some .balance => balance s
     | some .selfbalance => selfBalance s
     | some .address => observe s (fun _ => s.context.environment.currentTarget.val)

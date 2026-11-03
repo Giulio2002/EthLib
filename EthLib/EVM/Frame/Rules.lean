@@ -25,17 +25,17 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
 def Advances (s t : State) (pc gas : Nat) (xs : List Word) : Prop :=
-  t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧ t.warmAddresses = s.warmAddresses
+  t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧ t.warmAddresses = s.warmAddresses ∧ t.warmSlots = s.warmSlots
 
 /-- Exact fields after a memory instruction. -/
 def AdvancesMemory (s t : State) (memory : Memory.Allocation.State)
     (pc gas : Nat) (xs : List Word) : Prop :=
-  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧ t.warmAddresses = s.warmAddresses
+  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧ t.warmAddresses = s.warmAddresses ∧ t.warmSlots = s.warmSlots
 
 /-- A successful MCOPY with observed pops determines the resulting frame. -/
 theorem mcopy_actual_fields (s t : State) (destination source length : Word)
@@ -52,7 +52,7 @@ theorem mcopy_actual_fields (s t : State) (destination source length : Word)
   · simp only [step, dite_eq_left bounds, decoded, p1, p2, p3, charge, Gas.charge,
       ite_eq_left gas] at run
     cases run
-    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   · simp [step, bounds, decoded, p1, p2, p3, charge, Gas.charge, gas] at run
 
 /-- Cancun `runtime.py`: the source byte length at an instruction boundary. -/
@@ -178,12 +178,41 @@ def BalanceAccount (s : State) (a : World.Address) : World.Account :=
 def BalanceRead (s : State) (a : World.Address) : TransactionState.State :=
   { s.tracker with accountReads := a :: s.tracker.accountReads }
 
+/-- Slot warming is independent of tracker reads and account warmth. -/
+def SloadWarm (s : State) (key : Word) : List (World.Address × Word) :=
+  let slot := (s.context.environment.currentTarget, key)
+  if slot ∈ s.warmSlots then s.warmSlots else slot :: s.warmSlots
+
+/-- Amsterdam storage-access gas uses the initial slot warm set. -/
+def SloadCost (s : State) (key : Word) : Nat :=
+  if (s.context.environment.currentTarget, key) ∈ s.warmSlots then 100 else 2100
+
+/-- Effective storage gives writes priority over clears and the parent. -/
+def SloadValue (s : State) (key : Word) : Word :=
+  let address := s.context.environment.currentTarget
+  match s.tracker.writes.storageWrites.lookup (address, key) with
+  | some value => value
+  | none => if address ∈ s.tracker.writes.storageClears then 0 else World.getStorage s.tracker.parent address key
+
+/-- A successful storage read records the full target and key. -/
+def SloadRead (s : State) (key : Word) : TransactionState.State :=
+  { s.tracker with storageReads := (s.context.environment.currentTarget, key) :: s.tracker.storageReads }
+
 /-- Source-oriented rules for one frame transition. -/
 inductive Rule : State → Outcome → Prop where
   | endCode (s) : s.code.size ≤ s.pc → Rule s (.stop s)
   | stop (s) : At s (some .stop) → Rule s (.stop { s with pc := s.pc + 1 })
   | invalid (s) : At s none ∨ At s (some .invalid) → Rule s (.exception s .invalidOpcode)
   | unsupported (s op) : At s (some op) → Unsupported op → Rule s (.unsupported s op)
+  | sloadUnderflow (s) : At s (some .sload) → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | sloadGas (s : State) (rest : Stack) (key : Word) : At s (some .sload) → s.stack.val = key :: rest.val →
+      s.gas < SloadCost s key →
+      Rule s (.exception { s with stack := rest, warmSlots := SloadWarm s key } .outOfGas)
+  | sload (s t : State) (rest : Stack) (key : Word) : At s (some .sload) → s.stack.val = key :: rest.val →
+      SloadCost s key ≤ s.gas →
+      Advances { s with warmSlots := SloadWarm s key, tracker := SloadRead s key } t (s.pc + 1)
+        (s.gas - SloadCost s key) (SloadValue s key :: rest.val) → Rule s (.continue t)
   | balanceUnderflow (s) : At s (some .balance) → s.stack.val = [] →
       Rule s (.exception s .stackUnderflow)
   | balanceGas (s : State) (rest : Stack) (x : Word) : At s (some .balance) → s.stack.val = x :: rest.val →

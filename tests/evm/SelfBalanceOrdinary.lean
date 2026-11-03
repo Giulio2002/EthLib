@@ -47,7 +47,7 @@ private theorem memoryValid : Memory.Allocation.Valid initialMemory :=
 
 private def frame : Frame.State :=
   ⟨⟨#[0xfe]⟩, 99, ⟨[11], by decide⟩, 8, initialMemory,
-    memoryValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, tracker, [41, 42]⟩
+    memoryValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, tracker, [41, 42], [(43, 44), (45, 46)]⟩
 
 -- Expected memory and environment are written out independently of the operation.
 private def expected (code : ByteArray) (pc : Nat) (stack : Stack) (gas : Nat)
@@ -55,7 +55,7 @@ private def expected (code : ByteArray) (pc : Nat) (stack : Stack) (gas : Nat)
   ⟨code, pc, stack, gas, ⟨[(2, 0xa1), (3, 0xb2)], 1⟩,
     (by change Memory.Allocation.Valid initialMemory; exact memoryValid),
     ⟨⟨#[4]⟩, ⟨7, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-      [25, 26], [27, 28], ⟨⟨11684671, by decide⟩⟩⟩⟩, ⟨#[6]⟩, tx, [41, 42]⟩
+      [25, 26], [27, 28], ⟨⟨11684671, by decide⟩⟩⟩⟩, ⟨#[6]⟩, tx, [41, 42], [(43, 44), (45, 46)]⟩
 
 -- Validity proofs are propositions; all data fields are compared exactly.
 private def sameFrame (actual expected : Frame.State) : Bool :=
@@ -63,7 +63,7 @@ private def sameFrame (actual expected : Frame.State) : Bool :=
     actual.stack.val = expected.stack.val ∧ actual.gas = expected.gas ∧
     actual.memory = expected.memory ∧ actual.context = expected.context ∧
     actual.returnData = expected.returnData ∧ actual.tracker = expected.tracker ∧
-    actual.warmAddresses = expected.warmAddresses)
+    actual.warmAddresses = expected.warmAddresses ∧ actual.warmSlots = expected.warmSlots)
 
 private def check (ok : Bool) : IO Unit :=
   if ok then pure () else throw (IO.userError "SELFBALANCE full-frame assertion failed")
@@ -121,4 +121,14 @@ private def fullStack : Stack :=
 
 #eval check <| match Frame.step { frame with code := ⟨#[0x47]⟩, pc := 0, gas := 5, stack := fullStack } with
   | .exception t .stackOverflow => sameFrame t (expected ⟨#[0x47]⟩ 0 fullStack 5 trackerAfterRead)
+  | _ => false
+
+-- BALANCE and SELFBALANCE record account reads while retaining storage reads.
+#eval check <| match Runner.run 3 { frame with code := ⟨#[0x31, 0x47, 0x00]⟩, pc := 0, gas := 3005, stack := ⟨[7, 11], by decide⟩ } with
+  | .stopped t => sameFrame t
+      { (expected ⟨#[0x31, 0x47, 0x00]⟩ 3 ⟨[42, 42, 11], by decide⟩ 0
+        ⟨⟨[(7, ⟨1, 99, 8⟩), (8, ⟨1, 99, 8⟩)], [((8, 3), 5)], [(8, ⟨#[1]⟩)]⟩,
+          ⟨[(7, some ⟨3, 42, 9⟩), (7, none)], [((7, 1), 2)], [(9, ⟨#[2]⟩)], [8], [((7, 2), 3)]⟩,
+          [7, 7, 8], [(8, 3)], [9], [⟨[(8, none)], [((8, 4), 6)], [(10, ⟨#[3]⟩)], [10], [((8, 5), 7)]⟩]⟩)
+        with warmAddresses := [7, 41, 42] }
   | _ => false

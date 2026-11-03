@@ -39,16 +39,16 @@ example (fuel : Nat) (s : Frame.State) :
       (Runner.run fuel s).frame.returnData = s.returnData :=
   ⟨Runner.run_context_unchanged fuel s, Runner.run_returnData_unchanged fuel s⟩
 
-example (context : CallData.Context) (ret : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (x y : Word) (xs : List Word)
+example (context : CallData.Context) (ret : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (x y : Word) (xs : List Word)
     (room : xs.length ≤ 1022) (g : Nat) (mem : Memory.Allocation.State)
     (valid : Memory.Allocation.Valid mem)
     (inside : x.toNat < context.environment.blobVersionedHashes.length)
     (outside : context.environment.blobVersionedHashes.length ≤ y.toNat) :
     ∃ t, Runner.run 3 ⟨Runner.BlobHashProgram.program, 0,
-        ⟨x :: y :: xs, by simp; omega⟩, 9 + g, mem, valid, context, ret, tracker, warmAddresses⟩ = .exhausted t ∧
+        ⟨x :: y :: xs, by simp; omega⟩, 9 + g, mem, valid, context, ret, tracker, warmAddresses, warmSlots⟩ = .exhausted t ∧
       t.stack.val = 0 :: context.environment.blobVersionedHashes[x.toNat] :: xs ∧
       t.context = context ∧ t.memory = mem ∧ t.returnData = ret ∧ t.gas = g ∧ t.pc = 3 :=
-  Runner.BlobHashProgram.run_in_out context ret tracker warmAddresses x y xs room g mem valid inside outside
+  Runner.BlobHashProgram.run_in_out context ret tracker warmAddresses warmSlots x y xs room g mem valid inside outside
 
 example (fuel : Nat) (s : Frame.State) (code : s.code = Runner.BlobHashProgram.program) :
     (Runner.run fuel s).frame.memory = s.memory :=

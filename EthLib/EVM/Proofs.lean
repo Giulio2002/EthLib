@@ -35,6 +35,7 @@ public import EthLib.EVM.Proofs.Frame.CountLeadingZeros
 public import EthLib.EVM.Proofs.Frame.StackImmediate
 public import EthLib.EVM.Proofs.Frame.StackImmediateActual
 public import EthLib.EVM.Proofs.Frame.SlotNumber
+public import EthLib.EVM.Proofs.Frame.Sload
 public import EthLib.EVM.Proofs.Frame.Balance
 public import EthLib.EVM.Proofs.Frame.SelfBalance
 public import EthLib.EVM.Proofs.Frame.Environment
@@ -47,6 +48,7 @@ public import EthLib.EVM.Proofs.Frame.Reference
 public import EthLib.EVM.Proofs.Frame.Memory
 public import EthLib.EVM.Proofs.Runner
 public import EthLib.EVM.Proofs.Runner.StraightLine
+public import EthLib.EVM.Proofs.Runner.Sload
 public import EthLib.EVM.Proofs.Runner.Balance
 public import EthLib.EVM.Proofs.Runner.SelfBalance
 public import EthLib.EVM.Proofs.Runner.Mixed

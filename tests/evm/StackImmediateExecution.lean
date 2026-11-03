@@ -21,7 +21,7 @@ private def frame (code : ByteArray) (pc gas : Nat) (xs : List Word) : Frame.Sta
   ⟨code, pc, if h : xs.length ≤ 1024 then ⟨xs, h⟩ else Stack.empty, gas,
     Memory.Allocation.empty, emptyValid,
     ⟨⟨#[0xaa]⟩, ⟨1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, [15], [16], BlobFee.cancun⟩⟩,
-    ⟨#[0xcc]⟩, { parent := {} }, []⟩
+    ⟨#[0xcc]⟩, { parent := {} }, [], []⟩
 
 private def result (f : Frame.State → Frame.Outcome) (input : Frame.State)
     (pc gas : Nat) (xs : List Word) : Bool :=
