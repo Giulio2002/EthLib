@@ -719,7 +719,8 @@ Frame constructors and quantified runner theorems must supply this new argument.
 `outcome_tracker_unchanged_of_not_selfBalance` also excludes BALANCE, EXTCODESIZE, EXTCODEHASH, EXTCODECOPY, SLOAD, SSTORE and TSTORE.
 `outcome_warm_unchanged_of_not_balance` excludes BALANCE, EXTCODESIZE, EXTCODEHASH and EXTCODECOPY.
 The tracker account-read list is separate and survives tracker snapshot rollback.
-The source copies warm sets for child frames and merges them only after successful child execution; this instruction subset does not execute calls or implement that merge.
+The source copies warm sets for child frames and merges them only after successful child execution.
+`ChildSettlement` implements that merge for a caller-supplied child result; it does not execute calls.
 No transaction initialization or full Amsterdam execution is claimed.
 
 The source `environment.py`, `gas.py`, `vm/__init__.py`, `instructions/system.py`, and `utils/address.py` SHA-256 values are respectively
@@ -745,7 +746,8 @@ Frame constructors and quantified runner theorems take this additional argument,
 `outcome_tracker_read`, `outcome_tracker_retained` and `run_tracker_retained` require SSTORE and TSTORE to be excluded.
 The runner theorem takes an explicit `NoSstoreRun` trace.
 The source initializes the set from transaction access-list storage keys, copies it into child frames and merges a child's set only on success.
-This instruction subset leaves initialization, child calls and that merge to the caller.
+`ChildSettlement` merges the sets after a successful caller-supplied child result.
+Initialization and child calls remain the caller's responsibility.
 SSTORE uses this slot set and has separate state-gas and refund effects.
 
 The source files `instructions/storage.py`, `vm/gas.py`, `state_tracker.py`, `vm/interpreter.py`, and `vm/__init__.py` have SHA-256 values respectively
@@ -783,7 +785,8 @@ Execution gas is charged before state gas, and a missing effective account is re
 `SstoreLocal` states independent fieldwise cases, and `sstore_iff_local` relates them to the helper for arbitrary code and program counter.
 `step_iff_rule` covers actual opcode dispatch.
 `outcome_tracker_metadata_retained` and `run_tracker_metadata_retained` preserve the immutable parent, created markers and snapshots for every outcome.
-Transaction initialization, refund settlement and cap, child calls and child rollback are not implemented here.
+Transaction initialization, refund settlement and cap, and child calls are not implemented here.
+`ChildSettlement` provides tracker rollback for a caller-supplied child result.
 The pinned `vm/gas.py` SHA-256 is `67973191c49234387186ad17316c556adab73723f782e95104dd3a949132367c`.
 The pinned `vm/instructions/storage.py` SHA-256 is `c55f677ab99d2c9147d807d0b57bd616d5401d13c8fa92db0afa3f64d7376615`.
 
@@ -795,7 +798,8 @@ TLOAD pops its key before charging and reads the transaction tracker without rec
 TSTORE checks the static flag first, pops key and value, charges, then updates transient storage.
 A zero write removes all matching entries from the list representation.
 The tracker retains the original parent, persistent writes, read lists, created accounts and snapshots.
-These operations do not initialize transaction state or implement child calls and their rollback.
+These operations do not initialize transaction state or implement child calls.
+`ChildSettlement` can roll back transient storage using a caller-supplied checkpoint.
 
 `Frame.TransientWriteFields` constrains each tracker field and the exact transient list representation.
 `Frame.tstore_success_observation` connects a successful write to the independent map and set reference.
@@ -868,3 +872,30 @@ The independent global rules and `step_iff_rule` cover both opcodes, and termina
 RETURN remains allowed by this restriction.
 The output is distinct from the frame's prior call return-data buffer.
 Child calls, world rollback and transaction settlement are outside this frame-local slice.
+
+## Child-frame settlement
+
+`ChildSettlement` consumes a terminal `Runner.Result` after the parent has withheld the child's execution and state-gas grants.
+At child entry, the caller uses `checkpoint` on a child whose tracker has the parent's transaction state, copies the parent's warm sets, starts the child's logs empty, and supplies the child's initial gas meter.
+The caller must maintain the entry checkpoint at the top of the child tracker and preserve the transaction parent and retained metadata.
+The total function does not verify these ownership conditions.
+At source-valid entry, the parent state-gas reservoir has been drained into the child grant.
+The child reservoir and baseline both equal that grant, and the child spill, committed spill and refund counter are zero.
+These entry equations are not premises of the total Lean specification.
+
+A STOP or RETURN commits the top tracker snapshot, appends child logs and merges warm sets by membership.
+REVERT and exceptional termination restore the top snapshot while preserving tracker reads and created-account observations; they discard child logs, warmth and refunds.
+REVERT returns its remaining execution gas plus restored spill and its output.
+An exception returns no execution gas or output.
+State-gas reservoir restoration, successful spill repayment and parent meter absorption follow Amsterdam `vm/interpreter.py` `process_call`, `vm/gas.py` `restore_state_gas` and `repay_state_gas_spill`, and `vm/__init__.py` `incorporate_child` at revision `fd9298410ec7218838c8348f69c1eb633f1797dc`.
+Unsupported instructions, exhausted fuel, missing code and a missing storage account produce a tooling error instead of a protocol outcome.
+A missing snapshot or nonzero committed child spill is also a typed interface error.
+
+`Effect` specifies the returned frame field by field and `settleChild_iff` proves equivalence for all inputs, including duplicate-backed tracker and warm lists.
+The tracker commit and rollback observations reuse the existing map and set reference.
+The caller must ensure source-valid ownership and gas-grant conditions; the all-input theorem also describes the total extension outside those conditions.
+The return-data choice follows `generic_call`.
+Incorporation ends before `generic_call` refunds the new-account state-gas charge after a failed child.
+A caller that charged a new account must perform that refund separately; this transition is not complete CALL outcome gas settlement.
+CREATE additionally validates and deposits code and clears return data on success, which this transition does not implement.
+CALL and CREATE decoding, child entry and value transfer, output-memory copying, accounts scheduled for deletion, and transaction settlement remain outside this foundation.

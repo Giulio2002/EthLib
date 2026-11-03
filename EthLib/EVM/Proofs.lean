@@ -2,6 +2,7 @@ module
 public import EthLib.EVM.Proofs.World
 public import EthLib.EVM.Proofs.TransactionState
 public import EthLib.EVM.Proofs.TransactionStateReference
+public import EthLib.EVM.Proofs.ChildSettlement
 public import EthLib.EVM.Proofs.TransactionTracker
 public import EthLib.EVM.Proofs.TransactionAccount
 public import EthLib.EVM.Proofs.TransactionTransfer
