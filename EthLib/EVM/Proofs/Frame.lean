@@ -5,6 +5,7 @@ public import EthLib.EVM.Proofs.Stack
 public import EthLib.EVM.Proofs.JumpDest
 public import EthLib.EVM.Proofs.Frame.StackImmediate
 public import EthLib.EVM.Proofs.Frame.SstorePricing
+public import EthLib.EVM.Proofs.Frame.LogTopics
 import Aesop
 
 /-!
@@ -2135,7 +2136,7 @@ theorem returnDataCopy_helper_actual (s t : State) (x y z : Word) (xs : List Wor
   · by_cases bounds : y.toNat + z.toNat ≤ s.returnData.size
     · simp only [ite_eq_left gas, ite_eq_left bounds] at run
       cases run
-      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
     · simp [gas, bounds] at run
   · simp [gas] at run
 
@@ -2275,7 +2276,7 @@ theorem keccak_helper_actual (s t : State) (x y : Word) (xs : List Word)
   by_cases gas : Gas.keccakCost s.memory.words x.toNat y.toNat ≤ s.gas
   · simp only [ite_eq_left gas, Outcome.continue.injEq] at run
     subst t
-    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   · simp [gas] at run
 
 /-- Expansion performed by a successful hash preserves every raw store byte. -/
@@ -2342,6 +2343,48 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | stop at_ => exact step_stop _ at_
   | invalid at_ => rcases at_ with h | h; exact step_unassigned _ h; exact step_invalid _ h
   | unsupported op at_ unsupported => exact step_unsupported _ op at_ unsupported
+  | logEmpty count at_ empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    simp [step, bounds, decoded, logN, p, failStack]
+  | logSecond count first offset at_ items empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    simp [step, bounds, decoded, logN, p, q, failStack]
+  | logTopicsUnderflow count first rest offset length at_ items items' short =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    have r := popLogTopics_underflow count.val rest short
+    simp [step, bounds, decoded, logN, p, q, r]
+  | logGas count first rest tail offset length topics at_ items items' split size gas =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    have r := popLogTopics_ok topics rest tail split
+    rw [size] at r
+    simp [step, bounds, decoded, logN, p, q, r, charge, Gas.charge, Nat.not_le_of_gt gas]
+  | logStatic t count first rest tail offset length topics at_ items items' split size static gas fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    have r := popLogTopics_ok topics rest tail split
+    rw [size] at r
+    have eq := advancesMemory_eq s t _ (Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid)
+      s.pc (s.gas - (375 + 8 * length.toNat + 375 * count.val + Gas.rangeCost s.memory.words offset.toNat length.toNat)) tail fields
+    subst t
+    simp [step, bounds, decoded, logN, p, q, r, charge, Gas.charge, gas, static]
+  | logSuccess t count first rest tail offset length topics at_ items items' split size static gas fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    have r := popLogTopics_ok topics rest tail split
+    rw [size] at r
+    have eq := advancesMemory_eq _ t _ (Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid)
+      (s.pc + 1) (s.gas - (375 + 8 * length.toNat + 375 * count.val + Gas.rangeCost s.memory.words offset.toNat length.toNat)) tail fields
+    subst t
+    simp [step, bounds, decoded, logN, p, q, r, charge, Gas.charge, gas, static]
   | tloadUnderflow at_ empty =>
     obtain ⟨bounds, decoded⟩ := at_
     have pop := (Proofs.Stack.pop_underflow_iff _).mpr empty
@@ -3011,6 +3054,35 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
             let t := { s with tracker := SloadRead s key, warmSlots := SloadWarm s key, stack, pc := s.pc + 1, gas := s.gas - SloadCost s key }
             exact ⟨_, .sload s t rest key at_ items' gas (by simp [Advances, t, stack, rest])⟩
           · exact ⟨_, .sloadGas s rest key at_ items' (Nat.lt_of_not_ge gas)⟩
+      | log count =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .logEmpty s count at_ items⟩
+        | cons offset xs =>
+          let first : Stack := ⟨xs, by have h := s.stack.property; rw [items] at h; simp at h; omega⟩
+          have items' : s.stack.val = offset :: first.val := items
+          cases secondItems : first.val with
+          | nil => exact ⟨_, .logSecond s count first offset at_ items' secondItems⟩
+          | cons length ys =>
+            let rest : Stack := ⟨ys, by have h := first.property; rw [secondItems] at h; simp at h; omega⟩
+            have second' : first.val = length :: rest.val := secondItems
+            by_cases short : rest.val.length < count.val
+            · exact ⟨_, .logTopicsUnderflow s count first rest offset length at_ items' second' short⟩
+            · let topics := rest.val.take count.val
+              let tail : Stack := ⟨rest.val.drop count.val, by
+                have h := rest.property
+                simp only [List.length_drop]
+                omega⟩
+              have split : rest.val = topics ++ tail.val := (List.take_append_drop count.val rest.val).symm
+              have size : topics.length = count.val := by simp [topics, Nat.min_eq_left (Nat.le_of_not_gt short)]
+              by_cases gas : 375 + 8 * length.toNat + 375 * count.val + Gas.rangeCost s.memory.words offset.toNat length.toNat ≤ s.gas
+              · by_cases static : s.isStatic = true
+                · let t := { s with stack := tail, gas := s.gas - (375 + 8 * length.toNat + 375 * count.val + Gas.rangeCost s.memory.words offset.toNat length.toNat), memory := Memory.Allocation.expand s.memory offset.toNat length.toNat, memoryValid := Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid }
+                  exact ⟨_, .logStatic s t count first rest tail offset length topics at_ items' second' split size static gas (by simp [AdvancesMemory, t])⟩
+                · let entry : LogEntry := ⟨s.context.environment.currentTarget, topics.map logTopic, ⟨(Memory.readRange s.memory.store offset.toNat length.toNat).toArray⟩⟩
+                  let t := { s with stack := tail, gas := s.gas - (375 + 8 * length.toNat + 375 * count.val + Gas.rangeCost s.memory.words offset.toNat length.toNat), memory := Memory.Allocation.expand s.memory offset.toNat length.toNat, memoryValid := Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid, logs := s.logs ++ [entry], pc := s.pc + 1 }
+                  have notStatic : s.isStatic = false := by cases h : s.isStatic <;> simp_all
+                  exact ⟨_, .logSuccess s t count first rest tail offset length topics at_ items' second' split size notStatic gas (by simp [AdvancesMemory, t, entry])⟩
+              · exact ⟨_, .logGas s count first rest tail offset length topics at_ items' second' split size (Nat.lt_of_not_ge gas)⟩
       | extcodecopy =>
         cases items : s.stack.val with
         | nil => exact ⟨_, .extCodeCopyEmpty s at_ items⟩
@@ -3943,7 +4015,7 @@ theorem returnDataCopy_actual (s t : State) (x y z : Word) (xs : List Word)
   · by_cases bounds : y.toNat + z.toNat ≤ s.returnData.size
     · simp only [ite_eq_left gas, ite_eq_left bounds] at run
       cases run
-      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
     · simp [gas, bounds] at run
   · simp [gas] at run
 
@@ -3999,7 +4071,7 @@ theorem load_then_calldatasize_actual (s t u : State) (x : Word) (xs : List Word
 /-- A frame whose current instruction is outside the memory access subset. -/
 def PureMemoryStep (s : State) : Prop :=
   ¬ At s (some .mload) ∧ ¬ At s (some .mstore) ∧ ¬ At s (some .mstore8) ∧ ¬ At s (some .mcopy) ∧
-  ¬ At s (some .calldatacopy) ∧ ¬ At s (some .codecopy) ∧ ¬ At s (some .returndatacopy) ∧ ¬ At s (some .keccak) ∧ ¬ At s (some .extcodecopy)
+  ¬ At s (some .calldatacopy) ∧ ¬ At s (some .codecopy) ∧ ¬ At s (some .returndatacopy) ∧ ¬ At s (some .keccak) ∧ ¬ At s (some .extcodecopy) ∧ (∀ n, ¬ At s (some (.log n)))
 
 /-- A pure instruction preserves memory for every outcome. -/
 theorem outcome_memory_unchanged_of_pure {s : State} {out : Outcome}

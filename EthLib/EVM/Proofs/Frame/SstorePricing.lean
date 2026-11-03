@@ -49,7 +49,7 @@ theorem sstore_read_unique (s t : State) (rest : Stack) (key : Word)
     (h : SstoreReadFields s t rest key) :
     t = { s with stack := rest, warmSlots := SloadWarm s key, tracker := SloadRead s key } := by
   rcases h with ⟨code, pc, stack, gas, memory, context, data, addresses, slots, static, meter,
-    parent, writes, accounts, reads, created, snapshots⟩
+    parent, writes, accounts, reads, created, snapshots, logs⟩
   have tracker : t.tracker = SloadRead s key := by
     cases hs : s.tracker
     cases ht : t.tracker
@@ -81,8 +81,8 @@ theorem sstore_credit_unique (s t : State) (delta : Int) (credit : Bool)
     t = withStateMeter s (if credit then Gas.StateMeter.creditState
       (Gas.StateMeter.adjustRefund (stateMeter s) delta) 97920
       else Gas.StateMeter.adjustRefund (stateMeter s) delta) := by
-  rcases s with ⟨code, pc, stack, gas, memory, valid, context, data, tracker, addresses, slots, static, meter⟩
-  rcases t with ⟨code', pc', stack', gas', memory', valid', context', data', tracker', addresses', slots', static', meter'⟩
+  rcases s with ⟨code, pc, stack, gas, memory, valid, context, data, tracker, addresses, slots, static, meter, logs⟩
+  rcases t with ⟨code', pc', stack', gas', memory', valid', context', data', tracker', addresses', slots', static', meter', logs'⟩
   rcases meter with ⟨reservoir, baseline, refund, spilled, committed⟩
   rcases meter' with ⟨reservoir', baseline', refund', spilled', committed'⟩
   cases credit <;>
@@ -112,7 +112,7 @@ theorem sstore_charge_converse (s t : State) (amount : Nat)
     tauto
   refine ⟨stateMeter t, (Gas.StateMeter.chargeState_ok_iff _ _ _).mpr effect, ?_⟩
   rcases h with ⟨retained, _, _⟩
-  rcases retained with ⟨code, pc, stack, memory, context, data, tracker, addresses, slots, static, _, _⟩
+  rcases retained with ⟨code, pc, stack, memory, context, data, tracker, addresses, slots, static, _, _, logs⟩
   cases hm : t.stateGas
   cases s
   cases t
@@ -123,7 +123,7 @@ theorem sstore_execution_unique (s t : State) (cost : Nat)
     (h : SstoreExecutionFields s t cost) :
     t = { s with gas := s.gas - cost } := by
   rcases h with ⟨retained, meter, gas⟩
-  rcases retained with ⟨code, pc, stack, memory, context, data, tracker, addresses, slots, static, _, _⟩
+  rcases retained with ⟨code, pc, stack, memory, context, data, tracker, addresses, slots, static, _, _, logs⟩
   have gas' : t.gas = s.gas - cost := by omega
   cases s
   cases t
@@ -176,7 +176,7 @@ def sstoreWriteWitness (s : State) (key value : Word) (success : Bool) : State :
 theorem sstore_write_unique (s t : State) (key value : Word) (success : Bool)
     (h : SstoreWriteFields s t key value success) : t = sstoreWriteWitness s key value success := by
   rcases h with ⟨code, pc, stack, gas, memory, context, data, addresses, slots, static, meter,
-    parent, accounts, storage, codes, clears, transient, reads, storageReads, created, snapshots⟩
+    parent, accounts, storage, codes, clears, transient, reads, storageReads, created, snapshots, logs⟩
   have writes : t.tracker.writes = { s.tracker.writes with storageWrites :=
       if success then ((s.context.environment.currentTarget, key), value) :: s.tracker.writes.storageWrites
       else s.tracker.writes.storageWrites } := by

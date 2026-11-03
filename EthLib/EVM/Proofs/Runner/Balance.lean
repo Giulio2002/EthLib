@@ -15,9 +15,9 @@ def program : ByteArray := ⟨#[0x31, 0x90, 0x31, 0x00]⟩
 theorem run (x : Word) (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
     (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State)
-    (warm : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (cold : Frame.BalanceAddress x ∉ warm) :
+    (warm : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (logs : List Frame.LogEntry) (cold : Frame.BalanceAddress x ∉ warm) :
     let s : Frame.State := ⟨program, 0, ⟨x :: x :: xs, by simp; omega⟩,
-      3103 + g, mem, valid, context, returnData, tracker, warm, warmSlots, static, stateGas⟩
+      3103 + g, mem, valid, context, returnData, tracker, warm, warmSlots, static, stateGas, logs⟩
     ∃ t, Runner.run 4 s = .stopped t ∧ t.pc = 4 ∧ t.gas = g ∧
       t.stack.val = (Frame.BalanceAccount s (Frame.BalanceAddress x)).balance ::
         (Frame.BalanceAccount s (Frame.BalanceAddress x)).balance :: xs ∧
@@ -25,7 +25,7 @@ theorem run (x : Word) (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
       t.tracker = { tracker with accountReads := Frame.BalanceAddress x :: Frame.BalanceAddress x :: tracker.accountReads } ∧
       t.code = program ∧ t.memory = mem ∧ t.context = context ∧ t.returnData = returnData := by
   let a := Frame.BalanceAddress x
-  let s : Frame.State := ⟨program, 0, ⟨x :: x :: xs, by simp; omega⟩, 3103 + g, mem, valid, context, returnData, tracker, warm, warmSlots, static, stateGas⟩
+  let s : Frame.State := ⟨program, 0, ⟨x :: x :: xs, by simp; omega⟩, 3103 + g, mem, valid, context, returnData, tracker, warm, warmSlots, static, stateGas, logs⟩
   let v := (Frame.BalanceAccount s a).balance
   let r1 : Stack := ⟨x :: xs, by simp; omega⟩
   let r2 : Stack := ⟨v :: xs, by simp; omega⟩

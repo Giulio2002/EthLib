@@ -2,22 +2,22 @@ import EthLib.EVM.Proofs.Runner.BlockBlobIntegration
 
 open EthLib.EVM
 
-example (context : CallData.Context) (data : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (x y : Word)
+example (context : CallData.Context) (data : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (logs : List Frame.LogEntry) (x y : Word)
     (xs : List Word) (room : xs.length ≤ 1020) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) :
     ∃ t, Runner.run 5 ⟨Runner.BlockBlobIntegration.program, 0,
-        ⟨x :: y :: xs, by simp; omega⟩, 30 + g, mem, valid, context, data, tracker, warmAddresses, warmSlots, static, stateGas⟩ = .exhausted t ∧
+        ⟨x :: y :: xs, by simp; omega⟩, 30 + g, mem, valid, context, data, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩ = .exhausted t ∧
       t.stack.val = Frame.observationWord (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas) ::
         context.environment.number :: Environment.blobHash context.environment y ::
         Environment.blockHash context.environment.blockHashes context.environment.number x :: xs ∧
       t.code = Runner.BlockBlobIntegration.program ∧ t.context = context ∧ t.memory = mem ∧
       t.returnData = data ∧ t.gas = g ∧ t.pc = 5 :=
-  Runner.BlockBlobIntegration.run context data tracker warmAddresses warmSlots static stateGas x y xs room g mem valid
+  Runner.BlockBlobIntegration.run context data tracker warmAddresses warmSlots static stateGas logs x y xs room g mem valid
 
 #print axioms Runner.BlockBlobIntegration.run
 
 -- The exact contract derives the output from history and fee premises.
-example (context : CallData.Context) (data : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (x y : Word)
+example (context : CallData.Context) (data : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (logs : List Frame.LogEntry) (x y : Word)
     (xs : List Word) (room : xs.length ≤ 1020) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
     (chain : Nat → Word)
@@ -26,13 +26,13 @@ example (context : CallData.Context) (data : ByteArray) (tracker : TransactionSt
       context.environment.number.toNat ≤ x.toNat + 256)
     (feeBound : BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas < Word.modulus) :
     ∃ t fee, Runner.run 5 ⟨Runner.BlockBlobIntegration.program, 0,
-        ⟨x :: y :: xs, by simp; omega⟩, 30 + g, mem, valid, context, data, tracker, warmAddresses, warmSlots, static, stateGas⟩ = .exhausted t ∧
+        ⟨x :: y :: xs, by simp; omega⟩, 30 + g, mem, valid, context, data, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩ = .exhausted t ∧
       Word.ofNat (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas) = .ok fee ∧
       fee.toNat = BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas ∧
       t.stack.val = fee :: context.environment.number ::
         (context.environment.blobVersionedHashes[y.toNat]?).getD 0 :: chain x.toNat :: xs ∧
       t.code = Runner.BlockBlobIntegration.program ∧ t.context = context ∧ t.memory = mem ∧
       t.returnData = data ∧ t.gas = g ∧ t.pc = 5 :=
-  Runner.BlockBlobIntegration.run_source_in_window context data tracker warmAddresses warmSlots static stateGas x y xs room g mem valid chain history window feeBound
+  Runner.BlockBlobIntegration.run_source_in_window context data tracker warmAddresses warmSlots static stateGas logs x y xs room g mem valid chain history window feeBound
 
 #print axioms Runner.BlockBlobIntegration.run_source_in_window

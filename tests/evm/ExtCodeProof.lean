@@ -89,17 +89,17 @@ theorem hash_error_forward (s t : Frame.State) (reason : Frame.Exception)
 theorem mixed_run (xs : List Word) (room : xs.length ≤ 1022) (x : Word) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
     (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State)
-    (warm : List World.Address) (slots : List (World.Address × Word)) (static : Bool) (meter : Frame.StateGas)
+    (warm : List World.Address) (slots : List (World.Address × Word)) (static : Bool) (meter : Frame.StateGas) (logs : List Frame.LogEntry)
     (cold : Frame.BalanceAddress x ∉ warm) (code : ByteArray)
     (present : Frame.ExtCodeBytes
-      ⟨Runner.ExtCodeProgram.program, 0, ⟨x :: x :: xs, by simp; omega⟩, 3202 + g, mem, valid, context, returnData, tracker, warm, slots, static, meter⟩
+      ⟨Runner.ExtCodeProgram.program, 0, ⟨x :: x :: xs, by simp; omega⟩, 3202 + g, mem, valid, context, returnData, tracker, warm, slots, static, meter, logs⟩
       (Frame.BalanceAddress x) = some code) :
     let s : Frame.State := ⟨Runner.ExtCodeProgram.program, 0, ⟨x :: x :: xs, by simp; omega⟩, 3202 + g,
-      mem, valid, context, returnData, tracker, warm, slots, static, meter⟩
+      mem, valid, context, returnData, tracker, warm, slots, static, meter, logs⟩
     ∃ t, Runner.run 4 s = .stopped t ∧ t.pc = 4 ∧ t.gas = g ∧
       t.stack.val = Frame.ExtCodeHashValue s (Frame.BalanceAddress x) :: xs ∧
       t.tracker = { tracker with accountReads := Frame.BalanceAddress x :: Frame.BalanceAddress x :: tracker.accountReads } ∧
       t.warmAddresses = Frame.BalanceAddress x :: warm :=
-  Runner.ExtCodeProgram.run xs room x g mem valid context returnData tracker warm slots static meter cold code present
+  Runner.ExtCodeProgram.run xs room x g mem valid context returnData tracker warm slots static meter logs cold code present
 
 end ExtCodeConsumer

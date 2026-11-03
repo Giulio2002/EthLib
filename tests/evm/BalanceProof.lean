@@ -37,16 +37,16 @@ example (s : Frame.State) (out : Frame.Outcome)
 example (x : Word) (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
     (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State)
-    (warm : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (cold : Frame.BalanceAddress x ∉ warm) :
+    (warm : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (logs : List Frame.LogEntry) (cold : Frame.BalanceAddress x ∉ warm) :
     let s : Frame.State := ⟨Runner.BalanceProgram.program, 0, ⟨x :: x :: xs, by simp; omega⟩,
-      3103 + g, mem, valid, context, returnData, tracker, warm, warmSlots, static, stateGas⟩
+      3103 + g, mem, valid, context, returnData, tracker, warm, warmSlots, static, stateGas, logs⟩
     ∃ t, Runner.run 4 s = .stopped t ∧ t.pc = 4 ∧ t.gas = g ∧
       t.stack.val = (Frame.BalanceAccount s (Frame.BalanceAddress x)).balance ::
         (Frame.BalanceAccount s (Frame.BalanceAddress x)).balance :: xs ∧
       t.warmAddresses = Frame.BalanceAddress x :: warm ∧
       t.tracker = { tracker with accountReads := Frame.BalanceAddress x :: Frame.BalanceAddress x :: tracker.accountReads } ∧
       t.code = Runner.BalanceProgram.program ∧ t.memory = mem ∧ t.context = context ∧ t.returnData = returnData :=
-  Runner.BalanceProgram.run x xs room g mem valid context returnData tracker warm warmSlots static stateGas cold
+  Runner.BalanceProgram.run x xs room g mem valid context returnData tracker warm warmSlots static stateGas logs cold
 
 example (fuel : Nat) (s : Frame.State) (a : World.Address) (warm : a ∈ s.warmAddresses) :
     a ∈ (Runner.run fuel s).frame.warmAddresses :=

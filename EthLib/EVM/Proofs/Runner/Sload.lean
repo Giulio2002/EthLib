@@ -15,17 +15,17 @@ def program : ByteArray := ⟨#[0x54, 0x90, 0x54, 0x00]⟩
 theorem run (key : Word) (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
     (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State)
-    (warm : List World.Address) (slots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas)
+    (warm : List World.Address) (slots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (logs : List Frame.LogEntry)
     (cold : (context.environment.currentTarget, key) ∉ slots) :
     let s : Frame.State := ⟨program, 0, ⟨key :: key :: xs, by simp; omega⟩,
-      2203 + g, mem, valid, context, returnData, tracker, warm, slots, static, stateGas⟩
+      2203 + g, mem, valid, context, returnData, tracker, warm, slots, static, stateGas, logs⟩
     ∃ t, Runner.run 4 s = .stopped t ∧ t.pc = 4 ∧ t.gas = g ∧
       t.stack.val = Frame.SloadValue s key :: Frame.SloadValue s key :: xs ∧
       t.warmSlots = (context.environment.currentTarget, key) :: slots ∧ t.warmAddresses = warm ∧
       t.tracker = { tracker with storageReads := (context.environment.currentTarget, key) :: (context.environment.currentTarget, key) :: tracker.storageReads } ∧
       t.code = program ∧ t.memory = mem ∧ t.context = context ∧ t.returnData = returnData := by
   let slot := (context.environment.currentTarget, key)
-  let s : Frame.State := ⟨program, 0, ⟨key :: key :: xs, by simp; omega⟩, 2203 + g, mem, valid, context, returnData, tracker, warm, slots, static, stateGas⟩
+  let s : Frame.State := ⟨program, 0, ⟨key :: key :: xs, by simp; omega⟩, 2203 + g, mem, valid, context, returnData, tracker, warm, slots, static, stateGas, logs⟩
   let v := Frame.SloadValue s key
   let r1 : Stack := ⟨key :: xs, by simp; omega⟩
   let r2 : Stack := ⟨v :: xs, by simp; omega⟩

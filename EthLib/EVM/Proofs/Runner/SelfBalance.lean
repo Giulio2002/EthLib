@@ -34,13 +34,13 @@ def program : ByteArray := ⟨#[0x47, 0x58, 0x00]⟩
 /-- The real runner preserves the tracker except for the current-target read. -/
 theorem run (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
-    (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) :
-    let s : Frame.State := ⟨program, 0, ⟨xs, by omega⟩, 7 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩
+    (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (logs : List Frame.LogEntry) :
+    let s : Frame.State := ⟨program, 0, ⟨xs, by omega⟩, 7 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩
     ∃ t, Runner.run 3 s = .stopped t ∧ t.pc = 3 ∧ t.gas = g ∧
       t.stack.val = 1 :: (Frame.SelfBalanceAccount s).balance :: xs ∧
       t.tracker = Frame.SelfBalanceRead s ∧ t.memory = mem ∧ t.context = context ∧
       t.returnData = returnData ∧ t.code = program := by
-  let s : Frame.State := ⟨program, 0, ⟨xs, by omega⟩, 7 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩
+  let s : Frame.State := ⟨program, 0, ⟨xs, by omega⟩, 7 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩
   let s1 : Frame.State := { s with tracker := Frame.SelfBalanceRead s, pc := 1, gas := 2 + g, stack := ⟨(Frame.SelfBalanceAccount s).balance :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s1 with pc := 2, gas := g, stack := ⟨1 :: (Frame.SelfBalanceAccount s).balance :: xs, by simp; omega⟩ }
   let s3 : Frame.State := { s2 with pc := 3 }

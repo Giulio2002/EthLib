@@ -7,7 +7,7 @@ private def env : Environment.Context :=
 
 private def state : Frame.State :=
   ⟨⟨#[0x4a]⟩, 0, Stack.empty, 2, Memory.Allocation.empty,
-    (by intro a _; rfl), ⟨ByteArray.empty, env⟩, ByteArray.empty, { parent := {} }, [], [], false, {}⟩
+    (by intro a _; rfl), ⟨ByteArray.empty, env⟩, ByteArray.empty, { parent := {} }, [], [], false, {}, []⟩
 
 -- The expected prices are calculated from the integer recurrence independently.
 /-- info: (true, true, true) -/

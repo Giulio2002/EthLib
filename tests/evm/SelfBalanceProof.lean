@@ -21,14 +21,14 @@ example (s : Frame.State) (at_ : Frame.At s (some .selfbalance)) :
 
 example (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
-    (context : CallData.Context) (data : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) :
+    (context : CallData.Context) (data : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (logs : List Frame.LogEntry) :
     let s : Frame.State := ⟨Runner.SelfBalanceProgram.program, 0, ⟨xs, by omega⟩,
-      7 + g, mem, valid, context, data, tracker, warmAddresses, warmSlots, static, stateGas⟩
+      7 + g, mem, valid, context, data, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩
     ∃ t, Runner.run 3 s = .stopped t ∧ t.pc = 3 ∧ t.gas = g ∧
       t.stack.val = 1 :: (Frame.SelfBalanceAccount s).balance :: xs ∧
       t.tracker = Frame.SelfBalanceRead s ∧ t.memory = mem ∧ t.context = context ∧
       t.returnData = data ∧ t.code = Runner.SelfBalanceProgram.program :=
-  Runner.SelfBalanceProgram.run xs room g mem valid context data tracker warmAddresses warmSlots static stateGas
+  Runner.SelfBalanceProgram.run xs room g mem valid context data tracker warmAddresses warmSlots static stateGas logs
 
 example (s : Frame.State) :
     (∀ x, (TransactionState.Reference.observe s.tracker).writes.accounts
@@ -62,7 +62,7 @@ example (s t : Frame.State) (run : Frame.selfBalance s = .continue t) :
     t.tracker.storageReads = s.tracker.storageReads ∧
     t.tracker.createdAccounts = s.tracker.createdAccounts ∧
     t.tracker.snapshots = s.tracker.snapshots := by
-  obtain ⟨gas, _, code, memory, pc, left, stack, context, ret, tracker, warmAddresses, warmSlots, static, stateGas⟩ :=
+  obtain ⟨gas, _, code, memory, pc, left, stack, context, ret, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩ :=
     (Frame.selfBalance_success_iff s t).mp run
   rw [tracker]
   exact ⟨gas, pc, left, stack, code, memory, context, ret, rfl, rfl, rfl, rfl, rfl, rfl⟩

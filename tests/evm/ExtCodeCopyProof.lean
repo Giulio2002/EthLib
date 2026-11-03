@@ -142,21 +142,21 @@ theorem dispatch_converse (s t : Frame.State) (at_ : Frame.At s (some .extcodeco
 theorem mixed_run (xs : List Word) (room : xs.length ≤ 1018) (x destination source length : Word) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
     (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State)
-    (warm : List World.Address) (slots : List (World.Address × Word)) (static : Bool) (meter : Frame.StateGas)
+    (warm : List World.Address) (slots : List (World.Address × Word)) (static : Bool) (meter : Frame.StateGas) (logs : List Frame.LogEntry)
     (cold : Frame.BalanceAddress x ∉ warm) (code : ByteArray)
     (present : Frame.ExtCodeBytes
       ⟨Runner.ExtCodeCopyProgram.program, 0, ⟨x :: x :: destination :: source :: length :: destination :: xs, by simp; omega⟩,
-        0, mem, valid, context, returnData, tracker, warm, slots, static, meter⟩ (Frame.BalanceAddress x) = some code) :
+        0, mem, valid, context, returnData, tracker, warm, slots, static, meter, logs⟩ (Frame.BalanceAddress x) = some code) :
     let copied := Memory.Allocation.write (Memory.Allocation.expand mem destination.toNat length.toNat)
       destination.toNat (CallData.readRange code source.toNat length.toNat)
     let copyCost := 200 + 3 * ((length.toNat + 31) / 32) + Gas.rangeCost mem.words destination.toNat length.toNat
     let loadCost := 3 + Gas.rangeCost copied.words destination.toNat 32
     let s : Frame.State := ⟨Runner.ExtCodeCopyProgram.program, 0, ⟨x :: x :: destination :: source :: length :: destination :: xs, by simp; omega⟩,
-      3000 + 2 + copyCost + loadCost + g, mem, valid, context, returnData, tracker, warm, slots, static, meter⟩
+      3000 + 2 + copyCost + loadCost + g, mem, valid, context, returnData, tracker, warm, slots, static, meter, logs⟩
     ∃ t, Runner.run 5 s = .stopped t ∧ t.pc = 5 ∧ t.gas = g ∧
       t.stack.val = (Memory.Allocation.loadWord copied destination.toNat).1 :: xs ∧
       t.tracker = { tracker with accountReads := Frame.BalanceAddress x :: Frame.BalanceAddress x :: tracker.accountReads } ∧
       t.warmAddresses = Frame.BalanceAddress x :: warm :=
-  Runner.ExtCodeCopyProgram.run xs room x destination source length g mem valid context returnData tracker warm slots static meter cold code present
+  Runner.ExtCodeCopyProgram.run xs room x destination source length g mem valid context returnData tracker warm slots static meter logs cold code present
 
 end ExtCodeCopyConsumer

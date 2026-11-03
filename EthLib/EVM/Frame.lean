@@ -48,6 +48,15 @@ structure StateGas where
   committedSpill : Nat := 0
   deriving DecidableEq, Repr
 
+/-- Amsterdam `blocks.py`, `Log`, at revision
+`fd9298410ec7218838c8348f69c1eb633f1797dc`.
+Topics are the big-endian 32-byte encodings of stack words. -/
+structure LogEntry where
+  address : World.Address
+  topics : List { bytes : ByteArray // bytes.size = 32 }
+  data : ByteArray
+  deriving DecidableEq
+
 /-- The fields used by this instruction subset. -/
 structure State where
   code : ByteArray
@@ -63,6 +72,7 @@ structure State where
   warmSlots : List (World.Address × Word)
   isStatic : Bool := false
   stateGas : StateGas := {}
+  logs : List LogEntry := []
 
 /-- Exceptional halts distinguished by their first failing check. -/
 inductive Exception where
@@ -277,6 +287,51 @@ def tstore (s : State) : Outcome :=
         let tracker := TransactionTracker.setTransientStorage s.tracker
           s.context.environment.currentTarget key value
         .continue { input with gas, tracker, pc := s.pc + 1 }
+
+/-- Encode a topic in the fixed-width source representation. -/
+def logTopic (word : Word) : { bytes : ByteArray // bytes.size = 32 } :=
+  ⟨word.toBytesBE, by
+    change (EthLib.Execution.Precompiles.Modexp.natToBytes 32 word.toNat).toArray.size = 32
+    have size (len n : Nat) : (EthLib.Execution.Precompiles.Modexp.natToBytes len n).length = len := by
+      induction len generalizing n with
+      | zero => rfl
+      | succ len ih => simp [EthLib.Execution.Precompiles.Modexp.natToBytes, ih]
+    simpa using size 32 word.toNat⟩
+
+/-- Pop topics in source order and retain the stack at an underflow. -/
+def popLogTopics : Nat → Stack → Except Stack (List Word × Stack)
+  | 0, stack => .ok ([], stack)
+  | n + 1, stack =>
+    match Stack.pop stack with
+    | .error _ => .error stack
+    | .ok (topic, rest) =>
+      match popLogTopics n rest with
+      | .error stack => .error stack
+      | .ok (topics, stack) => .ok (topic :: topics, stack)
+
+/-- Amsterdam `instructions/log.py`, `log_n`, and `gas.py`, `GasCosts`,
+at revision `fd9298410ec7218838c8348f69c1eb633f1797dc`. -/
+def logN (s : State) (count : Fin 5) : Outcome :=
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (offset, first) =>
+    match Stack.pop first with
+    | .error e => failStack { s with stack := first } e
+    | .ok (length, rest) =>
+      match popLogTopics count.val rest with
+      | .error stack => .exception { s with stack } .stackUnderflow
+      | .ok (topics, stack) =>
+        let input := { s with stack }
+        charge input (375 + 8 * length.toNat + 375 * count.val +
+          Gas.rangeCost s.memory.words offset.toNat length.toNat) fun gas =>
+          let memory := Memory.Allocation.expand s.memory offset.toNat length.toNat
+          let expanded := { input with gas, memory, memoryValid :=
+            Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid }
+          if s.isStatic then .exception expanded .writeInStaticContext else
+            let entry : LogEntry := ⟨s.context.environment.currentTarget,
+              topics.map logTopic,
+              ⟨(Memory.readRange s.memory.store offset.toNat length.toNat).toArray⟩⟩
+            .continue { expanded with logs := s.logs ++ [entry], pc := s.pc + 1 }
 
 /-- Form the source meter using the frame's current execution-gas field. -/
 def stateMeter (s : State) : Gas.StateMeter.Meter :=
@@ -506,6 +561,7 @@ def step (s : State) : Outcome :=
     | some .extcodesize => extCodeSize s
     | some .extcodehash => extCodeHash s
     | some .extcodecopy => extCodeCopy s
+    | some (.log count) => logN s count
     | some .selfbalance => selfBalance s
     | some .address => observe s (fun _ => s.context.environment.currentTarget.val)
     | some .origin => observe s (fun _ => s.context.environment.origin.val)

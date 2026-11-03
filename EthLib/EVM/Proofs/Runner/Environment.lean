@@ -12,17 +12,17 @@ namespace EthLib.EVM.Runner.EnvironmentProgram
 def program : ByteArray := ⟨#[0x30, 0x32, 0x33, 0x34, 0x3a, 0x00]⟩
 
 /-- The program reads arbitrary metadata and leaves the residual frame intact. -/
-theorem run (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (xs : List Word)
+theorem run (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (logs : List Frame.LogEntry) (xs : List Word)
     (room : xs.length ≤ 1019) (g : Nat) (mem : Memory.Allocation.State)
     (valid : Memory.Allocation.Valid mem) :
-    ∃ t, Runner.run 6 ⟨program, 0, ⟨xs, by omega⟩, 10 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩ = .stopped t ∧
+    ∃ t, Runner.run 6 ⟨program, 0, ⟨xs, by omega⟩, 10 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩ = .stopped t ∧
       t.pc = 6 ∧ t.gas = g ∧ t.code = program ∧ t.memory = mem ∧
       t.context = context ∧ t.returnData = returnData ∧
       t.stack.val = context.environment.gasPrice :: context.environment.value ::
         Environment.addressWord context.environment.caller ::
         Environment.addressWord context.environment.origin ::
         Environment.addressWord context.environment.currentTarget :: xs := by
-  let s : Frame.State := ⟨program, 0, ⟨xs, by omega⟩, 10 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩
+  let s : Frame.State := ⟨program, 0, ⟨xs, by omega⟩, 10 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩
   let s1 : Frame.State := { s with pc := 1, gas := 8 + g, stack := ⟨Environment.addressWord context.environment.currentTarget :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s with pc := 2, gas := 6 + g, stack := ⟨Environment.addressWord context.environment.origin :: Environment.addressWord context.environment.currentTarget :: xs, by simp; omega⟩ }
   let s3 : Frame.State := { s with pc := 3, gas := 4 + g, stack := ⟨Environment.addressWord context.environment.caller :: Environment.addressWord context.environment.origin :: Environment.addressWord context.environment.currentTarget :: xs, by simp; omega⟩ }

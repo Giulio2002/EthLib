@@ -16,20 +16,20 @@ def program : ByteArray := ⟨#[0x3b, 0x50, 0x3f, 0x00]⟩
 theorem run (xs : List Word) (room : xs.length ≤ 1022) (x : Word) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
     (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State)
-    (warm : List World.Address) (slots : List (World.Address × Word)) (static : Bool) (meter : Frame.StateGas)
+    (warm : List World.Address) (slots : List (World.Address × Word)) (static : Bool) (meter : Frame.StateGas) (logs : List Frame.LogEntry)
     (cold : Frame.BalanceAddress x ∉ warm) (code : ByteArray)
     (present : Frame.ExtCodeBytes
-      ⟨program, 0, ⟨x :: x :: xs, by simp; omega⟩, 3202 + g, mem, valid, context, returnData, tracker, warm, slots, static, meter⟩
+      ⟨program, 0, ⟨x :: x :: xs, by simp; omega⟩, 3202 + g, mem, valid, context, returnData, tracker, warm, slots, static, meter, logs⟩
       (Frame.BalanceAddress x) = some code) :
     let s : Frame.State := ⟨program, 0, ⟨x :: x :: xs, by simp; omega⟩, 3202 + g,
-      mem, valid, context, returnData, tracker, warm, slots, static, meter⟩
+      mem, valid, context, returnData, tracker, warm, slots, static, meter, logs⟩
     ∃ t, Runner.run 4 s = .stopped t ∧ t.pc = 4 ∧ t.gas = g ∧
       t.stack.val = Frame.ExtCodeHashValue s (Frame.BalanceAddress x) :: xs ∧
       t.tracker = { tracker with accountReads := Frame.BalanceAddress x :: Frame.BalanceAddress x :: tracker.accountReads } ∧
       t.warmAddresses = Frame.BalanceAddress x :: warm := by
   let a := Frame.BalanceAddress x
   let s : Frame.State := ⟨program, 0, ⟨x :: x :: xs, by simp; omega⟩, 3202 + g,
-    mem, valid, context, returnData, tracker, warm, slots, static, meter⟩
+    mem, valid, context, returnData, tracker, warm, slots, static, meter, logs⟩
   let s1 : Frame.State := { s with tracker := Frame.BalanceRead s a, warmAddresses := a :: warm, pc := 1, gas := 102 + g, stack := ⟨BitVec.ofNat 256 code.size :: x :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s1 with pc := 2, gas := 100 + g, stack := ⟨x :: xs, by simp; omega⟩ }
   let s3 : Frame.State := { s2 with tracker := Frame.BalanceRead s2 a, pc := 3, gas := g, stack := ⟨Frame.ExtCodeHashValue s a :: xs, by simp; omega⟩ }

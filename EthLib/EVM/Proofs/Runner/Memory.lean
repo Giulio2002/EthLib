@@ -20,14 +20,14 @@ def program : ByteArray := ⟨#[0x52, 0x51]⟩
 /-- The loaded word is the arbitrary word stored by the preceding instruction. -/
 theorem store_load (x value : Word) (xs : List Word) (room : xs.length ≤ 1021)
     (mem : EthLib.EVM.Memory.Allocation.State) (valid : EthLib.EVM.Memory.Allocation.Valid mem)
-    (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (g : Nat) :
+    (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (logs : List Frame.LogEntry) (g : Nat) :
     ∃ t, Runner.run 2 ⟨program, 0, ⟨x :: value :: x :: xs, by simp; omega⟩,
-      6 + Gas.rangeCost mem.words x.toNat 32 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩ = .exhausted t ∧
+      6 + Gas.rangeCost mem.words x.toNat 32 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩ = .exhausted t ∧
       t.stack.val = value :: xs ∧ t.pc = 2 ∧ t.gas = g ∧ t.code = program := by
   let cost := Gas.rangeCost mem.words x.toNat 32
   let stored := EthLib.EVM.Memory.Allocation.storeWord mem x.toNat value
   let s : Frame.State := ⟨program, 0, ⟨x :: value :: x :: xs, by simp; omega⟩,
-    6 + cost + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩
+    6 + cost + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩
   let s1 : Frame.State := { s with pc := 1, gas := 3 + g, stack := ⟨x :: xs, by simp; omega⟩, memory := stored, memoryValid := EthLib.EVM.Memory.Allocation.write_valid_for_frame _ _ _ valid }
   let s2 : Frame.State := { s1 with pc := 2, gas := g, stack := ⟨value :: xs, by simp; omega⟩, memory := (EthLib.EVM.Memory.Allocation.loadWord stored x.toNat).2, memoryValid := EthLib.EVM.Memory.Allocation.expand_valid_for_frame _ _ _ s1.memoryValid }
   have zero : Gas.rangeCost stored.words x.toNat 32 = 0 := by

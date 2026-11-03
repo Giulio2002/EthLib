@@ -447,7 +447,7 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The augmented 256-byte dispatch regression covers 139 supported instructions and 14 assigned but unsupported instructions.
+The augmented 256-byte dispatch regression covers 144 supported instructions and 9 assigned but unsupported instructions.
 It also covers 102 unassigned bytes and INVALID.
 The historical Cancun subset has 125 supported instructions and 107 unassigned bytes.
 The Cancun-plus-CLZ subset has 126 supported instructions and 106 unassigned bytes.
@@ -836,3 +836,19 @@ Exact frame equality also retains the sparse-store representation constraint, si
 `Runner.ExtCodeCopyProgram.run` constructs a hash, copy and memory-load sequence.
 `PureMemoryStep` excludes EXTCODECOPY, and the account-read and warm-list equality contracts also exclude it.
 Child calls and transaction lifecycle remain outside this slice.
+
+## Frame logs
+
+Amsterdam `instructions/log.py`, `log_n`, appends the current target address, ordered 32-byte topic encodings and a memory byte sequence to the frame logs.
+The frame carries a caller-supplied list of existing entries.
+The instruction pops the range and topics, charges 375 gas plus 375 per topic, 8 per data byte and memory expansion, then expands memory before checking static mode.
+An underflow keeps the already popped stack, an out-of-gas error retains the popped stack, and a static error also retains the charge and memory expansion.
+Empty data ranges do not expand memory, even at a large offset.
+
+`Frame.LogLocal` characterizes every helper outcome at arbitrary code and program counter.
+Its success case binds the data observation to the original memory and popped range, and its exact frame constraint retains the sparse-memory representation.
+`log_step_iff_local` connects this contract to each dispatched LOG opcode.
+`NoLogStep` and `NoLogRun` give unchanged-log guarantees for non-LOG instructions and traces; every rule and bounded result retains the incoming sequence as a prefix.
+`PureMemoryStep` excludes all five LOG opcodes because they may expand memory.
+Existing positional `Frame.State` constructors and quantified runner programs take an additional log list.
+Child-call log merge and discard, transaction receipts and bloom construction are outside this frame-local slice.

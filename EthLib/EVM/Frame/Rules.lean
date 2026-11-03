@@ -25,17 +25,17 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .extcodecopy | .extcodesize | .extcodehash | .tload | .tstore | .sstore | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .log _ | .extcodecopy | .extcodesize | .extcodehash | .tload | .tstore | .sstore | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
 def Advances (s t : State) (pc gas : Nat) (xs : List Word) : Prop :=
-  t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧ t.warmAddresses = s.warmAddresses ∧ t.warmSlots = s.warmSlots ∧ t.isStatic = s.isStatic ∧ t.stateGas = s.stateGas
+  t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧ t.warmAddresses = s.warmAddresses ∧ t.warmSlots = s.warmSlots ∧ t.isStatic = s.isStatic ∧ t.stateGas = s.stateGas ∧ t.logs = s.logs
 
 /-- Exact fields after a memory instruction. -/
 def AdvancesMemory (s t : State) (memory : Memory.Allocation.State)
     (pc gas : Nat) (xs : List Word) : Prop :=
-  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧ t.warmAddresses = s.warmAddresses ∧ t.warmSlots = s.warmSlots ∧ t.isStatic = s.isStatic ∧ t.stateGas = s.stateGas
+  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧ t.warmAddresses = s.warmAddresses ∧ t.warmSlots = s.warmSlots ∧ t.isStatic = s.isStatic ∧ t.stateGas = s.stateGas ∧ t.logs = s.logs
 
 /-- A successful MCOPY with observed pops determines the resulting frame. -/
 theorem mcopy_actual_fields (s t : State) (destination source length : Word)
@@ -52,7 +52,7 @@ theorem mcopy_actual_fields (s t : State) (destination source length : Word)
   · simp only [step, dite_eq_left bounds, decoded, p1, p2, p3, charge, Gas.charge,
       ite_eq_left gas] at run
     cases run
-    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   · simp [step, bounds, decoded, p1, p2, p3, charge, Gas.charge, gas] at run
 
 /-- Cancun `runtime.py`: the source byte length at an instruction boundary. -/
@@ -247,14 +247,14 @@ def SstoreReadFields (s t : State) (rest : Stack) (key : Word) : Prop :=
   t.tracker.accountReads = s.tracker.accountReads ∧
   t.tracker.storageReads = (s.context.environment.currentTarget, key) :: s.tracker.storageReads ∧
   t.tracker.createdAccounts = s.tracker.createdAccounts ∧
-  t.tracker.snapshots = s.tracker.snapshots
+  t.tracker.snapshots = s.tracker.snapshots ∧ t.logs = s.logs
 
 /-- Fields unaffected by state-gas accounting. -/
 def SstoreMeterRetained (s t : State) : Prop :=
   t.code = s.code ∧ t.pc = s.pc ∧ t.stack = s.stack ∧ t.memory = s.memory ∧
   t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧
   t.warmAddresses = s.warmAddresses ∧ t.warmSlots = s.warmSlots ∧ t.isStatic = s.isStatic ∧
-  t.stateGas.baseline = s.stateGas.baseline ∧ t.stateGas.committedSpill = s.stateGas.committedSpill
+  t.stateGas.baseline = s.stateGas.baseline ∧ t.stateGas.committedSpill = s.stateGas.committedSpill ∧ t.logs = s.logs
 
 /-- The independent refund adjustment and optional state-gas credit. -/
 def SstoreCreditFields (s t : State) (delta : Int) (credit : Bool) : Prop :=
@@ -318,7 +318,7 @@ def SstoreWriteFields (s t : State) (key value : Word) (success : Bool) : Prop :
   t.tracker.writes.transientStorage = s.tracker.writes.transientStorage ∧
   t.tracker.accountReads = s.context.environment.currentTarget :: s.tracker.accountReads ∧
   t.tracker.storageReads = s.tracker.storageReads ∧
-  t.tracker.createdAccounts = s.tracker.createdAccounts ∧ t.tracker.snapshots = s.tracker.snapshots
+  t.tracker.createdAccounts = s.tracker.createdAccounts ∧ t.tracker.snapshots = s.tracker.snapshots ∧ t.logs = s.logs
 
 /-- Independent source cases for the SSTORE helper at any code and program counter. -/
 inductive SstoreLocal : State → Outcome → Prop where
@@ -513,6 +513,35 @@ inductive Rule : State → Outcome → Prop where
         t (Memory.Allocation.write (Memory.Allocation.expand s.memory destination.toNat length.toNat) destination.toNat
           (CallData.readRange code source.toNat length.toNat)) (s.pc + 1)
         (s.gas - ExtCodeCopyCost s (BalanceAddress x) destination length) rest.val → Rule s (.continue t)
+  | logEmpty (s : State) (count : Fin 5) : At s (some (.log count)) → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | logSecond (s : State) (count : Fin 5) (first : Stack) (offset : Word) :
+      At s (some (.log count)) → s.stack.val = offset :: first.val → first.val = [] →
+      Rule s (.exception { s with stack := first } .stackUnderflow)
+  | logTopicsUnderflow (s : State) (count : Fin 5) (first rest : Stack) (offset length : Word) :
+      At s (some (.log count)) → s.stack.val = offset :: first.val → first.val = length :: rest.val →
+      rest.val.length < count.val → Rule s (.exception { s with stack := Stack.empty } .stackUnderflow)
+  | logGas (s : State) (count : Fin 5) (first rest tail : Stack) (offset length : Word) (topics : List Word) :
+      At s (some (.log count)) → s.stack.val = offset :: first.val → first.val = length :: rest.val →
+      rest.val = topics ++ tail.val → topics.length = count.val →
+      s.gas < 375 + 8 * length.toNat + 375 * count.val + Gas.rangeCost s.memory.words offset.toNat length.toNat →
+      Rule s (.exception { s with stack := tail } .outOfGas)
+  | logStatic (s t : State) (count : Fin 5) (first rest tail : Stack) (offset length : Word) (topics : List Word) :
+      At s (some (.log count)) → s.stack.val = offset :: first.val → first.val = length :: rest.val →
+      rest.val = topics ++ tail.val → topics.length = count.val → s.isStatic = true →
+      375 + 8 * length.toNat + 375 * count.val + Gas.rangeCost s.memory.words offset.toNat length.toNat ≤ s.gas →
+      AdvancesMemory s t (Memory.Allocation.expand s.memory offset.toNat length.toNat) s.pc
+        (s.gas - (375 + 8 * length.toNat + 375 * count.val + Gas.rangeCost s.memory.words offset.toNat length.toNat)) tail.val →
+      Rule s (.exception t .writeInStaticContext)
+  | logSuccess (s t : State) (count : Fin 5) (first rest tail : Stack) (offset length : Word) (topics : List Word) :
+      At s (some (.log count)) → s.stack.val = offset :: first.val → first.val = length :: rest.val →
+      rest.val = topics ++ tail.val → topics.length = count.val → s.isStatic = false →
+      375 + 8 * length.toNat + 375 * count.val + Gas.rangeCost s.memory.words offset.toNat length.toNat ≤ s.gas →
+      AdvancesMemory { s with logs := s.logs ++ [⟨s.context.environment.currentTarget, topics.map logTopic,
+          ⟨(Memory.readRange s.memory.store offset.toNat length.toNat).toArray⟩⟩] }
+        t (Memory.Allocation.expand s.memory offset.toNat length.toNat) (s.pc + 1)
+        (s.gas - (375 + 8 * length.toNat + 375 * count.val + Gas.rangeCost s.memory.words offset.toNat length.toNat)) tail.val →
+      Rule s (.continue t)
   | selfBalanceGas (s) : At s (some .selfbalance) → s.gas < 5 →
       Rule s (.exception s .outOfGas)
   | selfBalanceFull (s) : At s (some .selfbalance) → 5 ≤ s.gas →

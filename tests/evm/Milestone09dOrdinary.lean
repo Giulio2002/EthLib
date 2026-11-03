@@ -4,7 +4,7 @@ open EthLib.EVM
 
 private def state : Frame.State :=
   ⟨⟨#[0x20]⟩, 0, ⟨[0, 0], by decide⟩, 30, Memory.Allocation.empty,
-    by intro a _; rfl, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty, { parent := {} }, [], [], false, {}⟩
+    by intro a _; rfl, ⟨ByteArray.empty, ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [], [], BlobFee.cancun⟩⟩, ByteArray.empty, { parent := {} }, [], [], false, {}, []⟩
 
 -- Empty Keccak-256, Keccak team's ShortMsgKAT_256.txt, Len = 0.
 /-- info: true -/

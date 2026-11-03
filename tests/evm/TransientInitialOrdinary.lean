@@ -21,7 +21,7 @@ private def tx : TransactionState.State :=
     [8], [(8, 3)], [9], [snap]⟩
 private def frame (stack : Stack) (gas : Nat) : Frame.State :=
   ⟨⟨#[0xaa]⟩, 99, stack, gas, mem, validMem, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩,
-    tx, [41], [(8, 3)], false, ⟨123, 456, -9, 7, 8⟩⟩
+    tx, [41], [(8, 3)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
 private def same (x y : Frame.State) : Bool :=
   decide (x.code = y.code ∧ x.pc = y.pc ∧ x.stack.val = y.stack.val ∧ x.gas = y.gas ∧
     x.memory = y.memory ∧ x.context = y.context ∧ x.returnData = y.returnData ∧
@@ -53,7 +53,7 @@ private def check (b : Bool) : IO Unit :=
       ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩,
       ⟨⟨[(7, ⟨1, 99, 8⟩)], [((7, 3), 5)], [(8, ⟨#[0x77]⟩)]⟩,
         ⟨[(8, some ⟨2, 3, 4⟩)], [((7, 3), 9)], [(12, ⟨#[0x66]⟩)], [8], [((8, 3), 2)]⟩, [8], [(8, 3)], [9], [snap]⟩,
-      [41], [(8, 3)], false, ⟨123, 456, -9, 7, 8⟩⟩
+      [41], [(8, 3)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
   | _ => false
 
 -- The dispatcher executes a write, a read, a pop and deletion before STOP.
@@ -64,7 +64,7 @@ private def check (b : Bool) : IO Unit :=
         ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩,
         ⟨⟨[(7, ⟨1, 99, 8⟩)], [((7, 3), 5)], [(8, ⟨#[0x77]⟩)]⟩,
           ⟨[(8, some ⟨2, 3, 4⟩)], [((7, 3), 9)], [(12, ⟨#[0x66]⟩)], [8], [((8, 3), 2)]⟩, [8], [(8, 3)], [9], [snap]⟩,
-        [41], [(8, 3)], false, ⟨123, 456, -9, 7, 8⟩⟩
+        [41], [(8, 3)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
   | _ => false
 
 -- Dispatch preserves the complete frame at each source-order failure.
@@ -94,7 +94,7 @@ private def check (b : Bool) : IO Unit :=
       ⟨⟨#[0x5d]⟩, 1, ⟨[11], by decide⟩, 0, mem, validMem, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩,
         ⟨⟨[(7, ⟨1, 99, 8⟩)], [((7, 3), 5)], [(8, ⟨#[0x77]⟩)]⟩,
           ⟨[(8, some ⟨2, 3, 4⟩)], [((7, 3), 9)], [(12, ⟨#[0x66]⟩)], [8], [((8, 3), 2)]⟩,
-          [8], [(8, 3)], [9], [snap]⟩, [41], [(8, 3)], false, ⟨123, 456, -9, 7, 8⟩⟩
+          [8], [(8, 3)], [9], [snap]⟩, [41], [(8, 3)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
   | _ => false
 
 #eval check <| match Frame.tstore (frame Stack.empty 0) with
@@ -106,7 +106,7 @@ private def check (b : Bool) : IO Unit :=
         ⟨⟨[(7, ⟨1, 99, 8⟩)], [((7, 3), 5)], [(8, ⟨#[0x77]⟩)]⟩,
           ⟨[(8, some ⟨2, 3, 4⟩)], [((7, 3), 9)], [(12, ⟨#[0x66]⟩)], [8],
             [((7, 3), 9), ((8, 3), 2)]⟩, [8], [(8, 3)], [9], [snap]⟩,
-        [41], [(8, 3)], false, ⟨123, 456, -9, 7, 8⟩⟩
+        [41], [(8, 3)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
   | _ => false
 -- A high key is kept at full word width and does not alias key 3.
 #eval check <| match Frame.tload (frame ⟨[(2^200 + 3), 11], by decide⟩ 100) with
@@ -128,7 +128,7 @@ private def check (b : Bool) : IO Unit :=
         ⟨⟨[(7, ⟨1, 99, 8⟩)], [((7, 3), 5)], [(8, ⟨#[0x77]⟩)]⟩,
           ⟨[(8, some ⟨2, 3, 4⟩)], [((7, 3), 9)], [(12, ⟨#[0x66]⟩)], [8],
             [((7, 2^200 + 3), 9), ((7, 3), 4), ((7, 3), 6), ((8, 3), 2)]⟩,
-          [8], [(8, 3)], [9], [snap]⟩, [41], [(8, 3)], false, ⟨123, 456, -9, 7, 8⟩⟩
+          [8], [(8, 3)], [9], [snap]⟩, [41], [(8, 3)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
   | _ => false
 
 -- TSTORE changes transient storage while preserving every nonempty persistent overlay.
@@ -138,5 +138,5 @@ private def check (b : Bool) : IO Unit :=
         ⟨⟨[(7, ⟨1, 99, 8⟩)], [((7, 3), 5)], [(8, ⟨#[0x77]⟩)]⟩,
           ⟨[(8, some ⟨2, 3, 4⟩)], [((7, 3), 9)], [(12, ⟨#[0x66]⟩)], [8],
             [((7, 3), 9), ((8, 3), 2)]⟩, [8], [(8, 3)], [9], [snap]⟩,
-        [41], [(8, 3)], false, ⟨123, 456, -9, 7, 8⟩⟩
+        [41], [(8, 3)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
   | _ => false

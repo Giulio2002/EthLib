@@ -12,11 +12,11 @@ namespace EthLib.EVM.Runner.BlockBlobIntegration
 def program : ByteArray := ⟨#[0x40, 0x90, 0x49, 0x43, 0x4a]⟩
 
 /-- The bounded run computes each observation for arbitrary accepted context and state. -/
-theorem run (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (x y : Word)
+theorem run (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (logs : List Frame.LogEntry) (x y : Word)
     (xs : List Word) (room : xs.length ≤ 1020) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) :
     ∃ t, Runner.run 5 ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩,
-        30 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩ = .exhausted t ∧
+        30 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩ = .exhausted t ∧
       t.stack.val = Frame.observationWord (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas) ::
         context.environment.number :: Environment.blobHash context.environment y ::
         Environment.blockHash context.environment.blockHashes context.environment.number x :: xs ∧
@@ -26,7 +26,7 @@ theorem run (context : CallData.Context) (returnData : ByteArray) (tracker : Tra
   let b := Environment.blobHash context.environment y
   let c := context.environment.number
   let d := Frame.observationWord (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas)
-  let s : Frame.State := ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩, 30 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩
+  let s : Frame.State := ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩, 30 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩
   let s1 : Frame.State := { s with pc := 1, gas := 10 + g, stack := ⟨a :: y :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s with pc := 2, gas := 7 + g, stack := ⟨y :: a :: xs, by simp; omega⟩ }
   let s3 : Frame.State := { s with pc := 3, gas := 4 + g, stack := ⟨b :: a :: xs, by simp; omega⟩ }
@@ -72,7 +72,7 @@ The chain maps block numbers to decoded 32-byte hashes.
 The list in the context contains the transaction's decoded versioned hashes.
 The premises do not validate headers, transactions, or chain ancestry.
 The fee uses the supplied schedule and is exact when it fits a word. -/
-theorem run_source_in_window (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas)
+theorem run_source_in_window (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (logs : List Frame.LogEntry)
     (x y : Word) (xs : List Word) (room : xs.length ≤ 1020) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
     (chain : Nat → Word)
@@ -82,7 +82,7 @@ theorem run_source_in_window (context : CallData.Context) (returnData : ByteArra
       context.environment.number.toNat ≤ x.toNat + 256)
     (feeBound : BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas < Word.modulus) :
     ∃ t fee, Runner.run 5 ⟨program, 0, ⟨x :: y :: xs, by simp; omega⟩,
-        30 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩ = .exhausted t ∧
+        30 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩ = .exhausted t ∧
       Word.ofNat (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas) = .ok fee ∧
       fee.toNat = BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas ∧
       t.stack.val = fee :: context.environment.number ::
@@ -90,7 +90,7 @@ theorem run_source_in_window (context : CallData.Context) (returnData : ByteArra
       t.code = program ∧ t.context = context ∧ t.memory = mem ∧ t.returnData = returnData ∧
       t.gas = g ∧ t.pc = 5 := by
   obtain ⟨t, result, stack, code, ctx, memory, data, gas, pc⟩ :=
-    run context returnData tracker warmAddresses warmSlots static stateGas x y xs room g mem valid
+    run context returnData tracker warmAddresses warmSlots static stateGas logs x y xs room g mem valid
   refine ⟨t, Frame.observationWord (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas),
     result, Frame.observationWord_checked _ feeBound, Frame.observationWord_exact _ feeBound, ?_,
     code, ctx, memory, data, gas, pc⟩

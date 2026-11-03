@@ -16,15 +16,15 @@ theorem run (xs : List Word) (room : xs.length ≤ 1019) (key value : Word) (g :
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
     (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State)
     (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word))
-    (stateGas : Frame.StateGas) :
+    (stateGas : Frame.StateGas) (logs : List Frame.LogEntry) :
     let s : Frame.State := ⟨program, 0, ⟨key :: value :: key :: key :: 0 :: xs, by simp; omega⟩,
-      302 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, false, stateGas⟩
+      302 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, false, stateGas, logs⟩
     ∃ t, Runner.run 5 s = .stopped t ∧ t.pc = 5 ∧ t.gas = g ∧ t.stack.val = xs ∧
       t.tracker = TransactionTracker.setTransientStorage
         (TransactionTracker.setTransientStorage tracker context.environment.currentTarget key value)
         context.environment.currentTarget key 0 := by
   let s : Frame.State := ⟨program, 0, ⟨key :: value :: key :: key :: 0 :: xs, by simp; omega⟩,
-    302 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, false, stateGas⟩
+    302 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, false, stateGas, logs⟩
   let tx1 := TransactionTracker.setTransientStorage tracker context.environment.currentTarget key value
   let tx2 := TransactionTracker.setTransientStorage tx1 context.environment.currentTarget key 0
   let s1 : Frame.State := { s with tracker := tx1, pc := 1, gas := 202 + g, stack := ⟨key :: key :: 0 :: xs, by simp; omega⟩ }
@@ -75,14 +75,14 @@ theorem run_deleted (xs : List Word) (room : xs.length ≤ 1019) (key value : Wo
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
     (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State)
     (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word))
-    (stateGas : Frame.StateGas) :
+    (stateGas : Frame.StateGas) (logs : List Frame.LogEntry) :
     let s : Frame.State := ⟨program, 0, ⟨key :: value :: key :: key :: 0 :: xs, by simp; omega⟩,
-      302 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, false, stateGas⟩
+      302 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, false, stateGas, logs⟩
     ∃ t, Runner.run 5 s = .stopped t ∧
       (TransactionState.Reference.observe t.tracker).writes.transient
         (context.environment.currentTarget, key) = none := by
   obtain ⟨t, run, _, _, _, trackerEq⟩ :=
-    run xs room key value g mem valid context returnData tracker warmAddresses warmSlots stateGas
+    run xs room key value g mem valid context returnData tracker warmAddresses warmSlots stateGas logs
   refine ⟨t, run, ?_⟩
   rw [trackerEq]
   have spec := (TransactionTracker.setTransientStorage_spec

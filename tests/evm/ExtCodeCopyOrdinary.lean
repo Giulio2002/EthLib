@@ -57,7 +57,7 @@ private theorem memoryValid : Memory.Allocation.Valid initialMemory :=
 
 private def frame : Frame.State :=
   ⟨⟨#[0xfe]⟩, 99, ⟨[7, 11], by decide⟩, 3000, initialMemory,
-    memoryValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, tracker, [41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩⟩
+    memoryValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, tracker, [41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
 
 -- Expected memory and environment are written out independently of the operation.
 private def expected (code : ByteArray) (pc : Nat) (stack : Stack) (gas : Nat)
@@ -65,7 +65,7 @@ private def expected (code : ByteArray) (pc : Nat) (stack : Stack) (gas : Nat)
   ⟨code, pc, stack, gas, ⟨[(2, 0xa1), (3, 0xb2)], 1⟩,
     (by change Memory.Allocation.Valid initialMemory; exact memoryValid),
     ⟨⟨#[4]⟩, ⟨7, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-      [25, 26], [27, 28], ⟨⟨11684671, by decide⟩⟩⟩⟩, ⟨#[6]⟩, tx, warm, [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩⟩
+      [25, 26], [27, 28], ⟨⟨11684671, by decide⟩⟩⟩⟩, ⟨#[6]⟩, tx, warm, [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
 
 -- Validity proofs are propositions; all data fields are compared exactly.
 private def sameFrame (actual expected : Frame.State) : Bool :=
@@ -85,7 +85,7 @@ private theorem copiedValid : Memory.Allocation.Valid ⟨[(2, 2), (3, 0), (4, 0)
   exact Memory.Allocation.write_valid_for_frame _ _ _ memoryValid
 private def copyExpected (code : ByteArray) (pc : Nat) (gas : Nat) : Frame.State :=
   ⟨code, pc, ⟨[11], by decide⟩, gas, ⟨[(2, 2), (3, 0), (4, 0), (2, 0xa1), (3, 0xb2)], 1⟩,
-    copiedValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, trackerAfterRead, [7, 41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩⟩
+    copiedValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, trackerAfterRead, [7, 41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
 #eval check <| match Frame.extCodeCopy { frame with stack := ⟨[7, 2, 0, 3, 11], by decide⟩, gas := 3103 } with
   | .continue t => sameFrame t (copyExpected ⟨#[0xfe]⟩ 100 0)
   | _ => false
@@ -139,7 +139,7 @@ private theorem expandedValid : Memory.Allocation.Valid ⟨[(2, 0xa1), (3, 0xb2)
   exact Memory.Allocation.expand_valid_for_frame _ _ _ memoryValid
 private def missingExpected (code : ByteArray) (pc : Nat) : Frame.State :=
   ⟨code, pc, ⟨[11], by decide⟩, 0, ⟨[(2, 0xa1), (3, 0xb2)], 2⟩, expandedValid,
-    ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, missingRead, [7, 41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩⟩
+    ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, missingRead, [7, 41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
 #eval check <| match Frame.extCodeCopy { frame with tracker := missingTracker, stack := ⟨[7, 33, 0, 1, 11], by decide⟩, gas := 3106 } with
   | .exception t .missingCode => sameFrame t (missingExpected ⟨#[0xfe]⟩ 99)
   | _ => false
@@ -154,7 +154,7 @@ private theorem mixedMemoryValid : Memory.Allocation.Valid ⟨[(0, 2), (1, 0), (
 private def mixedExpected : Frame.State :=
   ⟨⟨#[0x3f, 0x50, 0x3c, 0x51, 0x00]⟩, 5, ⟨[2 * 2^248, 11], by decide⟩, 0,
     ⟨[(0, 2), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0), (7, 0), (8, 0), (9, 0), (10, 0), (11, 0), (12, 0), (13, 0), (14, 0), (15, 0), (16, 0), (17, 0), (18, 0), (19, 0), (20, 0), (21, 0), (22, 0), (23, 0), (24, 0), (25, 0), (26, 0), (27, 0), (28, 0), (29, 0), (30, 0), (31, 0), (2, 0xa1), (3, 0xb2)], 1⟩, mixedMemoryValid,
-    ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, twiceRead, [7, 41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩⟩
+    ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, twiceRead, [7, 41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
 #eval check <| match Runner.run 5 { frame with code := ⟨#[0x3f, 0x50, 0x3c, 0x51, 0x00]⟩, pc := 0, stack := ⟨[7, 7, 0, 0, 32, 0, 11], by decide⟩, gas := 3208 } with
   | .stopped t => sameFrame t mixedExpected
   | _ => false
@@ -173,7 +173,7 @@ private def mixedExpected : Frame.State :=
   | _ => false
 private def warmExpected : Frame.State :=
   ⟨⟨#[0x3c]⟩, 1, ⟨[11], by decide⟩, 0, ⟨[(2, 2), (3, 0), (4, 0), (2, 0xa1), (3, 0xb2)], 1⟩,
-    copiedValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, trackerAfterRead, [7, 41, 7], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩⟩
+    copiedValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, trackerAfterRead, [7, 41, 7], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
 #eval check <| match Frame.step { frame with code := ⟨#[0x3c]⟩, pc := 0, stack := ⟨[7, 2, 0, 3, 11], by decide⟩, gas := 203, warmAddresses := [7, 41, 7] } with
   | .continue t => sameFrame t warmExpected
   | _ => false
@@ -185,7 +185,7 @@ private theorem zeroValid : Memory.Allocation.Valid ⟨[(2, 0), (3, 0), (4, 0), 
   exact Memory.Allocation.write_valid_for_frame _ _ _ memoryValid
 private def zeroExpected : Frame.State :=
   ⟨⟨#[0x3c]⟩, 1, ⟨[11], by decide⟩, 0, ⟨[(2, 0), (3, 0), (4, 0), (2, 0xa1), (3, 0xb2)], 1⟩,
-    zeroValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, trackerAfterRead, [7, 41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩⟩
+    zeroValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, trackerAfterRead, [7, 41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
 #eval check <| match Frame.step { frame with code := ⟨#[0x3c]⟩, pc := 0, stack := ⟨[7, 2, 2^255, 3, 11], by decide⟩, gas := 3103 } with
   | .continue t => sameFrame t zeroExpected
   | _ => false
@@ -205,7 +205,7 @@ private theorem delegValid : Memory.Allocation.Valid ⟨[(2, 0xef), (3, 1), (4, 
   exact Memory.Allocation.write_valid_for_frame _ _ _ memoryValid
 private def delegExpected : Frame.State :=
   ⟨⟨#[0x3c]⟩, 1, ⟨[11], by decide⟩, 0, ⟨[(2, 0xef), (3, 1), (4, 0), (2, 0xa1), (3, 0xb2)], 1⟩,
-    delegValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, delegRead, [7, 41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩⟩
+    delegValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, delegRead, [7, 41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
 #eval check <| match Frame.step { frame with code := ⟨#[0x3c]⟩, pc := 0, stack := ⟨[7, 2, 0, 3, 11], by decide⟩, gas := 3103, tracker := delegTracker } with
   | .continue t => sameFrame t delegExpected
   | _ => false
@@ -215,7 +215,7 @@ private theorem parentCopyValid : Memory.Allocation.Valid ⟨[(2, 1), (3, 0), (4
   exact Memory.Allocation.write_valid_for_frame _ _ _ memoryValid
 private def parentCopyExpected : Frame.State :=
   ⟨⟨#[0x3c]⟩, 1, ⟨[11], by decide⟩, 0, ⟨[(2, 1), (3, 0), (4, 0), (2, 0xa1), (3, 0xb2)], 1⟩,
-    parentCopyValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, parentRead, [7, 41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩⟩
+    parentCopyValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, parentRead, [7, 41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
 #eval check <| match Frame.step { frame with code := ⟨#[0x3c]⟩, pc := 0, stack := ⟨[7, 2, 0, 3, 11], by decide⟩, gas := 3103, tracker := { tracker with writes := { tracker.writes with accountWrites := [] } } } with
   | .continue t => sameFrame t parentCopyExpected
   | _ => false
@@ -252,7 +252,7 @@ private theorem crossingValid : Memory.Allocation.Valid ⟨[(33, 2), (34, 0), (3
   exact Memory.Allocation.write_valid_for_frame _ _ _ (Memory.Allocation.expand_valid_for_frame _ _ _ memoryValid)
 private def crossingExpected : Frame.State :=
   ⟨⟨#[0x3c]⟩, 1, ⟨[11], by decide⟩, 0, ⟨[(33, 2), (34, 0), (35, 0), (2, 0xa1), (3, 0xb2)], 2⟩,
-    crossingValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, trackerAfterRead, [7, 41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩⟩
+    crossingValid, ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, trackerAfterRead, [7, 41, 42], [(43, 44), (45, 46)], false, ⟨123, 456, -9, 7, 8⟩, []⟩
 #eval check <| match Frame.step { frame with code := ⟨#[0x3c]⟩, pc := 0, stack := ⟨[7, 33, 0, 3, 11], by decide⟩, gas := 3106 } with
   | .continue t => sameFrame t crossingExpected
   | _ => false

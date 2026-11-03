@@ -39,16 +39,16 @@ example (n d i term output result : Nat) (hd : 0 < d) (hi : 0 < i) :
       result = BlobFee.recurrence n d i term output hd hi :=
   BlobFee.recurrence_iff n d i term output result hd hi
 
-example (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (x : Word)
+example (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (logs : List Frame.LogEntry) (x : Word)
     (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) :
     ∃ t, Runner.run 2 ⟨Runner.BlobFeeProgram.program, 0, ⟨x :: xs, by simp; omega⟩,
-        5 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩ = .exhausted t ∧
+        5 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩ = .exhausted t ∧
       t.stack.val = Frame.observationWord (BlobFee.calculateWith context.environment.blobFeeSchedule context.environment.excessBlobGas) ::
         Environment.blobHash context.environment x :: xs ∧
       t.context = context ∧ t.memory = mem ∧ t.returnData = returnData ∧
       t.gas = g ∧ t.pc = 2 :=
-  Runner.BlobFeeProgram.run context returnData tracker warmAddresses warmSlots static stateGas x xs room g mem valid
+  Runner.BlobFeeProgram.run context returnData tracker warmAddresses warmSlots static stateGas logs x xs room g mem valid
 
 example (s : Frame.State) (gas : 2 ≤ s.gas) (full : s.stack.val.length = 1024) :
     Frame.blobBaseFee s = .exception s .stackOverflow :=

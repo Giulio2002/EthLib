@@ -8,7 +8,7 @@ private def env (n : Word) (hs : List Word) : Environment.Context :=
 private def state (n : Word) (hs : List Word) (xs : List Word)
     (bound : xs.length ≤ 1024) (gas : Nat) : Frame.State :=
   ⟨⟨#[0x40]⟩, 0, ⟨xs, bound⟩, gas, Memory.Allocation.empty,
-    (by intro a _; rfl), ⟨ByteArray.empty, env n hs⟩, ByteArray.empty, { parent := {} }, [], [], false, {}⟩
+    (by intro a _; rfl), ⟨ByteArray.empty, env n hs⟩, ByteArray.empty, { parent := {} }, [], [], false, {}, []⟩
 private def result (s : Frame.State) : Option Word :=
   match Frame.step s with
   | .continue t => t.stack.val.head?

@@ -75,7 +75,7 @@ theorem store_success_fields (s t : Frame.State) (run : Frame.tstore s = .contin
       fields.2.2.2.1, fields.2.2.2.2.1, fields.1, fields.2.1, fields.2.2.2.2.2.1,
       fields.2.2.2.2.2.2.1, fields.2.2.2.2.2.2.2.2.1,
       fields.2.2.2.2.2.2.2.2.2.1, fields.2.2.2.2.2.2.2.2.2.2.1,
-      fields.2.2.2.2.2.2.2.2.2.2.2, map⟩
+      fields.2.2.2.2.2.2.2.2.2.2.2.1, map⟩
 
 theorem store_retained_observations (s t : Frame.State) (run : Frame.tstore s = .continue t) :
     let before := TransactionState.Reference.observe s.tracker
@@ -125,22 +125,22 @@ theorem snapshot_application (s : TransactionState.State) (a : World.Address) (k
 theorem program_application (xs : List Word) (room : xs.length ≤ 1019) (key value : Word) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) (ctx : CallData.Context)
     (ret : ByteArray) (tx : TransactionState.State) (warm : List World.Address)
-    (slots : List (World.Address × Word)) (meter : Frame.StateGas) :
+    (slots : List (World.Address × Word)) (meter : Frame.StateGas) (logs : List Frame.LogEntry) :
     let s : Frame.State := ⟨Runner.TransientProgram.program, 0,
-      ⟨key :: value :: key :: key :: 0 :: xs, by simp; omega⟩, 302 + g, mem, valid, ctx, ret, tx, warm, slots, false, meter⟩
+      ⟨key :: value :: key :: key :: 0 :: xs, by simp; omega⟩, 302 + g, mem, valid, ctx, ret, tx, warm, slots, false, meter, logs⟩
     ∃ t, Runner.run 5 s = .stopped t ∧ t.pc = 5 ∧ t.gas = g ∧ t.stack.val = xs ∧
       t.tracker = TransactionTracker.setTransientStorage
         (TransactionTracker.setTransientStorage tx ctx.environment.currentTarget key value) ctx.environment.currentTarget key 0 :=
-  Runner.TransientProgram.run xs room key value g mem valid ctx ret tx warm slots meter
+  Runner.TransientProgram.run xs room key value g mem valid ctx ret tx warm slots meter logs
 
 theorem program_deleted_application (xs : List Word) (room : xs.length ≤ 1019) (key value : Word) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) (ctx : CallData.Context)
     (ret : ByteArray) (tx : TransactionState.State) (warm : List World.Address)
-    (slots : List (World.Address × Word)) (meter : Frame.StateGas) :
+    (slots : List (World.Address × Word)) (meter : Frame.StateGas) (logs : List Frame.LogEntry) :
     let s : Frame.State := ⟨Runner.TransientProgram.program, 0,
-      ⟨key :: value :: key :: key :: 0 :: xs, by simp; omega⟩, 302 + g, mem, valid, ctx, ret, tx, warm, slots, false, meter⟩
+      ⟨key :: value :: key :: key :: 0 :: xs, by simp; omega⟩, 302 + g, mem, valid, ctx, ret, tx, warm, slots, false, meter, logs⟩
     ∃ t, Runner.run 5 s = .stopped t ∧
       (TransactionState.Reference.observe t.tracker).writes.transient (ctx.environment.currentTarget, key) = none :=
-  Runner.TransientProgram.run_deleted xs room key value g mem valid ctx ret tx warm slots meter
+  Runner.TransientProgram.run_deleted xs room key value g mem valid ctx ret tx warm slots meter logs
 
 end TransientConsumer

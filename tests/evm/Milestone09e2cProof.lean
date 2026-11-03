@@ -59,15 +59,15 @@ example (fuel : Nat) (s : Frame.State) :
       (Runner.run fuel s).frame.returnData = s.returnData :=
   Runner.BlockHashProgram.run_preserves fuel s
 
-example (context : CallData.Context) (ret : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (x y : Word)
+example (context : CallData.Context) (ret : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (logs : List Frame.LogEntry) (x y : Word)
     (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) :
     ∃ t, Runner.run 3 ⟨Runner.BlockHashProgram.program, 0,
-        ⟨x :: y :: xs, by simp; omega⟩, 43 + g, mem, valid, context, ret, tracker, warmAddresses, warmSlots, static, stateGas⟩ = .exhausted t ∧
+        ⟨x :: y :: xs, by simp; omega⟩, 43 + g, mem, valid, context, ret, tracker, warmAddresses, warmSlots, static, stateGas, logs⟩ = .exhausted t ∧
       t.stack.val = Environment.blockHash context.environment.blockHashes context.environment.number y ::
         Environment.blockHash context.environment.blockHashes context.environment.number x :: xs ∧
       t.context = context ∧ t.memory = mem ∧ t.returnData = ret ∧ t.gas = g ∧ t.pc = 3 :=
-  Runner.BlockHashProgram.run context ret tracker warmAddresses warmSlots static stateGas x y xs room g mem valid
+  Runner.BlockHashProgram.run context ret tracker warmAddresses warmSlots static stateGas logs x y xs room g mem valid
 
 example (s t : Frame.State) (at_ : Frame.At s (some .blockhash))
     (run : Frame.step s = .continue t) (x : Word) (xs : List Word)
