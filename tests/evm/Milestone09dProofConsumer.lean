@@ -10,7 +10,7 @@ example (s : Frame.State) (out : Frame.Outcome) :
 example (d : Vector UInt8 32) : Word.toBytesBE (Frame.digestWord d) = ⟨d.toArray⟩ :=
   Frame.digestWord_encode d
 
-example (ctx : CallData.Context) (ret : ByteArray) (source : Word) (xs : List Word)
+example (ctx : CallData.Context) (ret : ByteArray) (tracker : TransactionState.State) (source : Word) (xs : List Word)
     (room : xs.length ≤ 1019) (mem : Memory.Allocation.State)
     (valid : Memory.Allocation.Valid mem) (g : Nat) :
     let bytes := CallData.readRange ctx.data source.toNat 32
@@ -19,11 +19,11 @@ example (ctx : CallData.Context) (ret : ByteArray) (source : Word) (xs : List Wo
     let c2 := Gas.keccakCost m.words 0 32
     ∃ t, Runner.run 2 ⟨Runner.CopyKeccak.program, 0,
         ⟨[0, source, 32, 0, 32] ++ xs, by simp; omega⟩,
-        c1 + c2 + g, mem, valid, ctx, ret⟩ = .exhausted t ∧
+        c1 + c2 + g, mem, valid, ctx, ret, tracker⟩ = .exhausted t ∧
       t.stack.val = Frame.digestWord (EthLib.Cryptography.Hash.Keccak.keccak256 ⟨bytes.toArray⟩) :: xs ∧
       t.pc = 2 ∧ t.gas = g ∧ t.memory.store = m.store ∧ t.context = ctx ∧
       t.returnData = ret ∧ Memory.readRange t.memory.store 0 32 = bytes :=
-  Runner.CopyKeccak.run_copy_keccak ctx ret source xs room mem valid g
+  Runner.CopyKeccak.run_copy_keccak ctx ret tracker source xs room mem valid g
 
 -- The rounded count is specified by coverage bounds, independently of division.
 example (old offset length cost : Nat) :

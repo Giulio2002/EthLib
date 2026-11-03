@@ -1,5 +1,6 @@
 module
 
+public import EthLib.EVM.TransactionTracker
 public import EthLib.EVM.CallData
 public import EthLib.EVM.ReturnData
 public import EthLib.EVM.Stack
@@ -28,7 +29,7 @@ The instruction rules come from Cancun execution-specs revision
 Amsterdam `vm/instructions/block.py`, `slot_number`, defines SLOTNUM at the same revision.
 Amsterdam `vm/instructions/stack.py` defines DUPN, SWAPN and EXCHANGE.
 The blob fee observation uses the supplied schedule, which can differ from Cancun.
-An exception retains the input frame only as diagnostic context.
+An exception carries a diagnostic frame, including reads performed before failure.
 Its gas is zero at the message boundary; its stack is not a protocol final state.
 Unsupported instructions are a tooling result and do not execute.
 -/
@@ -46,6 +47,7 @@ structure State where
   memoryValid : Memory.Allocation.Valid memory
   context : CallData.Context
   returnData : ByteArray
+  tracker : TransactionState.State
 
 /-- Exceptional halts distinguished by their first failing check. -/
 inductive Exception where
@@ -114,6 +116,14 @@ def observe (s : State) (value : Nat → Nat) : Outcome :=
     match Stack.push s.stack (observationWord (value gas)) with
     | .error e => failStack s e
     | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+
+/-- Amsterdam `environment.py`, `self_balance`, charges before recording the account read. -/
+def selfBalance (s : State) : Outcome :=
+  charge s 5 fun gas =>
+    let result := TransactionTracker.getAccount s.tracker s.context.environment.currentTarget
+    match Stack.push s.stack result.1.balance with
+    | .error e => failStack { s with tracker := result.2 } e
+    | .ok stack => .continue { s with stack, gas, pc := s.pc + 1, tracker := result.2 }
 
 /-- Amsterdam `environment.py`, `blob_base_fee`, charges before computing and pushing. -/
 def blobBaseFee (s : State) : Outcome :=
@@ -282,6 +292,7 @@ def step (s : State) : Outcome :=
     | some .keccak => keccak s
     -- Cancun `environment.py`, `calldatasize` and `codesize`: charge before push.
     -- Cancun `environment.py`: charge before pushing supplied metadata.
+    | some .selfbalance => selfBalance s
     | some .address => observe s (fun _ => s.context.environment.currentTarget.val)
     | some .origin => observe s (fun _ => s.context.environment.origin.val)
     | some .caller => observe s (fun _ => s.context.environment.caller.val)

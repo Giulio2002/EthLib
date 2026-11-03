@@ -9,7 +9,7 @@ private def metadata : Environment.Context :=
 private def input : Frame.State :=
   ⟨⟨#[0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x48, 0x00]⟩, 0,
     ⟨[99], by decide⟩, 14, Memory.Allocation.empty, (by intro a _; rfl),
-    ⟨⟨#[9]⟩, metadata⟩, ⟨#[10]⟩⟩
+    ⟨⟨#[9]⟩, metadata⟩, ⟨#[10]⟩, { parent := {} }⟩
 
 /-- info: true -/
 #guard_msgs in

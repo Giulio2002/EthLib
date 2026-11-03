@@ -210,7 +210,7 @@ theorem returnDataCopy_helper_actual_output (s t : State) (x y z : Word) (xs : L
       s.returnData[y.toNat + i]'(by omega)) ∧
     (∀ a, ¬ (x.toNat ≤ a ∧ a < x.toNat + z.toNat) →
       readByte t.memory.store a = readByte s.memory.store a) := by
-  obtain ⟨gas, bound, code, mem, pc, remaining, stack, context, ret⟩ :=
+  obtain ⟨gas, bound, code, mem, pc, remaining, stack, context, ret, _tracker⟩ :=
     returnDataCopy_helper_actual s t x y z xs items run
   let bytes := (s.returnData.data.toList.drop y.toNat).take z.toNat
   have read : ReturnData.read s.returnData y.toNat z.toNat = .ok bytes := by
@@ -244,7 +244,7 @@ theorem returnDataCopy_actual_output (s t : State) (x y z : Word) (xs : List Wor
       s.returnData[y.toNat + i]'(by omega)) ∧
     (∀ a, ¬ (x.toNat ≤ a ∧ a < x.toNat + z.toNat) →
       readByte t.memory.store a = readByte s.memory.store a) := by
-  obtain ⟨gas, bound, code, mem, pc, remaining, stack, context, ret⟩ :=
+  obtain ⟨gas, bound, code, mem, pc, remaining, stack, context, ret, _tracker⟩ :=
     returnDataCopy_actual s t x y z xs at_ items run
   let bytes := (s.returnData.data.toList.drop y.toNat).take z.toNat
   have read : ReturnData.read s.returnData y.toNat z.toNat = .ok bytes := by

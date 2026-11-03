@@ -25,17 +25,17 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
 def Advances (s t : State) (pc gas : Nat) (xs : List Word) : Prop :=
-  t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData
+  t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker
 
 /-- Exact fields after a memory instruction. -/
 def AdvancesMemory (s t : State) (memory : Memory.Allocation.State)
     (pc gas : Nat) (xs : List Word) : Prop :=
-  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData
+  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker
 
 /-- A successful MCOPY with observed pops determines the resulting frame. -/
 theorem mcopy_actual_fields (s t : State) (destination source length : Word)
@@ -52,7 +52,7 @@ theorem mcopy_actual_fields (s t : State) (destination source length : Word)
   · simp only [step, dite_eq_left bounds, decoded, p1, p2, p3, charge, Gas.charge,
       ite_eq_left gas] at run
     cases run
-    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   · simp [step, bounds, decoded, p1, p2, p3, charge, Gas.charge, gas] at run
 
 /-- Cancun `runtime.py`: the source byte length at an instruction boundary. -/
@@ -145,12 +145,32 @@ def BlockHashValue (history : List Word) (current index : Word) (value : Word) :
   ((current.toNat ≤ index.toNat ∨ index.toNat + 256 < current.toNat ∨
     history.length < current.toNat - index.toNat) ∧ value = 0)
 
+/-- Account selected by the overlay before the transaction-start parent. -/
+def SelfBalanceAccount (s : State) : World.Account :=
+  let a := s.context.environment.currentTarget
+  (match s.tracker.writes.accountWrites.lookup a with
+   | some value => value
+   | none => s.tracker.parent.accounts.lookup a).getD World.emptyAccount
+
+/-- The source account read records the target without changing other fields. -/
+def SelfBalanceRead (s : State) : TransactionState.State :=
+  { s.tracker with accountReads := s.context.environment.currentTarget :: s.tracker.accountReads }
+
 /-- Source-oriented rules for one frame transition. -/
 inductive Rule : State → Outcome → Prop where
   | endCode (s) : s.code.size ≤ s.pc → Rule s (.stop s)
   | stop (s) : At s (some .stop) → Rule s (.stop { s with pc := s.pc + 1 })
   | invalid (s) : At s none ∨ At s (some .invalid) → Rule s (.exception s .invalidOpcode)
   | unsupported (s op) : At s (some op) → Unsupported op → Rule s (.unsupported s op)
+  | selfBalanceGas (s) : At s (some .selfbalance) → s.gas < 5 →
+      Rule s (.exception s .outOfGas)
+  | selfBalanceFull (s) : At s (some .selfbalance) → 5 ≤ s.gas →
+      s.stack.val.length = 1024 →
+      Rule s (.exception { s with tracker := SelfBalanceRead s } .stackOverflow)
+  | selfBalance (s t) : At s (some .selfbalance) → 5 ≤ s.gas →
+      s.stack.val.length < 1024 →
+      Advances { s with tracker := SelfBalanceRead s } t (s.pc + 1) (s.gas - 5)
+        ((SelfBalanceAccount s).balance :: s.stack.val) → Rule s (.continue t)
   | dupnGas (s) : At s (some .dupn) → s.gas < 3 → Rule s (.exception s .outOfGas)
   | dupnInvalid (s) : At s (some .dupn) → 3 ≤ s.gas →
       StackImmediate.decodeSingle (StackImmediate.byte s.code s.pc) = none →

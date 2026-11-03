@@ -356,8 +356,8 @@ Other assigned Cancun opcodes return a distinct unsupported tooling result.
 Unassigned bytes and INVALID cause exceptional halts.
 Fuel exhaustion is a tooling result and is not an EVM exception.
 The runner is fuel bounded and makes no claim that every program terminates.
-The frame holds code, a natural program counter, a bounded stack, gas, valid allocated memory, immutable message input, and return data.
-It does not execute REVERT or model world state, calls, or rollback.
+The frame holds code, a natural program counter, a bounded stack, gas, valid allocated memory, immutable message input, return data, and a transaction tracker.
+It does not execute REVERT, calls, or rollback.
 A manually constructed revert carries remaining gas and output bytes as scaffolding.
 The restricted step and runner cannot produce that constructor for any input or fuel.
 World-state rollback and REVERT execution belong to milestone 12.
@@ -447,8 +447,8 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The 256-byte dispatch regression covers 127 supported instructions and 23 assigned but unsupported instructions.
-It also covers 105 unassigned bytes and INVALID.
+The augmented 256-byte dispatch regression covers 131 supported instructions and 22 assigned but unsupported instructions.
+It also covers 102 unassigned bytes and INVALID.
 The historical Cancun subset has 125 supported instructions and 107 unassigned bytes.
 The Cancun-plus-CLZ subset has 126 supported instructions and 106 unassigned bytes.
 These counts describe this restricted frame and do not cover all Amsterdam opcodes.
@@ -685,3 +685,22 @@ The decoder also includes SLOTNUM and the EIP-8024 stack instructions.
 The frame does not implement full Amsterdam execution.
 
 The pure Amsterdam account and storage model is documented in [AmsterdamWorld10a.md](AmsterdamWorld10a.md).
+
+## SELFBALANCE
+
+Amsterdam `vm/instructions/environment.py`, `self_balance`, at execution-specs revision
+`fd9298410ec7218838c8348f69c1eb633f1797dc` charges five gas, reads the current target account, pushes its balance, and advances the program counter.
+An out-of-gas exception precedes the read.
+A stack overflow follows the read and its diagnostic frame retains that read.
+The instruction preserves the parent, writes, created accounts and snapshots.
+
+`Frame.State` construction now requires an explicit `TransactionState.State` tracker.
+`Frame.Advances` and `Frame.AdvancesMemory` require tracker equality for instructions that leave it unchanged.
+Runner program theorems take an arbitrary tracker argument.
+`Frame.selfBalance_success_iff` and `Frame.selfBalance_exception_iff` characterize the direct helper; `Runner.SelfBalanceProgram.run` executes the opcode in a mixed program.
+
+The source file `environment.py` has SHA-256
+`8c57bd699b99ff8b4d8e41e6a9c89cd1a03dda8160bf1d6dffe091932ec03657` at that revision.
+The source files `vm/gas.py` and `vm/stack.py` have SHA-256
+`67973191c49234387186ad17316c556adab73723f782e95104dd3a949132367c` and
+`20cdb907098ae500c47abc6a1437cb9e4cdb5809f6c40b7d8935038aedd57b2a`.

@@ -19,7 +19,7 @@ example (s t : Frame.State) (value : Nat → Nat)
     t.code = s.code ∧ t.memory = s.memory ∧ t.pc = s.pc + 1 ∧
     t.gas = s.gas - 2 ∧
     t.stack.val = Frame.observationWord (value (s.gas - 2)) :: s.stack.val ∧
-    t.context = s.context ∧ t.returnData = s.returnData := by
+    t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker := by
   simpa [Frame.Advances] using Frame.observe_actual s t value run
 
 example (s t : Frame.State) (value : Nat → Nat) (gas : 2 ≤ s.gas)
@@ -48,17 +48,17 @@ example (bytes : ByteArray) (s : Frame.State)
     (h : Word.ofBytesBE bytes = .ok s.context.environment.prevRandao) :
     s.context.environment.prevRandao.toBytesBE = bytes := Frame.prevRandao_codec bytes s h
 
-example (context : CallData.Context) (returnData : ByteArray) (xs : List Word)
+example (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (xs : List Word)
     (room : xs.length ≤ 1017) (g : Nat) (mem : Memory.Allocation.State)
     (valid : Memory.Allocation.Valid mem) :
     ∃ t, Runner.run 8 ⟨Runner.BlockEnvironmentProgram.program, 0, ⟨xs, by omega⟩,
-      14 + g, mem, valid, context, returnData⟩ = .stopped t ∧
+      14 + g, mem, valid, context, returnData, tracker⟩ = .stopped t ∧
       t.pc = 8 ∧ t.gas = g ∧ t.code = Runner.BlockEnvironmentProgram.program ∧
       t.memory = mem ∧ t.context = context ∧ t.returnData = returnData ∧
       t.stack.val = context.environment.baseFee :: BitVec.ofNat 256 context.environment.chainId.val ::
         context.environment.gasLimit :: context.environment.prevRandao :: context.environment.number ::
         context.environment.timestamp :: Environment.addressWord context.environment.coinbase :: xs :=
-  Runner.BlockEnvironmentProgram.run context returnData xs room g mem valid
+  Runner.BlockEnvironmentProgram.run context returnData tracker xs room g mem valid
 
 example (s : Frame.State) :
     Frame.observationWord (Frame.Observation.coinbase.value s) =

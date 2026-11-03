@@ -7,7 +7,7 @@ private def env : Environment.Context :=
 
 private def input : Frame.State :=
   ⟨⟨#[0xfe]⟩, 100, ⟨[9], by decide⟩, 5, Memory.Allocation.empty,
-    (by intro a _; rfl), ⟨⟨#[1, 2]⟩, env⟩, ⟨#[3, 4]⟩⟩
+    (by intro a _; rfl), ⟨⟨#[1, 2]⟩, env⟩, ⟨#[3, 4]⟩, { parent := {} }⟩
 
 -- The helper observes the supplied slot even outside the code.
 example : Frame.observe input (fun _ => input.context.environment.slotNumber.val) =

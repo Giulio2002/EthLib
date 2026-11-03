@@ -129,7 +129,7 @@ theorem step_swap_empty (s : State) (i : Fin 16) (h : At s (some (.swap i)))
 theorem advances_eq (s t : State) (pc gas : Nat) (stack : Stack)
     (h : Advances s t pc gas stack.val) :
     t = { s with pc, gas, stack } := by
-  rcases h with ⟨code, memory, pcEq, gasEq, stackEq, contextEq, returnDataEq⟩
+  rcases h with ⟨code, memory, pcEq, gasEq, stackEq, contextEq, returnDataEq, trackerEq⟩
   have stackEq' : t.stack = stack := Subtype.ext stackEq
   cases s
   cases t
@@ -2133,7 +2133,7 @@ theorem returnDataCopy_helper_actual (s t : State) (x y z : Word) (xs : List Wor
   · by_cases bounds : y.toNat + z.toNat ≤ s.returnData.size
     · simp only [ite_eq_left gas, ite_eq_left bounds] at run
       cases run
-      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
     · simp [gas, bounds] at run
   · simp [gas] at run
 
@@ -2273,7 +2273,7 @@ theorem keccak_helper_actual (s t : State) (x y : Word) (xs : List Word)
   by_cases gas : Gas.keccakCost s.memory.words x.toNat y.toNat ≤ s.gas
   · simp only [ite_eq_left gas, Outcome.continue.injEq] at run
     subst t
-    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   · simp [gas] at run
 
 /-- Expansion performed by a successful hash preserves every raw store byte. -/
@@ -2311,6 +2311,33 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | stop at_ => exact step_stop _ at_
   | invalid at_ => rcases at_ with h | h; exact step_unassigned _ h; exact step_invalid _ h
   | unsupported op at_ unsupported => exact step_unsupported _ op at_ unsupported
+  | selfBalanceGas at_ gas =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp [step, bounds, decoded, selfBalance, charge, Gas.charge, Nat.not_le_of_gt gas]
+  | selfBalanceFull at_ gas full =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have push : s.stack.push (SelfBalanceAccount s).balance = .error .overflow :=
+      (Proofs.Stack.push_overflow_iff _ _).mpr full
+    have value : (TransactionTracker.getAccount s.tracker s.context.environment.currentTarget).1 =
+        SelfBalanceAccount s := rfl
+    have read : (TransactionTracker.getAccount s.tracker s.context.environment.currentTarget).2 =
+        SelfBalanceRead s := rfl
+    simp only [step, dite_eq_left bounds, decoded, selfBalance, charge, Gas.charge,
+      ite_eq_left gas, value, read, push, failStack]
+  | selfBalance t at_ gas room fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    let stack : Stack := ⟨(SelfBalanceAccount s).balance :: s.stack.val, by simp; omega⟩
+    have push : s.stack.push (SelfBalanceAccount s).balance = .ok stack :=
+      (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨room, rfl⟩
+    have eq := advances_eq { s with tracker := SelfBalanceRead s } t (s.pc + 1)
+      (s.gas - 5) stack fields
+    subst t
+    have value : (TransactionTracker.getAccount s.tracker s.context.environment.currentTarget).1 =
+        SelfBalanceAccount s := rfl
+    have read : (TransactionTracker.getAccount s.tracker s.context.environment.currentTarget).2 =
+        SelfBalanceRead s := rfl
+    simp only [step, dite_eq_left bounds, decoded, selfBalance, charge, Gas.charge,
+      ite_eq_left gas, value, read, push]
   | dupnGas at_ gas =>
     obtain ⟨bounds, decoded⟩ := at_
     simp only [step, dite_eq_left bounds, decoded]
@@ -2554,6 +2581,15 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
       cases op with
       | stop => exact ⟨_, .stop s at_⟩
       | invalid => exact ⟨_, .invalid s (Or.inr at_)⟩
+      | selfbalance =>
+        by_cases gas : 5 ≤ s.gas
+        · by_cases room : s.stack.val.length < 1024
+          · let stack : Stack := ⟨(SelfBalanceAccount s).balance :: s.stack.val, by simp; omega⟩
+            let t := { s with tracker := SelfBalanceRead s, stack, pc := s.pc + 1, gas := s.gas - 5 }
+            exact ⟨_, .selfBalance s t at_ gas room (by simp [Advances, t, stack])⟩
+          · have full : s.stack.val.length = 1024 := by have := s.stack.property; omega
+            exact ⟨_, .selfBalanceFull s at_ gas full⟩
+        · exact ⟨_, .selfBalanceGas s at_ (Nat.lt_of_not_ge gas)⟩
       | coinbase =>
         let o := Observation.coinbase
         have atO : At s (some o.opcode) := at_
@@ -3406,7 +3442,7 @@ theorem returnDataCopy_actual (s t : State) (x y z : Word) (xs : List Word)
   · by_cases bounds : y.toNat + z.toNat ≤ s.returnData.size
     · simp only [ite_eq_left gas, ite_eq_left bounds] at run
       cases run
-      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
     · simp [gas, bounds] at run
   · simp [gas] at run
 

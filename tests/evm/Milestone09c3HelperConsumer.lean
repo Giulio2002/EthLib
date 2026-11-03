@@ -9,7 +9,7 @@ example (s t : Frame.State) (x y z : Word) (xs : List Word)
     Gas.inputCopyCost s.memory.words x.toNat z.toNat ≤ s.gas ∧
     y.toNat + z.toNat ≤ s.returnData.size ∧ t.returnData = s.returnData := by
   have h := Frame.returnDataCopy_helper_actual s t x y z xs items run
-  exact ⟨h.1, h.2.1, h.2.2.2.2.2.2.2.2⟩
+  exact ⟨h.1, h.2.1, h.2.2.2.2.2.2.2.2.1⟩
 
 example (s t : Frame.State) (x y z : Word) (xs : List Word)
     (items : s.stack.val = x :: y :: z :: xs)

@@ -71,7 +71,7 @@ theorem keccak_helper_actual_output (s t : State) (offset length : Word) (xs : L
       t.pc = s.pc + 1 ∧
       t.gas = s.gas - Gas.keccakCost s.memory.words offset.toNat length.toNat ∧
       t.code = s.code ∧ t.context = s.context ∧ t.returnData = s.returnData := by
-  obtain ⟨gas, code, memory, pc, remaining, stack, context, returnData⟩ :=
+  obtain ⟨gas, code, memory, pc, remaining, stack, context, returnData, _tracker⟩ :=
     keccak_helper_actual s t offset length xs items run
   refine ⟨_, gas, stack, digestWord_encode _, ?_, ?_, pc, remaining, code, context, returnData⟩
   · rw [memory]; rfl

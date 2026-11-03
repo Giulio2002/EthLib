@@ -19,7 +19,7 @@ example (s t : Frame.State) (value : Nat → Nat)
     t.code = s.code ∧ t.memory = s.memory ∧ t.pc = s.pc + 1 ∧
     t.gas = s.gas - 2 ∧
     t.stack.val = Frame.observationWord (value (s.gas - 2)) :: s.stack.val ∧
-    t.context = s.context ∧ t.returnData = s.returnData := by
+    t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker := by
   simpa [Frame.Advances] using Frame.observe_actual s t value run
 
 example (s t : Frame.State) (value : Nat → Nat) (gas : 2 ≤ s.gas)
@@ -36,15 +36,15 @@ example (s : Frame.State) (value : Nat → Nat) (gas : 2 ≤ s.gas)
     (full : s.stack.val.length = 1024) :
     Frame.observe s value = .exception s .stackOverflow := Frame.observe_full s value gas full
 
-example (context : CallData.Context) (returnData : ByteArray) (xs : List Word)
+example (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (xs : List Word)
     (room : xs.length ≤ 1019) (g : Nat) (mem : Memory.Allocation.State)
     (valid : Memory.Allocation.Valid mem) :
     ∃ t, Runner.run 6 ⟨Runner.EnvironmentProgram.program, 0, ⟨xs, by omega⟩,
-      10 + g, mem, valid, context, returnData⟩ = .stopped t ∧
+      10 + g, mem, valid, context, returnData, tracker⟩ = .stopped t ∧
       t.pc = 6 ∧ t.gas = g ∧ t.code = Runner.EnvironmentProgram.program ∧
       t.memory = mem ∧ t.context = context ∧ t.returnData = returnData ∧
       t.stack.val = context.environment.gasPrice :: context.environment.value ::
         Environment.addressWord context.environment.caller ::
         Environment.addressWord context.environment.origin ::
         Environment.addressWord context.environment.currentTarget :: xs :=
-  Runner.EnvironmentProgram.run context returnData xs room g mem valid
+  Runner.EnvironmentProgram.run context returnData tracker xs room g mem valid
