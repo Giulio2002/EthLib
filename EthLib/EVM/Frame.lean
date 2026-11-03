@@ -198,6 +198,38 @@ def extCodeHash (s : State) : Outcome :=
       | .error e => failStack { input with tracker := result.2, gas } e
       | .ok stack => .continue { input with stack, gas, pc := s.pc + 1, tracker := result.2 }
 
+/-- Amsterdam `environment.py`, `extcodecopy`, at revision
+`fd9298410ec7218838c8348f69c1eb633f1797dc`.
+An incomplete supplied code store produces `missingCode` after memory expansion. -/
+def extCodeCopy (s : State) : Outcome :=
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (word, first) =>
+    match Stack.pop first with
+    | .error e => failStack { s with stack := first } e
+    | .ok (destination, second) =>
+      match Stack.pop second with
+      | .error e => failStack { s with stack := second } e
+      | .ok (source, third) =>
+        match Stack.pop third with
+        | .error e => failStack { s with stack := third } e
+        | .ok (length, stack) =>
+          let address := balanceAddress word
+          let warm := s.warmAddresses.contains address
+          let touched := if warm then s.warmAddresses else address :: s.warmAddresses
+          let input := { s with stack, warmAddresses := touched }
+          let cost := (if warm then 200 else 3100) + 3 * ((length.toNat + 31) / 32) +
+            Gas.rangeCost s.memory.words destination.toNat length.toNat
+          charge input cost fun gas =>
+            let expanded := Memory.Allocation.expand s.memory destination.toNat length.toNat
+            let read := TransactionTracker.getAccount s.tracker address
+            let charged := { input with gas, tracker := read.2, memory := expanded, memoryValid := Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid }
+            match TransactionAccount.getCode read.2 read.1.codeHash with
+            | none => .exception charged .missingCode
+            | some code =>
+              let bytes := CallData.readRange code source.toNat length.toNat
+              .continue { charged with pc := s.pc + 1, memory := Memory.Allocation.write expanded destination.toNat bytes, memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ charged.memoryValid }
+
 /-- Amsterdam `instructions/storage.py`, `sload`, warms a cold slot before charging. -/
 def sload (s : State) : Outcome :=
   match Stack.pop s.stack with
@@ -473,6 +505,7 @@ def step (s : State) : Outcome :=
     | some .balance => balance s
     | some .extcodesize => extCodeSize s
     | some .extcodehash => extCodeHash s
+    | some .extcodecopy => extCodeCopy s
     | some .selfbalance => selfBalance s
     | some .address => observe s (fun _ => s.context.environment.currentTarget.val)
     | some .origin => observe s (fun _ => s.context.environment.origin.val)

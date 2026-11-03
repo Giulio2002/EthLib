@@ -2493,6 +2493,76 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
     obtain ⟨bounds, decoded⟩ := at_
     have pop := (Proofs.Stack.pop_underflow_iff _).mpr empty
     simp [step, bounds, decoded, extCodeHash, pop, failStack]
+  | extCodeCopyEmpty at_ empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    simp [step, bounds, decoded, extCodeCopy, p, failStack]
+  | extCodeCopySecond first x at_ items empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    simp [step, bounds, decoded, extCodeCopy, p, q, failStack]
+  | extCodeCopyThird first second x destination at_ items items' empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    have r := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    simp [step, bounds, decoded, extCodeCopy, p, q, r, failStack]
+  | extCodeCopyFourth first second third x destination source at_ items items' items'' empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    have r := (Proofs.Stack.pop_ok_iff _ _ _).mpr items''
+    have v := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    simp [step, bounds, decoded, extCodeCopy, p, q, r, v, failStack]
+  | extCodeCopyGas first second third rest x destination source length at_ items items' items'' items''' gas =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    have r := (Proofs.Stack.pop_ok_iff _ _ _).mpr items''
+    have v := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'''
+    by_cases warm : BalanceAddress x ∈ s.warmAddresses <;>
+      simp_all [step, extCodeCopy, balanceAddress, BalanceAddress, BalanceWarm, BalanceCost,
+        ExtCodeSizeCost, ExtCodeCopyCost, charge, Gas.charge, Nat.not_le_of_gt]
+  | extCodeCopyMissing t first second third rest x destination source length at_ items items' items'' items''' gas missing fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    have r := (Proofs.Stack.pop_ok_iff _ _ _).mpr items''
+    have v := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'''
+    have valid := Memory.Allocation.expand_valid_for_frame s.memory destination.toNat length.toNat s.memoryValid
+    have eq := advancesMemory_eq { s with warmAddresses := BalanceWarm s (BalanceAddress x), tracker := BalanceRead s (BalanceAddress x) }
+      t (Memory.Allocation.expand s.memory destination.toNat length.toNat) valid s.pc
+      (s.gas - ExtCodeCopyCost s (BalanceAddress x) destination length) rest fields
+    subst t
+    have addr : balanceAddress x = BalanceAddress x := rfl
+    have cost : (if s.warmAddresses.contains (BalanceAddress x) then 200 else 3100) + 3 * ((length.toNat + 31) / 32) + Gas.rangeCost s.memory.words destination.toNat length.toNat = ExtCodeCopyCost s (BalanceAddress x) destination length := by simp [ExtCodeCopyCost, ExtCodeSizeCost, BalanceCost]; split <;> simp_all
+    have warms : (if s.warmAddresses.contains (BalanceAddress x) then s.warmAddresses else BalanceAddress x :: s.warmAddresses) = BalanceWarm s (BalanceAddress x) := by simp [BalanceWarm]
+    have bytes := extCodeBytes_eq s (BalanceAddress x)
+    simp only [step, dite_eq_left bounds, decoded, extCodeCopy, p, q, r, v, addr, cost, warms,
+      charge, Gas.charge, ite_eq_left gas, bytes, missing]
+    rfl
+  | extCodeCopy t first second third rest x destination source length code at_ items items' items'' items''' gas present fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have p := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have q := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    have r := (Proofs.Stack.pop_ok_iff _ _ _).mpr items''
+    have v := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'''
+    have valid := Memory.Allocation.write_valid_for_frame (Memory.Allocation.expand s.memory destination.toNat length.toNat)
+      destination.toNat (CallData.readRange code source.toNat length.toNat)
+      (Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid)
+    have eq := advancesMemory_eq { s with warmAddresses := BalanceWarm s (BalanceAddress x), tracker := BalanceRead s (BalanceAddress x) }
+      t (Memory.Allocation.write (Memory.Allocation.expand s.memory destination.toNat length.toNat) destination.toNat
+        (CallData.readRange code source.toNat length.toNat)) valid (s.pc + 1)
+      (s.gas - ExtCodeCopyCost s (BalanceAddress x) destination length) rest fields
+    subst t
+    have addr : balanceAddress x = BalanceAddress x := rfl
+    have cost : (if s.warmAddresses.contains (BalanceAddress x) then 200 else 3100) + 3 * ((length.toNat + 31) / 32) + Gas.rangeCost s.memory.words destination.toNat length.toNat = ExtCodeCopyCost s (BalanceAddress x) destination length := by simp [ExtCodeCopyCost, ExtCodeSizeCost, BalanceCost]; split <;> simp_all
+    have warms : (if s.warmAddresses.contains (BalanceAddress x) then s.warmAddresses else BalanceAddress x :: s.warmAddresses) = BalanceWarm s (BalanceAddress x) := by simp [BalanceWarm]
+    have bytes := extCodeBytes_eq s (BalanceAddress x)
+    simp only [step, dite_eq_left bounds, decoded, extCodeCopy, p, q, r, v, addr, cost, warms,
+      charge, Gas.charge, ite_eq_left gas, bytes, present]
+    rfl
   | extCodeSizeGas rest x at_ items gas =>
     obtain ⟨bounds, decoded⟩ := at_
     have pop := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
@@ -2941,6 +3011,37 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
             let t := { s with tracker := SloadRead s key, warmSlots := SloadWarm s key, stack, pc := s.pc + 1, gas := s.gas - SloadCost s key }
             exact ⟨_, .sload s t rest key at_ items' gas (by simp [Advances, t, stack, rest])⟩
           · exact ⟨_, .sloadGas s rest key at_ items' (Nat.lt_of_not_ge gas)⟩
+      | extcodecopy =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .extCodeCopyEmpty s at_ items⟩
+        | cons x xs =>
+          let first : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+          have items' : s.stack.val = x :: first.val := items
+          cases secondItems : first.val with
+          | nil => exact ⟨_, .extCodeCopySecond s first x at_ items' secondItems⟩
+          | cons destination ys =>
+            let second : Stack := ⟨ys, by have b := first.property; rw [secondItems] at b; simp at b; omega⟩
+            have second' : first.val = destination :: second.val := secondItems
+            cases thirdItems : second.val with
+            | nil => exact ⟨_, .extCodeCopyThird s first second x destination at_ items' second' thirdItems⟩
+            | cons source zs =>
+              let third : Stack := ⟨zs, by have b := second.property; rw [thirdItems] at b; simp at b; omega⟩
+              have third' : second.val = source :: third.val := thirdItems
+              cases fourthItems : third.val with
+              | nil => exact ⟨_, .extCodeCopyFourth s first second third x destination source at_ items' second' third' fourthItems⟩
+              | cons length ws =>
+                let rest : Stack := ⟨ws, by have b := third.property; rw [fourthItems] at b; simp at b; omega⟩
+                have fourth' : third.val = length :: rest.val := fourthItems
+                by_cases gas : ExtCodeCopyCost s (BalanceAddress x) destination length ≤ s.gas
+                · cases bytes : ExtCodeBytes s (BalanceAddress x) with
+                  | none =>
+                    let t := { s with stack := rest, tracker := BalanceRead s (BalanceAddress x), warmAddresses := BalanceWarm s (BalanceAddress x), gas := s.gas - ExtCodeCopyCost s (BalanceAddress x) destination length, memory := Memory.Allocation.expand s.memory destination.toNat length.toNat, memoryValid := Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid }
+                    exact ⟨_, .extCodeCopyMissing s t first second third rest x destination source length at_ items' second' third' fourth' gas bytes (by simp [AdvancesMemory, t])⟩
+                  | some code =>
+                    let expanded := Memory.Allocation.expand s.memory destination.toNat length.toNat
+                    let t := { s with stack := rest, tracker := BalanceRead s (BalanceAddress x), warmAddresses := BalanceWarm s (BalanceAddress x), pc := s.pc + 1, gas := s.gas - ExtCodeCopyCost s (BalanceAddress x) destination length, memory := Memory.Allocation.write expanded destination.toNat (CallData.readRange code source.toNat length.toNat), memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ (Memory.Allocation.expand_valid_for_frame _ _ _ s.memoryValid) }
+                    exact ⟨_, .extCodeCopy s t first second third rest x destination source length code at_ items' second' third' fourth' gas bytes (by simp [AdvancesMemory, t, expanded])⟩
+                · exact ⟨_, .extCodeCopyGas s first second third rest x destination source length at_ items' second' third' fourth' (Nat.lt_of_not_ge gas)⟩
       | extcodesize =>
         cases items : s.stack.val with
         | nil => exact ⟨_, .extCodeSizeUnderflow s at_ items⟩
@@ -3898,7 +3999,7 @@ theorem load_then_calldatasize_actual (s t u : State) (x : Word) (xs : List Word
 /-- A frame whose current instruction is outside the memory access subset. -/
 def PureMemoryStep (s : State) : Prop :=
   ¬ At s (some .mload) ∧ ¬ At s (some .mstore) ∧ ¬ At s (some .mstore8) ∧ ¬ At s (some .mcopy) ∧
-  ¬ At s (some .calldatacopy) ∧ ¬ At s (some .codecopy) ∧ ¬ At s (some .returndatacopy) ∧ ¬ At s (some .keccak)
+  ¬ At s (some .calldatacopy) ∧ ¬ At s (some .codecopy) ∧ ¬ At s (some .returndatacopy) ∧ ¬ At s (some .keccak) ∧ ¬ At s (some .extcodecopy)
 
 /-- A pure instruction preserves memory for every outcome. -/
 theorem outcome_memory_unchanged_of_pure {s : State} {out : Outcome}

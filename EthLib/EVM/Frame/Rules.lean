@@ -25,7 +25,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .extcodesize | .extcodehash | .tload | .tstore | .sstore | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .extcodecopy | .extcodesize | .extcodehash | .tload | .tstore | .sstore | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -180,6 +180,11 @@ def BalanceRead (s : State) (a : World.Address) : TransactionState.State :=
 
 /-- EXTCODESIZE adds Amsterdam's separate code-reading charge. -/
 def ExtCodeSizeCost (s : State) (a : World.Address) : Nat := BalanceCost s a + 100
+
+/-- EXTCODECOPY charges access, code reading, word copying and memory expansion. -/
+def ExtCodeCopyCost (s : State) (a : World.Address) (destination length : Word) : Nat :=
+  ExtCodeSizeCost s a + 3 * ((length.toNat + 31) / 32) +
+    Gas.rangeCost s.memory.words destination.toNat length.toNat
 
 /-- Code lookup follows the empty sentinel, transaction overlay and parent store. -/
 def ExtCodeBytes (s : State) (a : World.Address) : Option ByteArray :=
@@ -478,6 +483,36 @@ inductive Rule : State → Outcome → Prop where
       Advances { s with warmAddresses := BalanceWarm s (BalanceAddress x), tracker := BalanceRead s (BalanceAddress x) }
         t (s.pc + 1) (s.gas - BalanceCost s (BalanceAddress x)) (ExtCodeHashValue s (BalanceAddress x) :: rest.val) →
       Rule s (.continue t)
+  | extCodeCopyEmpty (s) : At s (some .extcodecopy) → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | extCodeCopySecond (s : State) (first : Stack) (x : Word) : At s (some .extcodecopy) →
+      s.stack.val = x :: first.val → first.val = [] → Rule s (.exception { s with stack := first } .stackUnderflow)
+  | extCodeCopyThird (s : State) (first second : Stack) (x destination : Word) : At s (some .extcodecopy) →
+      s.stack.val = x :: first.val → first.val = destination :: second.val → second.val = [] →
+      Rule s (.exception { s with stack := second } .stackUnderflow)
+  | extCodeCopyFourth (s : State) (first second third : Stack) (x destination source : Word) : At s (some .extcodecopy) →
+      s.stack.val = x :: first.val → first.val = destination :: second.val → second.val = source :: third.val → third.val = [] →
+      Rule s (.exception { s with stack := third } .stackUnderflow)
+  | extCodeCopyGas (s : State) (first second third rest : Stack) (x destination source length : Word) :
+      At s (some .extcodecopy) → s.stack.val = x :: first.val → first.val = destination :: second.val →
+      second.val = source :: third.val → third.val = length :: rest.val →
+      s.gas < ExtCodeCopyCost s (BalanceAddress x) destination length →
+      Rule s (.exception { s with stack := rest, warmAddresses := BalanceWarm s (BalanceAddress x) } .outOfGas)
+  | extCodeCopyMissing (s t : State) (first second third rest : Stack) (x destination source length : Word) :
+      At s (some .extcodecopy) → s.stack.val = x :: first.val → first.val = destination :: second.val →
+      second.val = source :: third.val → third.val = length :: rest.val →
+      ExtCodeCopyCost s (BalanceAddress x) destination length ≤ s.gas → ExtCodeBytes s (BalanceAddress x) = none →
+      AdvancesMemory { s with warmAddresses := BalanceWarm s (BalanceAddress x), tracker := BalanceRead s (BalanceAddress x) }
+        t (Memory.Allocation.expand s.memory destination.toNat length.toNat) s.pc
+        (s.gas - ExtCodeCopyCost s (BalanceAddress x) destination length) rest.val → Rule s (.exception t .missingCode)
+  | extCodeCopy (s t : State) (first second third rest : Stack) (x destination source length : Word) (code : ByteArray) :
+      At s (some .extcodecopy) → s.stack.val = x :: first.val → first.val = destination :: second.val →
+      second.val = source :: third.val → third.val = length :: rest.val →
+      ExtCodeCopyCost s (BalanceAddress x) destination length ≤ s.gas → ExtCodeBytes s (BalanceAddress x) = some code →
+      AdvancesMemory { s with warmAddresses := BalanceWarm s (BalanceAddress x), tracker := BalanceRead s (BalanceAddress x) }
+        t (Memory.Allocation.write (Memory.Allocation.expand s.memory destination.toNat length.toNat) destination.toNat
+          (CallData.readRange code source.toNat length.toNat)) (s.pc + 1)
+        (s.gas - ExtCodeCopyCost s (BalanceAddress x) destination length) rest.val → Rule s (.continue t)
   | selfBalanceGas (s) : At s (some .selfbalance) → s.gas < 5 →
       Rule s (.exception s .outOfGas)
   | selfBalanceFull (s) : At s (some .selfbalance) → 5 ≤ s.gas →

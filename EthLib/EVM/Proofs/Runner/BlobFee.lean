@@ -49,6 +49,7 @@ theorem run_preserves (fuel : Nat) (s : Frame.State) :
       (Runner.run fuel s).frame.returnData = s.returnData :=
   ⟨Runner.run_context_unchanged fuel s, Runner.run_returnData_unchanged fuel s⟩
 
+set_option maxRecDepth 2048 in
 set_option maxHeartbeats 2000000 in
 /-- Every instruction in this program preserves memory. -/
 theorem program_pure (s : Frame.State) (code : s.code = program) :

@@ -44,6 +44,6 @@ example (fuel : Nat) (s : Frame.State) :
 /-- info: (true, true) -/
 #guard_msgs in
 #eval let bad := frame 0xfe 2 [] (by decide)
-  let unknown := frame 0x3c 2 [] (by decide)
+  let unknown := frame 0xf0 2 [] (by decide)
   (match Runner.run 1 bad with | .exception t _ => t.context.environment.origin == env.origin | _ => false,
    match Runner.run 1 unknown with | .unsupported t _ => t.context.environment.caller == env.caller | _ => false)

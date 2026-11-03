@@ -447,7 +447,7 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The augmented 256-byte dispatch regression covers 138 supported instructions and 15 assigned but unsupported instructions.
+The augmented 256-byte dispatch regression covers 139 supported instructions and 14 assigned but unsupported instructions.
 It also covers 102 unassigned bytes and INVALID.
 The historical Cancun subset has 125 supported instructions and 107 unassigned bytes.
 The Cancun-plus-CLZ subset has 126 supported instructions and 106 unassigned bytes.
@@ -718,8 +718,8 @@ The list represents a set by membership and may contain duplicates.
 Frame constructors and quantified runner theorems must supply this new argument.
 `Advances` and `AdvancesMemory` now include warm-list equality.
 `outcome_tracker_read` allows one account or storage read when SSTORE and TSTORE are excluded.
-`outcome_tracker_unchanged_of_not_selfBalance` also excludes BALANCE, EXTCODESIZE, EXTCODEHASH, SLOAD, SSTORE and TSTORE.
-`outcome_warm_unchanged_of_not_balance` excludes BALANCE, EXTCODESIZE and EXTCODEHASH.
+`outcome_tracker_unchanged_of_not_selfBalance` also excludes BALANCE, EXTCODESIZE, EXTCODEHASH, EXTCODECOPY, SLOAD, SSTORE and TSTORE.
+`outcome_warm_unchanged_of_not_balance` excludes BALANCE, EXTCODESIZE, EXTCODEHASH and EXTCODECOPY.
 The tracker account-read list is separate and survives tracker snapshot rollback.
 The source copies warm sets for child frames and merges them only after successful child execution; this instruction subset does not execute calls or implement that merge.
 No transaction initialization or full Amsterdam execution is claimed.
@@ -819,4 +819,20 @@ An incomplete supplied code store produces the typed `missingCode` diagnostic af
 EXTCODEHASH returns zero when the selected account equals the source empty account; otherwise it returns the stored code hash.
 `ExtCodeSizeLocal` specifies source-order outcomes, while `extCodeHash_success_iff` and `extCodeHash_exception_iff` describe all helper outcomes.
 The pinned source is inspected independently; Lean checks the stated reference and implementation relation.
-This slice does not implement EXTCODECOPY or child calls.
+This slice does not implement child calls.
+
+## External code copy
+
+Amsterdam `environment.py`, `extcodecopy`, pops address, destination, source offset and length in that order.
+It warms the low 160-bit address, charges access, code reading, copy words and destination expansion, then expands memory before reading the account and code.
+A missing nonempty code entry produces the `missingCode` diagnostic with the completed pops, charge, warming, memory expansion and account read retained.
+Successful copies use the account's own code bytes, including any delegation designator, and pad with zeros past the end of code.
+A zero length does not expand memory even for a large destination.
+
+`Frame.ExtCodeCopyLocal` describes all helper outcomes and binds successful copy observations to the popped offsets, length and resolved code.
+`ExtCodeCopyObservation` states the allocated size, each copied byte and each unaffected byte without calling the copy implementation.
+Exact frame equality also retains the sparse-store representation constraint, since distinct stores can have the same byte observations.
+`extCodeCopy_step_iff_local` and `extCodeCopy_rule_iff_local` connect these cases to actual dispatch and the global frame rule.
+`Runner.ExtCodeCopyProgram.run` constructs a hash, copy and memory-load sequence.
+`PureMemoryStep` excludes EXTCODECOPY, and the account-read and warm-list equality contracts also exclude it.
+Child calls and transaction lifecycle remain outside this slice.

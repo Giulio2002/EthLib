@@ -82,8 +82,8 @@ theorem state_gas_actual_step (s : Frame.State) (notSstore : ¬ Frame.At s (some
 
 theorem tracker_actual_step (s : Frame.State) (notSelf : ¬ Frame.At s (some .selfbalance))
     (notBalance : ¬ Frame.At s (some .balance)) (notSload : ¬ Frame.At s (some .sload))
-    (notSstore : ¬ Frame.At s (some .sstore)) (notTstore : ¬ Frame.At s (some .tstore)) (notSize : ¬ Frame.At s (some .extcodesize)) (notHash : ¬ Frame.At s (some .extcodehash)) : (Frame.step s).frame.tracker = s.tracker :=
-  Frame.outcome_tracker_unchanged_of_not_selfBalance notSelf notBalance notSload notSstore notTstore notSize notHash
+    (notSstore : ¬ Frame.At s (some .sstore)) (notTstore : ¬ Frame.At s (some .tstore)) (notSize : ¬ Frame.At s (some .extcodesize)) (notHash : ¬ Frame.At s (some .extcodehash)) (notCopy : ¬ Frame.At s (some .extcodecopy)) : (Frame.step s).frame.tracker = s.tracker :=
+  Frame.outcome_tracker_unchanged_of_not_selfBalance notSelf notBalance notSload notSstore notTstore notSize notHash notCopy
     ((Frame.step_iff_rule s _).mp rfl)
 
 theorem account_read_balance (s : Frame.State) (at_ : Frame.At s (some .balance)) :

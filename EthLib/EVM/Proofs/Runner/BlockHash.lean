@@ -62,6 +62,7 @@ theorem run_preserves_memory (fuel : Nat) (s : Frame.State)
     (Runner.run fuel s).frame.memory = s.memory :=
   Runner.run_memory_unchanged_of_pure fuel s pure
 
+set_option maxRecDepth 2048 in
 set_option maxHeartbeats 2000000 in
 /-- Every program counter in this program is free of memory instructions. -/
 theorem program_pure (s : Frame.State) (code : s.code = program) :
