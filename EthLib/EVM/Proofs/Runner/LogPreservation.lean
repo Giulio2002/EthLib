@@ -31,6 +31,7 @@ theorem run_logs_unchanged_of_noLog (fuel : Nat) (s : Frame.State)
     | revert input gas output => simpa [run, h, Frame.Outcome.frame, Result.frame] using preserved
     | exception input error => simpa [run, h, Frame.Outcome.frame, Result.frame] using preserved
     | unsupported input op => simpa [run, h, Frame.Outcome.frame, Result.frame] using preserved
+    | callRequest input request => simpa [run, h, Frame.Outcome.frame, Result.frame] using preserved
 
 /-- Every bounded result retains the initial logs as a prefix. -/
 theorem run_logs_prefix (fuel : Nat) (s : Frame.State) :
@@ -51,5 +52,6 @@ theorem run_logs_prefix (fuel : Nat) (s : Frame.State) :
     | revert input gas output => simpa [run, h, Frame.Outcome.frame, Result.frame] using retained
     | exception input error => simpa [run, h, Frame.Outcome.frame, Result.frame] using retained
     | unsupported input op => simpa [run, h, Frame.Outcome.frame, Result.frame] using retained
+    | callRequest input request => simpa [run, h, Frame.Outcome.frame, Result.frame] using retained
 
 end EthLib.EVM.Runner

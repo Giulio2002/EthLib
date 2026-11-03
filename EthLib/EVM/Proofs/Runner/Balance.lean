@@ -84,5 +84,8 @@ theorem run_warm_monotone (fuel : Nat) (s : Frame.State) (a : World.Address)
     | unsupported input op =>
       have same := Frame.outcome_warm_monotone ((Frame.step_iff_rule _ _).mp hs) a warm
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
+    | callRequest input request =>
+      have same := Frame.outcome_warm_monotone ((Frame.step_iff_rule _ _).mp hs) a warm
+      simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
 
 end EthLib.EVM.Runner.BalanceProgram

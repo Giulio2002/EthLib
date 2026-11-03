@@ -1,13 +1,14 @@
 import EthLib.EVM.Proofs.Opcode
 import EthLib.EVM.Frame.Rules
 import EthLib.EVM.Proofs.Memory.Allocation
+import EthLib.EVM.Runner
 
 open EthLib.EVM
 
 -- This range list is independent of the decoder and matches the supported slice.
 private def supported (n : Nat) : Bool :=
   n ≤ 0x0b || (0x10 ≤ n && n ≤ 0x1e) || n == 0x20 || (0x30 ≤ n && n ≤ 0x3a) || n == 0x3b || n == 0x3c || n == 0x3d || n == 0x3e || n == 0x3f || (0x40 ≤ n && n ≤ 0x47) || n == 0x48 || n == 0x49 || n == 0x4a || n == 0x4b || n == 0x50 || n == 0x51 || n == 0x52 || n == 0x53 || n == 0x54 || n == 0x55 ||
-  (0x56 ≤ n && n ≤ 0x5d) || n == 0x5e || (0x5f ≤ n && n ≤ 0x9f) || (0xa0 ≤ n && n ≤ 0xa4) || n == 0xf3 || n == 0xfd || (0xe6 ≤ n && n ≤ 0xe8)
+  (0x56 ≤ n && n ≤ 0x5d) || n == 0x5e || (0x5f ≤ n && n ≤ 0x9f) || (0xa0 ≤ n && n ≤ 0xa4) || n == 0xf1 || n == 0xf3 || n == 0xfd || (0xe6 ≤ n && n ≤ 0xe8)
 
 private instance (op : Opcode) : Decidable (Frame.Unsupported op) := by
   cases op <;> simp [Frame.Unsupported] <;> infer_instance
@@ -39,7 +40,7 @@ private def check (n : Nat) : Bool := Id.run do
   (List.range 256).all check)
 
 -- Count the outcomes produced by executable dispatch.
-/-- info: (146, 7, 103) -/
+/-- info: (147, 6, 103) -/
 #guard_msgs in
 #eval Id.run do
   let mut executed := 0
@@ -51,3 +52,18 @@ private def check (n : Nat) : Bool := Id.run do
     | .unsupported _ _ => unsupported := unsupported + 1
     | _ => executed := executed + 1
   return (executed, unsupported, invalid)
+
+-- CALL is an Amsterdam frame suspension; the legacy runner retains its tooling boundary.
+/-- info: (true, true, true) -/
+#guard_msgs in
+#eval Id.run do
+  let s := { state 0xf1 with stack := ⟨[1, 2, 3, 4, 5, 6, 7, 8], by decide⟩ }
+  let reference := Proofs.Opcode.reference.lookup 0xf1 == some .call
+  let suspended := match Frame.step s with
+    | .callRequest t r => t.stack.val == [8] && r.gas == 1 && r.address == 2 &&
+        r.value == 3 && r.inputOffset == 4 && r.inputSize == 5 && r.outputOffset == 6 && r.outputSize == 7
+    | _ => false
+  let legacy := match Runner.run 1 s with
+    | .unsupported t .call => t.stack.val == [8]
+    | _ => false
+  return (reference, suspended, legacy)

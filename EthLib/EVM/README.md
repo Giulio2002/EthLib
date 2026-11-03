@@ -290,6 +290,10 @@ The decoder and scanner do not model frames, gas, stack effects or instruction e
 # Restricted frame execution
 
 The frame runner supports STOP, JUMP, JUMPI, JUMPDEST, PC, MSIZE, GAS, MLOAD, MSTORE, MSTORE8, MCOPY, CALLDATALOAD, CALLDATASIZE, CALLDATACOPY, CODESIZE, CODECOPY, PUSH0 through PUSH32, POP, arithmetic, comparison and bitwise instructions, DUP1 through DUP16, SWAP1 through SWAP16, DUPN, SWAPN and EXCHANGE.
+The frame dispatcher also suspends CALL after checking and popping its operands.
+`NestedRunner` handles the supported CALL path and RIPEMD-160 at address 3, while unavailable precompiles and delegation remain tooling outcomes.
+The legacy `Runner` exposes that suspension as unsupported.
+CALLCODE, DELEGATECALL and STATICCALL are not integrated.
 The implemented arithmetic and bitwise instructions are ADD, MUL, SUB, DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD, EXP, LT, GT, SLT, SGT, EQ, ISZERO, AND, OR, XOR, NOT, SHL, SHR, SAR, BYTE and SIGNEXTEND.
 The arithmetic, comparison and bitwise instructions have independent success, underflow and out-of-gas rules.
 Operand checks precede charging gas.
@@ -898,4 +902,8 @@ The return-data choice follows `generic_call`.
 Incorporation ends before `generic_call` refunds the new-account state-gas charge after a failed child.
 A caller that charged a new account must perform that refund separately; this transition is not complete CALL outcome gas settlement.
 CREATE additionally validates and deposits code and clears return data on success, which this transition does not implement.
-CALL and CREATE decoding, child entry and value transfer, output-memory copying, accounts scheduled for deletion, and transaction settlement remain outside this foundation.
+The standalone settlement foundation does not itself decode CALL or CREATE, enter children, transfer value or copy output memory.
+The separate `NestedRunner` executes a partial CALL path, including value transfer, child settlement and the RIPEMD-160 precompile at address 3.
+Other precompiles and delegation remain tooling boundaries, and CALLCODE, DELEGATECALL and STATICCALL are not integrated.
+The legacy `Runner` reports a CALL suspension as unsupported instead of executing a child.
+CREATE, accounts scheduled for deletion and transaction settlement remain outside this scope.

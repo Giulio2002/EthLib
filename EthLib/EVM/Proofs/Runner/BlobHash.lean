@@ -103,5 +103,6 @@ theorem program_memory (fuel : Nat) (s : Frame.State) (code : s.code = program) 
     | revert input gas output => trivial
     | exception input e => trivial
     | unsupported input op => trivial
+    | callRequest input request => trivial
 
 end EthLib.EVM.Runner.BlobHashProgram

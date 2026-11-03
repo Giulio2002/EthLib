@@ -74,6 +74,16 @@ structure State where
   stateGas : StateGas := {}
   logs : List LogEntry := []
 
+/-- Operands removed by Amsterdam `instructions/system.py`, `call`. -/
+structure CallRequest where
+  gas : Word
+  address : Word
+  value : Word
+  inputOffset : Word
+  inputSize : Word
+  outputOffset : Word
+  outputSize : Word
+
 /-- Exceptional halts distinguished by their first failing check. -/
 inductive Exception where
   | invalidOpcode | invalidJumpDestination | outOfGas | stackUnderflow | stackOverflow | outOfBoundsRead | invalidParameter
@@ -91,6 +101,7 @@ inductive Outcome where
   | revert (input : State) (gas : Nat) (output : ByteArray)
   | exception (input : State) (reason : Exception)
   | unsupported (input : State) (opcode : Opcode)
+  | callRequest (input : State) (request : CallRequest)
 
 def failStack (s : State) : StackError → Outcome
   | .underflow => .exception s .stackUnderflow
@@ -518,6 +529,17 @@ def exchange (s : State) : Outcome :=
       match s.stack.exchangeAt n m with
       | .error e => failStack s e
       | .ok stack => .continue { s with stack, gas, pc := s.pc + 2 }
+
+/-- Suspend CALL after its operand pops and static-value check.
+Pricing, state access and child execution follow this suspension. -/
+def callEntry (s : State) : Outcome :=
+  match items : s.stack.val with
+  | gas :: address :: value :: inputOffset :: inputSize :: outputOffset :: outputSize :: rest =>
+    let stack : Stack := ⟨rest, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+    let input := { s with stack }
+    if s.isStatic && value != 0 then .exception input .writeInStaticContext
+    else .callRequest input ⟨gas, address, value, inputOffset, inputSize, outputOffset, outputSize⟩
+  | _ => failStack { s with stack := Stack.empty } .underflow
 
 /-- Execute one instruction or stop at the end of code. -/
 def step (s : State) : Outcome :=
@@ -947,6 +969,7 @@ def step (s : State) : Outcome :=
           match Stack.push stack (Word.iszeroResult a) with
           | .error e => failStack s e
           | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
+    | some .call => callEntry s
     | some .clz => clz s
     -- Cancun `bitwise.py`, `bitwise_not`: pop the operand before charging gas.
     | some .not =>
@@ -972,7 +995,7 @@ def step (s : State) : Outcome :=
 
 /-- The frame carried by an outcome, including diagnostic input for failures. -/
 def Outcome.frame : Outcome → State
-  | .continue s | .stop s | .returned s _ | .revert s _ _ | .exception s _ | .unsupported s _ => s
+  | .continue s | .stop s | .returned s _ | .revert s _ _ | .exception s _ | .unsupported s _ | .callRequest s _ => s
 
 /-- Message-boundary observations modeled by this subset. -/
 inductive Boundary where
@@ -993,6 +1016,6 @@ def settle : Outcome → Option Boundary
   | .returned s output => some (.returned s.gas output)
   | .revert _ gas output => some (.reverted gas output)
   | .exception _ reason => some (.exceptional 0 reason)
-  | .continue _ | .unsupported _ _ => none
+  | .continue _ | .unsupported _ _ | .callRequest _ _ => none
 
 end EthLib.EVM.Frame

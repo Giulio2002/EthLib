@@ -2343,6 +2343,53 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | stop at_ => exact step_stop _ at_
   | invalid at_ => rcases at_ with h | h; exact step_unassigned _ h; exact step_invalid _ h
   | unsupported op at_ unsupported => exact step_unsupported _ op at_ unsupported
+  | callUnderflow at_ short =>
+    obtain ⟨bounds, decoded⟩ := at_
+    cases h : s.stack.val with
+    | nil => simp [step, bounds, decoded, callEntry, h, failStack]
+    | cons a xs =>
+      cases xs with
+      | nil => simp [step, bounds, decoded, callEntry, h, failStack]
+      | cons b xs =>
+        cases xs with
+        | nil => simp [step, bounds, decoded, callEntry, h, failStack]
+        | cons c xs =>
+          cases xs with
+          | nil => simp [step, bounds, decoded, callEntry, h, failStack]
+          | cons d xs =>
+            cases xs with
+            | nil => simp [step, bounds, decoded, callEntry, h, failStack]
+            | cons e xs =>
+              cases xs with
+              | nil => simp [step, bounds, decoded, callEntry, h, failStack]
+              | cons f xs =>
+                cases xs with
+                | nil => simp [step, bounds, decoded, callEntry, h, failStack]
+                | cons g xs => simp [h] at short; omega
+  | callStatic stack gas address value inputOffset inputSize outputOffset outputSize at_ items static nonzero =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp only [step, bounds, decoded, ↓reduceDIte]
+    unfold callEntry
+    split
+    · simp_all
+    · rename_i impossible
+      exact False.elim (impossible gas address value inputOffset inputSize outputOffset outputSize stack.val items)
+  | callSuspend stack gas address value inputOffset inputSize outputOffset outputSize at_ items allowed =>
+    obtain ⟨bounds, decoded⟩ := at_
+    rcases allowed with static | iszero
+    · simp only [step, bounds, decoded, ↓reduceDIte]
+      unfold callEntry
+      split
+      · simp_all
+      · rename_i impossible
+        exact False.elim (impossible gas address value inputOffset inputSize outputOffset outputSize stack.val items)
+    · simp only [step, bounds, decoded, ↓reduceDIte]
+      unfold callEntry
+      split
+      · simp_all
+      · rename_i impossible
+        exact False.elim (impossible gas address value inputOffset inputSize outputOffset outputSize stack.val items)
+
   | finishEmpty kind at_ empty =>
     obtain ⟨bounds, decoded⟩ := at_
     have p := (Proofs.Stack.pop_underflow_iff _).mpr empty
@@ -3997,6 +4044,35 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
                   exact ⟨_, .returnDataCopy s t x y z rest at_ items gas bounds (by simp [AdvancesMemory, t, stack])⟩
                 · exact ⟨_, .returnDataCopyBounds s x y z rest at_ items gas (Nat.lt_of_not_ge bounds)⟩
               · exact ⟨_, .returnDataCopyGas s x y z rest at_ items (Nat.lt_of_not_ge gas)⟩
+      | call =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .callUnderflow s at_ (by simp_all)⟩
+        | cons gas xs1 =>
+          cases h1 : xs1 with
+          | nil => exact ⟨_, .callUnderflow s at_ (by simp_all)⟩
+          | cons address xs2 =>
+            cases h2 : xs2 with
+            | nil => exact ⟨_, .callUnderflow s at_ (by simp_all)⟩
+            | cons value xs3 =>
+              cases h3 : xs3 with
+              | nil => exact ⟨_, .callUnderflow s at_ (by simp_all)⟩
+              | cons inputOffset xs4 =>
+                cases h4 : xs4 with
+                | nil => exact ⟨_, .callUnderflow s at_ (by simp_all)⟩
+                | cons inputSize xs5 =>
+                  cases h5 : xs5 with
+                  | nil => exact ⟨_, .callUnderflow s at_ (by simp_all)⟩
+                  | cons outputOffset xs6 =>
+                    cases h6 : xs6 with
+                    | nil => exact ⟨_, .callUnderflow s at_ (by simp_all)⟩
+                    | cons outputSize xs7 =>
+                      let stack : Stack := ⟨xs7, by have bound := s.stack.property; simp_all; omega⟩
+                      have itemsAll : s.stack.val = gas :: address :: value :: inputOffset :: inputSize :: outputOffset :: outputSize :: stack.val := by simp_all [stack]
+                      by_cases static : s.isStatic = true
+                      · by_cases nonzero : value ≠ 0
+                        · exact ⟨_, .callStatic s stack gas address value inputOffset inputSize outputOffset outputSize at_ itemsAll static nonzero⟩
+                        · exact ⟨_, .callSuspend s stack gas address value inputOffset inputSize outputOffset outputSize at_ itemsAll (Or.inr (by simpa using nonzero))⟩
+                      · exact ⟨_, .callSuspend s stack gas address value inputOffset inputSize outputOffset outputSize at_ itemsAll (Or.inl (by cases h : s.isStatic <;> simp_all))⟩
       | _ => exact ⟨_, .unsupported s _ at_ (by trivial)⟩
   · exact ⟨_, .endCode s (Nat.le_of_not_gt bounds)⟩
 

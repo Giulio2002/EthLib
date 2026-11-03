@@ -2,6 +2,9 @@ module
 public import EthLib.EVM.Proofs.World
 public import EthLib.EVM.Proofs.TransactionState
 public import EthLib.EVM.Proofs.TransactionStateReference
+public import EthLib.EVM.Proofs.NestedRunner
+public import EthLib.EVM.Proofs.NestedRunner.Step
+public import EthLib.EVM.Proofs.CallPreparation
 public import EthLib.EVM.Proofs.ChildSettlement
 public import EthLib.EVM.Proofs.TransactionTracker
 public import EthLib.EVM.Proofs.TransactionAccount
@@ -9,6 +12,7 @@ public import EthLib.EVM.Proofs.TransactionTransfer
 public import EthLib.EVM.Proofs.Memory.WordAccess
 public import EthLib.EVM.Proofs.Gas
 public import EthLib.EVM.Proofs.Gas.StateMeter
+public import EthLib.EVM.Proofs.Gas.Call
 public import EthLib.EVM.Proofs.BlobFee
 
 public import EthLib.EVM.Proofs.Word

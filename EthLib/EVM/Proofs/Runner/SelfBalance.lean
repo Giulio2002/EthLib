@@ -98,6 +98,9 @@ theorem run_tracker_retained (fuel : Nat) (s : Frame.State) (trace : Runner.NoSs
     | unsupported input op =>
       have same := Frame.outcome_tracker_retained current noTransient.1 ((Frame.step_iff_rule _ _).mp hs)
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
+    | callRequest input request =>
+      have same := Frame.outcome_tracker_retained current noTransient.1 ((Frame.step_iff_rule _ _).mp hs)
+      simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
 
 /-- Every bounded outcome without SSTORE retains the persistent write components. -/
 theorem run_persistent_writes_unchanged_of_no_sstore (fuel : Nat) (s : Frame.State)
@@ -134,6 +137,9 @@ theorem run_persistent_writes_unchanged_of_no_sstore (fuel : Nat) (s : Frame.Sta
     | unsupported input op =>
       have same := Frame.outcome_persistent_writes_unchanged_of_not_sstore current ((Frame.step_iff_rule _ _).mp hs)
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
+    | callRequest input request =>
+      have same := Frame.outcome_persistent_writes_unchanged_of_not_sstore current ((Frame.step_iff_rule _ _).mp hs)
+      simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
 
 /-- Every bounded outcome retains the transaction parent, created markers, and snapshots. -/
 theorem run_tracker_metadata_retained (fuel : Nat) (s : Frame.State) :
@@ -166,6 +172,9 @@ theorem run_tracker_metadata_retained (fuel : Nat) (s : Frame.State) :
     | unsupported input op =>
       have same := Frame.outcome_tracker_metadata_retained ((Frame.step_iff_rule _ _).mp hs)
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
+    | callRequest input request =>
+      have same := Frame.outcome_tracker_metadata_retained ((Frame.step_iff_rule _ _).mp hs)
+      simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
 
 
 /-- Every bounded outcome retains the static-context flag. -/
@@ -193,6 +202,9 @@ theorem run_static_retained (fuel : Nat) (s : Frame.State) :
       have same := Frame.outcome_static_retained ((Frame.step_iff_rule _ _).mp hs)
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
     | unsupported input op =>
+      have same := Frame.outcome_static_retained ((Frame.step_iff_rule _ _).mp hs)
+      simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
+    | callRequest input request =>
       have same := Frame.outcome_static_retained ((Frame.step_iff_rule _ _).mp hs)
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
 
@@ -223,6 +235,9 @@ theorem run_stateGas_unchanged_of_no_sstore (fuel : Nat) (s : Frame.State)
       have same := Frame.outcome_stateGas_unchanged_of_not_sstore current ((Frame.step_iff_rule _ _).mp hs)
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
     | unsupported input op =>
+      have same := Frame.outcome_stateGas_unchanged_of_not_sstore current ((Frame.step_iff_rule _ _).mp hs)
+      simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
+    | callRequest input request =>
       have same := Frame.outcome_stateGas_unchanged_of_not_sstore current ((Frame.step_iff_rule _ _).mp hs)
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
 
@@ -266,6 +281,9 @@ theorem run_storageReads_unchanged_of_no_sload (fuel : Nat) (s : Frame.State)
       have same := Frame.outcome_storageReads_unchanged_of_not_sload current noStore.1 ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
     | unsupported input op =>
+      have same := Frame.outcome_storageReads_unchanged_of_not_sload current noStore.1 ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | callRequest input request =>
       have same := Frame.outcome_storageReads_unchanged_of_not_sload current noStore.1 ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
 

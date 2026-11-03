@@ -48,5 +48,6 @@ def run : Nat → Frame.State → Result
     | .revert input gas output => .reverted input gas output
     | .exception input reason => .exception input reason
     | .unsupported input op => .unsupported input op
+    | .callRequest input _ => .unsupported input .call
 
 end EthLib.EVM.Runner

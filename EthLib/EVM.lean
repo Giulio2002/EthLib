@@ -7,6 +7,7 @@ public import EthLib.EVM.TransactionTransfer
 public import EthLib.EVM.Memory.WordAccess
 public import EthLib.EVM.Gas
 public import EthLib.EVM.Gas.StateMeter
+public import EthLib.EVM.Gas.Call
 public import EthLib.EVM.BlobFee
 
 public import EthLib.EVM.Word
@@ -32,6 +33,7 @@ public import EthLib.EVM.Frame
 public import EthLib.EVM.Frame.Rules
 public import EthLib.EVM.Runner
 public import EthLib.EVM.ChildSettlement
+public import EthLib.EVM.NestedRunner
 
 /-!
 # `EthLib.EVM`
