@@ -5,6 +5,7 @@ public import EthLib.EVM.Proofs.TransactionStateReference
 public import EthLib.EVM.Proofs.NestedRunner
 public import EthLib.EVM.Proofs.NestedRunner.Step
 public import EthLib.EVM.Proofs.CallPreparation
+public import EthLib.EVM.Proofs.StaticCall
 public import EthLib.EVM.Proofs.ChildSettlement
 public import EthLib.EVM.Proofs.TransactionTracker
 public import EthLib.EVM.Proofs.TransactionAccount

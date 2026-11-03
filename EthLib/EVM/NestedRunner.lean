@@ -2,13 +2,15 @@ module
 
 public import EthLib.EVM.Runner
 public import EthLib.EVM.CallPreparation
+public import EthLib.EVM.StaticCall
 public import EthLib.Execution.Precompiles.Ripemd160
 
 /-!
 # Fuel-bounded nested CALL execution
 
-This is an incomplete Amsterdam CALL path for nondelegated calls.
+This is an incomplete Amsterdam CALL and STATICCALL path for nondelegated calls.
 Delegation and unavailable precompiles are tooling outcomes.
+CALLCODE, DELEGATECALL and the CREATE family remain unsupported instructions.
 Fuel bounds the whole machine, including child and continuation steps.
 -/
 
@@ -131,6 +133,35 @@ def exceptional (child : Frame.State) (reason : Frame.Exception)
   | [] => .done (.terminal (.exception child reason))
   | c :: rest => resume c child false 0 ByteArray.empty rest
 
+/-- Build a STATICCALL child.
+
+Amsterdam `generic_call` sets `is_static` to `is_staticcall or evm.is_static`, which is true here.
+The value is zero, so `process_message` moves no ether and the child keeps the checkpoint tracker.
+-/
+def staticChildFrame (p : CallPreparation.Prepared) : Frame.State :=
+  { childFrame p with isStatic := true }
+
+/-- Amsterdam `generic_call` after STATICCALL preparation.
+
+The only preflight check is the depth limit, because STATICCALL has no balance check.
+No new-account charge exists, so a rejected or failed call refunds no state gas.
+-/
+def staticDispatch (m : Machine) (request : Frame.CallRequest) (p : CallPreparation.Prepared) : Transition :=
+  if m.depth + 1 > 1024 then
+    -- `restore_child_gas` returns both grants, then the parent pushes zero.
+    let restored := { p.parent with
+      gas := p.parent.gas + p.childGas,
+      stateGas := { p.parent.stateGas with reservoir := p.parent.stateGas.reservoir + p.stateGrant } }
+    match Stack.push restored.stack 0 with
+    | .error _ => .done (.tooling restored .invalidContinuation)
+    | .ok stack => .next { m with frame := { restored with stack, pc := restored.pc + 1 } }
+  else
+    let child := staticChildFrame p
+    let c : Continuation := ⟨p.parent, request, m.depth, false⟩
+    if p.address.val == 3 then ripemdCall c child m.callers
+    else if isPrecompile p.address then .done (.tooling child .precompile)
+    else .next ⟨child, m.depth + 1, c :: m.callers⟩
+
 /-- One step of the nested machine. -/
 def step (m : Machine) : Transition :=
   match Frame.step m.frame with
@@ -171,6 +202,11 @@ def step (m : Machine) : Transition :=
             ripemdCall ⟨p.parent, request, m.depth, p.newAccountCharged⟩ child m.callers
           else if isPrecompile p.address then .done (.tooling child .precompile)
           else .next ⟨child, m.depth + 1, ⟨p.parent, request, m.depth, p.newAccountCharged⟩ :: m.callers⟩
+  | .staticCallRequest input request =>
+    match StaticCall.prepare input request with
+    | .outOfGas diagnostic => exceptional diagnostic .outOfGas m.callers
+    | .tooling diagnostic reason => .done (.tooling diagnostic (.preparation reason))
+    | .ready p => staticDispatch m request p
 
 /-- Execute up to `fuel` machine transitions, including nested calls. -/
 def run : Nat → Machine → Result

@@ -12,6 +12,7 @@ theorem call_step_rule_converse (m : NestedRunner.Machine) (result : NestedRunne
     ∃ outcome, Frame.Rule m.frame outcome ∧
       match outcome with
       | .callRequest input request => NestedRunner.CallRoute m input request result
+      | .staticCallRequest input request => NestedRunner.StaticRoute m input request result
       | _ => NestedRunner.NonCallRoute m outcome result := by
   obtain ⟨outcome, hframe, hroute⟩ := (NestedRunner.step_iff_spec m result).mp h
   exact ⟨outcome, hframe, hroute⟩

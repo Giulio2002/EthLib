@@ -25,7 +25,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .call | .return | .revert | .log _ | .extcodecopy | .extcodesize | .extcodehash | .tload | .tstore | .sstore | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .call | .staticcall | .return | .revert | .log _ | .extcodecopy | .extcodesize | .extcodehash | .tload | .tstore | .sstore | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -405,6 +405,12 @@ inductive Rule : State → Outcome → Prop where
       s.stack.val = gas :: address :: value :: inputOffset :: inputSize :: outputOffset :: outputSize :: stack.val →
       (s.isStatic = false ∨ value = 0) →
       Rule s (.callRequest { s with stack } ⟨gas, address, value, inputOffset, inputSize, outputOffset, outputSize⟩)
+  | staticCallUnderflow (s) : At s (some .staticcall) → s.stack.val.length < 6 →
+      Rule s (.exception { s with stack := Stack.empty } .stackUnderflow)
+  | staticCallSuspend (s stack gas address inputOffset inputSize outputOffset outputSize) :
+      At s (some .staticcall) →
+      s.stack.val = gas :: address :: inputOffset :: inputSize :: outputOffset :: outputSize :: stack.val →
+      Rule s (.staticCallRequest { s with stack } ⟨gas, address, 0, inputOffset, inputSize, outputOffset, outputSize⟩)
 
   | tloadUnderflow (s) : At s (some .tload) → s.stack.val = [] →
       Rule s (.exception s .stackUnderflow)

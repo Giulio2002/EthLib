@@ -87,5 +87,8 @@ theorem run_slots_monotone (fuel : Nat) (s : Frame.State) (slot : World.Address 
     | callRequest input request =>
       have same := Frame.outcome_slots_monotone ((Frame.step_iff_rule _ _).mp hs) slot warm
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
+    | staticCallRequest input request =>
+      have same := Frame.outcome_slots_monotone ((Frame.step_iff_rule _ _).mp hs) slot warm
+      simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
 
 end EthLib.EVM.Runner.SloadProgram

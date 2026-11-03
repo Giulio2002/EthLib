@@ -74,7 +74,9 @@ structure State where
   stateGas : StateGas := {}
   logs : List LogEntry := []
 
-/-- Operands removed by Amsterdam `instructions/system.py`, `call`. -/
+/-- Operands removed by Amsterdam `instructions/system.py`, `call` or `staticcall`.
+
+STATICCALL has no value operand, so its request carries value zero. -/
 structure CallRequest where
   gas : Word
   address : Word
@@ -102,6 +104,7 @@ inductive Outcome where
   | exception (input : State) (reason : Exception)
   | unsupported (input : State) (opcode : Opcode)
   | callRequest (input : State) (request : CallRequest)
+  | staticCallRequest (input : State) (request : CallRequest)
 
 def failStack (s : State) : StackError → Outcome
   | .underflow => .exception s .stackUnderflow
@@ -541,6 +544,19 @@ def callEntry (s : State) : Outcome :=
     else .callRequest input ⟨gas, address, value, inputOffset, inputSize, outputOffset, outputSize⟩
   | _ => failStack { s with stack := Stack.empty } .underflow
 
+/-- Suspend STATICCALL after its six operand pops.
+
+Amsterdam `vm/instructions/system.py`, `staticcall`, has no value operand.
+The request therefore carries value zero.
+It also has no static-context check of its own, so it suspends in any context.
+Pricing, state access and child execution follow this suspension. -/
+def staticCallEntry (s : State) : Outcome :=
+  match items : s.stack.val with
+  | gas :: address :: inputOffset :: inputSize :: outputOffset :: outputSize :: rest =>
+    let stack : Stack := ⟨rest, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+    .staticCallRequest { s with stack } ⟨gas, address, 0, inputOffset, inputSize, outputOffset, outputSize⟩
+  | _ => failStack { s with stack := Stack.empty } .underflow
+
 /-- Execute one instruction or stop at the end of code. -/
 def step (s : State) : Outcome :=
   if h : s.pc < s.code.size then
@@ -970,6 +986,7 @@ def step (s : State) : Outcome :=
           | .error e => failStack s e
           | .ok stack => .continue { s with stack, gas, pc := s.pc + 1 }
     | some .call => callEntry s
+    | some .staticcall => staticCallEntry s
     | some .clz => clz s
     -- Cancun `bitwise.py`, `bitwise_not`: pop the operand before charging gas.
     | some .not =>
@@ -995,7 +1012,8 @@ def step (s : State) : Outcome :=
 
 /-- The frame carried by an outcome, including diagnostic input for failures. -/
 def Outcome.frame : Outcome → State
-  | .continue s | .stop s | .returned s _ | .revert s _ _ | .exception s _ | .unsupported s _ | .callRequest s _ => s
+  | .continue s | .stop s | .returned s _ | .revert s _ _ | .exception s _ | .unsupported s _ | .callRequest s _
+  | .staticCallRequest s _ => s
 
 /-- Message-boundary observations modeled by this subset. -/
 inductive Boundary where
@@ -1016,6 +1034,6 @@ def settle : Outcome → Option Boundary
   | .returned s output => some (.returned s.gas output)
   | .revert _ gas output => some (.reverted gas output)
   | .exception _ reason => some (.exceptional 0 reason)
-  | .continue _ | .unsupported _ _ | .callRequest _ _ => none
+  | .continue _ | .unsupported _ _ | .callRequest _ _ | .staticCallRequest _ _ => none
 
 end EthLib.EVM.Frame

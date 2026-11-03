@@ -33,6 +33,7 @@ public import EthLib.EVM.Frame
 public import EthLib.EVM.Frame.Rules
 public import EthLib.EVM.Runner
 public import EthLib.EVM.ChildSettlement
+public import EthLib.EVM.StaticCall
 public import EthLib.EVM.NestedRunner
 
 /-!

@@ -3,20 +3,22 @@ module
 public import EthLib.EVM.Proofs.NestedRunner
 public import EthLib.EVM.Proofs.Frame
 public import EthLib.EVM.Proofs.CallPreparation
+public import EthLib.EVM.Proofs.StaticCall
 
 /-!
 # Independent nested transitions
 
 The frame rule and continuation relations specify the current partial runner.
-Unavailable CALL features remain tooling results.
+CALL and STATICCALL each have their own route.
+Unavailable call features remain tooling results.
 -/
 
 @[expose] public section
 namespace EthLib.EVM.NestedRunner
 
-/-- Outcomes handled without entering CALL preparation. -/
+/-- Outcomes handled without entering CALL or STATICCALL preparation. -/
 def NonCallOutcome : Frame.Outcome → Prop
-  | .callRequest _ _ => False
+  | .callRequest _ _ | .staticCallRequest _ _ => False
   | _ => True
 
 /-- Route a non-CALL frame outcome through its caller stack. -/
@@ -42,6 +44,7 @@ def NonCallRoute (m : Machine) : Frame.Outcome → Transition → Prop
       | c :: rest => ResumeOutcomeSpec c child false 0 ByteArray.empty rest result
   | .unsupported child op, result => result = .done (.tooling child (.unsupported op))
   | .callRequest _ _, _ => False
+  | .staticCallRequest _ _, _ => False
 
 /-- Independent frame rule followed by non-CALL nested routing. -/
 def NonCallStep (m : Machine) (result : Transition) : Prop :=
@@ -69,6 +72,7 @@ theorem nonCallRoute_iff (m : Machine) (outcome : Frame.Outcome) (result : Trans
     cases reason <;> cases hc : m.callers <;> simp [step, h, NonCallRoute, exceptional, hc, resume_iff] <;> exact eq_comm
   | unsupported child op => simp [step, h, NonCallRoute, eq_comm]
   | callRequest input request => cases hn
+  | staticCallRequest input request => cases hn
 
 /-- The independent non-CALL relation is equivalent to the corresponding step. -/
 theorem nonCallStep_iff (m : Machine) (result : Transition) :
@@ -360,10 +364,139 @@ theorem callRoute_iff (m : Machine) (input : Frame.State) (request : Frame.CallR
     rw [he]
     exact (callDecision_iff _ _ _ _).mpr hr
 
+/-- Depth rejection returns both grants and pushes zero, with no state-gas refund. -/
+def StaticRejectSpec (m : Machine) (p : CallPreparation.Prepared) (result : Transition) : Prop :=
+  ∃ restored, GrantRestore p restored ∧ ZeroPushSpec m restored result
+
+theorem staticReject_iff (m : Machine) (p : CallPreparation.Prepared) (result : Transition) :
+    (let restored := { p.parent with gas := p.parent.gas + p.childGas, stateGas := { p.parent.stateGas with reservoir := p.parent.stateGas.reservoir + p.stateGrant } }
+     match Stack.push restored.stack 0 with
+     | .error _ => .done (.tooling restored .invalidContinuation)
+     | .ok stack => .next { m with frame := { restored with stack, pc := restored.pc + 1 } }) = result ↔
+      StaticRejectSpec m p result := by
+  constructor
+  · intro h
+    exact ⟨_, (grantRestore_iff p _).mp rfl, (zeroPush_iff m _ result).mp h⟩
+  · rintro ⟨restored, hr, hz⟩
+    have he := (grantRestore_iff p restored).mpr hr
+    subst restored
+    exact (zeroPush_iff m _ result).mpr hz
+
+/-- Independent STATICCALL child fields: a zero-value checkpointed entry with the static flag set. -/
+def StaticEntry (p : CallPreparation.Prepared) (out : Frame.State) : Prop :=
+  out.code = p.code ∧ out.pc = 0 ∧ out.stack = Stack.empty ∧ out.gas = p.childGas ∧
+  out.memory = Memory.Allocation.empty ∧ out.returnData = ByteArray.empty ∧
+  out.context.environment = { p.parent.context.environment with
+    currentTarget := p.address, caller := p.parent.context.environment.currentTarget, value := p.request.value } ∧
+  Frame.FinishBytes p.parent p.request.inputOffset p.request.inputSize out.context.data ∧
+  CheckpointExact p.parent.tracker out.tracker ∧
+  out.warmAddresses = p.parent.warmAddresses ∧ out.warmSlots = p.parent.warmSlots ∧
+  out.isStatic = true ∧ out.stateGas = ⟨p.stateGrant, p.stateGrant, 0, 0, 0⟩ ∧ out.logs = []
+
+theorem staticEntry_iff (p : CallPreparation.Prepared) (out : Frame.State) :
+    staticChildFrame p = out ↔ StaticEntry p out := by
+  constructor
+  · intro h
+    subst out
+    refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, Frame.finish_bytes _ _ _, (checkpoint_exact_iff _ _).mp rfl,
+      rfl, rfl, rfl, rfl, rfl⟩
+  · rintro ⟨hc, hpc, hstack, hgas, hmem, hret, henv, hbytes, hcheck, hwarm, hslots, hstatic, hmeter, hlogs⟩
+    have hb := inputBytes_unique p.parent p.request.inputOffset p.request.inputSize out.context.data
+      ⟨(Memory.readRange p.parent.memory.store p.request.inputOffset.toNat p.request.inputSize.toNat).toArray⟩
+      hbytes (Frame.finish_bytes _ _ _)
+    have ht := (checkpoint_exact_iff _ _).mpr hcheck
+    apply ChildSettlement.frame_eq_of_fields <;> simp_all [staticChildFrame, childFrame]
+    cases hctx : out.context with
+    | mk data env => simp only [hctx] at hb henv; simp_all
+
+/-- After the depth check the callee address selects RIPEMD, a tooling precompile or a new child. -/
+def StaticChildDecision (m : Machine) (request : Frame.CallRequest) (p : CallPreparation.Prepared)
+    (child : Frame.State) (result : Transition) : Prop :=
+  (p.address.val = 3 ∧ RipemdSpec ⟨p.parent, request, m.depth, false⟩ child m.callers result) ∨
+  (p.address.val ≠ 3 ∧ PrecompileAddress p.address ∧ result = .done (.tooling child .precompile)) ∨
+  (p.address.val ≠ 3 ∧ ¬ PrecompileAddress p.address ∧
+    result = .next ⟨child, m.depth + 1, ⟨p.parent, request, m.depth, false⟩ :: m.callers⟩)
+
+theorem staticChildDecision_iff (m : Machine) (request : Frame.CallRequest) (p : CallPreparation.Prepared)
+    (child : Frame.State) (result : Transition) :
+    (if p.address.val == 3 then ripemdCall ⟨p.parent, request, m.depth, false⟩ child m.callers
+      else if isPrecompile p.address then .done (.tooling child .precompile)
+      else .next ⟨child, m.depth + 1, ⟨p.parent, request, m.depth, false⟩ :: m.callers⟩) = result ↔
+      StaticChildDecision m request p child result := by
+  by_cases h3 : p.address.val = 3
+  · simp only [StaticChildDecision, h3, true_and, ne_eq, not_true_eq_false, false_and, or_false]
+    exact ripemdCall_iff _ _ _ _
+  · have hb : (p.address.val == 3) = false := beq_eq_false_iff_ne.mpr h3
+    by_cases hp : PrecompileAddress p.address
+    · have hc := (precompileAddress_iff p.address).mpr hp
+      simp [StaticChildDecision, hb, h3, hc, hp, eq_comm]
+    · have hc : isPrecompile p.address = false := by
+        cases he : isPrecompile p.address <;> simp_all [precompileAddress_iff]
+      simp [StaticChildDecision, hb, h3, hc, hp, eq_comm]
+
+/-- The STATICCALL lifecycle after preparation: depth rejection or child entry. -/
+def StaticDecision (m : Machine) (request : Frame.CallRequest) (p : CallPreparation.Prepared)
+    (result : Transition) : Prop :=
+  (1024 < m.depth + 1 ∧ StaticRejectSpec m p result) ∨
+  (m.depth + 1 ≤ 1024 ∧ ∃ child, StaticEntry p child ∧ StaticChildDecision m request p child result)
+
+theorem staticDispatch_iff (m : Machine) (request : Frame.CallRequest) (p : CallPreparation.Prepared)
+    (result : Transition) : staticDispatch m request p = result ↔ StaticDecision m request p result := by
+  by_cases hd : 1024 < m.depth + 1
+  · simp only [staticDispatch, hd, ↓reduceIte, StaticDecision, true_and, Nat.not_le_of_gt hd, false_and, or_false]
+    exact staticReject_iff m p result
+  · have hl : m.depth + 1 ≤ 1024 := Nat.le_of_not_gt hd
+    simp only [staticDispatch, hd, ↓reduceIte, StaticDecision, false_and, false_or, hl, true_and]
+    constructor
+    · intro h
+      exact ⟨staticChildFrame p, (staticEntry_iff p _).mp rfl,
+        (staticChildDecision_iff m request p _ result).mp h⟩
+    · rintro ⟨child, he, hr⟩
+      have heq := (staticEntry_iff p child).mpr he
+      subst child
+      exact (staticChildDecision_iff m request p _ result).mpr hr
+
+/-- Preparation failures route like CALL; a ready preparation enters the static lifecycle. -/
+def StaticPrepDecision (m : Machine) (request : Frame.CallRequest) (prep : CallPreparation.Result)
+    (result : Transition) : Prop :=
+  match prep with
+  | .outOfGas diagnostic => ExceptionalRoute m diagnostic .outOfGas result
+  | .tooling diagnostic reason => result = .done (.tooling diagnostic (.preparation reason))
+  | .ready p => StaticDecision m request p result
+
+def StaticRoute (m : Machine) (input : Frame.State) (request : Frame.CallRequest) (result : Transition) : Prop :=
+  ∃ prep, StaticCall.OutcomeSpec input request prep ∧ StaticPrepDecision m request prep result
+
+theorem staticPrepDecision_iff (m : Machine) (request : Frame.CallRequest) (prep : CallPreparation.Result)
+    (result : Transition) :
+    (match prep with
+    | .outOfGas diagnostic => exceptional diagnostic .outOfGas m.callers
+    | .tooling diagnostic reason => .done (.tooling diagnostic (.preparation reason))
+    | .ready p => staticDispatch m request p) = result ↔
+      StaticPrepDecision m request prep result := by
+  cases prep with
+  | outOfGas diagnostic => exact exceptionalRoute_iff m diagnostic .outOfGas result
+  | tooling diagnostic reason => simp [StaticPrepDecision, eq_comm]
+  | ready p => exact staticDispatch_iff m request p result
+
+theorem staticRoute_iff (m : Machine) (input : Frame.State) (request : Frame.CallRequest) (result : Transition)
+    (hframe : Frame.step m.frame = .staticCallRequest input request) :
+    step m = result ↔ StaticRoute m input request result := by
+  simp only [step, hframe]
+  constructor
+  · intro h
+    exact ⟨StaticCall.prepare input request, (StaticCall.prepare_iff _ _ _).mp rfl,
+      (staticPrepDecision_iff _ _ _ _).mp h⟩
+  · rintro ⟨prep, hp, hr⟩
+    have he := (StaticCall.prepare_iff input request prep).mpr hp
+    rw [he]
+    exact (staticPrepDecision_iff _ _ _ _).mpr hr
+
 def StepSpec (m : Machine) (result : Transition) : Prop :=
   ∃ outcome, Frame.Rule m.frame outcome ∧
     match outcome with
     | .callRequest input request => CallRoute m input request result
+    | .staticCallRequest input request => StaticRoute m input request result
     | _ => NonCallRoute m outcome result
 
 theorem step_iff_spec (m : Machine) (result : Transition) : step m = result ↔ StepSpec m result := by
@@ -372,6 +505,7 @@ theorem step_iff_spec (m : Machine) (result : Transition) : step m = result ↔ 
     refine ⟨Frame.step m.frame, (Frame.step_iff_rule _ _).mp rfl, ?_⟩
     cases hframe : Frame.step m.frame with
     | callRequest input request => exact (callRoute_iff m input request result hframe).mp h
+    | staticCallRequest input request => exact (staticRoute_iff m input request result hframe).mp h
     | «continue» s => exact (nonCallRoute_iff m _ result hframe trivial).mp h
     | stop s => exact (nonCallRoute_iff m _ result hframe trivial).mp h
     | returned s bytes => exact (nonCallRoute_iff m _ result hframe trivial).mp h
@@ -382,6 +516,7 @@ theorem step_iff_spec (m : Machine) (result : Transition) : step m = result ↔ 
     have hframe := (Frame.step_iff_rule _ _).mpr hrule
     cases outcome with
     | callRequest input request => exact (callRoute_iff m input request result hframe).mpr hroute
+    | staticCallRequest input request => exact (staticRoute_iff m input request result hframe).mpr hroute
     | «continue» s => exact (nonCallRoute_iff m _ result hframe trivial).mpr hroute
     | stop s => exact (nonCallRoute_iff m _ result hframe trivial).mpr hroute
     | returned s bytes => exact (nonCallRoute_iff m _ result hframe trivial).mpr hroute

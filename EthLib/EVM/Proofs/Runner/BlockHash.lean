@@ -89,5 +89,6 @@ theorem program_memory (fuel : Nat) (s : Frame.State) (code : s.code = program) 
     | exception input e => trivial
     | unsupported input op => trivial
     | callRequest input request => trivial
+    | staticCallRequest input request => trivial
 
 end EthLib.EVM.Runner.BlockHashProgram

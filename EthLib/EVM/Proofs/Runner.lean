@@ -50,6 +50,7 @@ theorem stops_of_run {fuel : Nat} {s t : Frame.State}
     | exception input reason => simp [run, hs] at h
     | unsupported input op => simp [run, hs] at h
     | callRequest input request => simp [run, hs] at h
+    | staticCallRequest input request => simp [run, hs] at h
 
 /-- A finite trace ending in any terminal EVM or tooling result. -/
 inductive Terminates : Frame.State → Nat → Result → Prop where
@@ -62,6 +63,8 @@ inductive Terminates : Frame.State → Nat → Result → Prop where
       Terminates s 1 (.unsupported input op)
   | callRequest {s input request} : Frame.Rule s (.callRequest input request) →
       Terminates s 1 (.unsupported input .call)
+  | staticCallRequest {s input request} : Frame.Rule s (.staticCallRequest input request) →
+      Terminates s 1 (.unsupported input .staticcall)
   | next {s t n result} : Frame.Rule s (.continue t) → Terminates t n result →
       Terminates s (n + 1) result
 
@@ -75,6 +78,7 @@ theorem run_of_terminates {s : Frame.State} {n : Nat} {result : Result}
   | exception hs => intro extra; simp [Nat.one_add, run, Frame.rule_sound hs]
   | unsupported hs => intro extra; simp [Nat.one_add, run, Frame.rule_sound hs]
   | callRequest hs => intro extra; simp [Nat.one_add, run, Frame.rule_sound hs]
+  | staticCallRequest hs => intro extra; simp [Nat.one_add, run, Frame.rule_sound hs]
   | next hs _ ih =>
     intro extra
     have := ih extra
@@ -116,6 +120,10 @@ theorem terminates_of_run {fuel : Nat} {s : Frame.State} {result : Result}
       simp [run, hs] at h
       subst result
       exact ⟨1, by omega, .callRequest ((Frame.step_iff_rule _ _).mp hs)⟩
+    | staticCallRequest input request =>
+      simp [run, hs] at h
+      subst result
+      exact ⟨1, by omega, .staticCallRequest ((Frame.step_iff_rule _ _).mp hs)⟩
 
 /-- Exactly `n` independent continuing frame rules. -/
 inductive Continues : Frame.State → Nat → Frame.State → Prop where
@@ -142,6 +150,7 @@ theorem run_exhausted_iff (fuel : Nat) (s t : Frame.State) :
       | exception input e => simp [run, hs] at h
       | unsupported input op => simp [run, hs] at h
       | callRequest input request => simp [run, hs] at h
+      | staticCallRequest input request => simp [run, hs] at h
     · intro h
       cases h with
       | next hs ht =>
@@ -192,6 +201,7 @@ theorem run_not_reverted (fuel : Nat) (s input : Frame.State) (gas : Nat)
     | exception next e => simp [run, hs]
     | unsupported next op => simp [run, hs]
     | callRequest next request => simp [run, hs]
+    | staticCallRequest next request => simp [run, hs]
 
 /-- A terminal trace without REVERT cannot end in a reverted result. -/
 theorem terminates_not_reverted {s : Frame.State} {n : Nat} {input : Frame.State}
@@ -266,6 +276,9 @@ theorem run_code_unchanged (fuel : Nat) (s : Frame.State) :
     | callRequest input request =>
       have same := Frame.outcome_code_unchanged ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | staticCallRequest input request =>
+      have same := Frame.outcome_code_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
 
 /-- All bounded runs preserve context. -/
 theorem run_context_unchanged (fuel : Nat) (s : Frame.State) :
@@ -296,6 +309,9 @@ theorem run_context_unchanged (fuel : Nat) (s : Frame.State) :
     | callRequest input request =>
       have same := Frame.outcome_context_unchanged ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | staticCallRequest input request =>
+      have same := Frame.outcome_context_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
 
 /-- All bounded runs preserve return data. -/
 theorem run_returnData_unchanged (fuel : Nat) (s : Frame.State) :
@@ -324,6 +340,9 @@ theorem run_returnData_unchanged (fuel : Nat) (s : Frame.State) :
       have same := Frame.outcome_returnData_unchanged ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
     | callRequest input request =>
+      have same := Frame.outcome_returnData_unchanged ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | staticCallRequest input request =>
       have same := Frame.outcome_returnData_unchanged ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
 
@@ -363,6 +382,9 @@ theorem run_memory_unchanged_of_pure (fuel : Nat) (s : Frame.State)
       have same := Frame.outcome_memory_unchanged_of_pure current ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
     | callRequest input request =>
+      have same := Frame.outcome_memory_unchanged_of_pure current ((Frame.step_iff_rule _ _).mp hs)
+      simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
+    | staticCallRequest input request =>
       have same := Frame.outcome_memory_unchanged_of_pure current ((Frame.step_iff_rule _ _).mp hs)
       simpa [run, hs, Result.frame, Frame.Outcome.frame] using same
 

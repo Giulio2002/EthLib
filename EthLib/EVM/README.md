@@ -291,9 +291,11 @@ The decoder and scanner do not model frames, gas, stack effects or instruction e
 
 The frame runner supports STOP, JUMP, JUMPI, JUMPDEST, PC, MSIZE, GAS, MLOAD, MSTORE, MSTORE8, MCOPY, CALLDATALOAD, CALLDATASIZE, CALLDATACOPY, CODESIZE, CODECOPY, PUSH0 through PUSH32, POP, arithmetic, comparison and bitwise instructions, DUP1 through DUP16, SWAP1 through SWAP16, DUPN, SWAPN and EXCHANGE.
 The frame dispatcher also suspends CALL after checking and popping its operands.
-`NestedRunner` handles the supported CALL path and RIPEMD-160 at address 3, while unavailable precompiles and delegation remain tooling outcomes.
-The legacy `Runner` exposes that suspension as unsupported.
-CALLCODE, DELEGATECALL and STATICCALL are not integrated.
+It suspends STATICCALL after popping its six operands, with a zero value and no static-context check of its own.
+`NestedRunner` handles the supported CALL and STATICCALL paths and RIPEMD-160 at address 3, while unavailable precompiles and delegation remain tooling outcomes.
+A STATICCALL child always runs with the static flag set, so SSTORE, TSTORE, LOG0 through LOG4 and a CALL with nonzero value fail in it with `writeInStaticContext`.
+The legacy `Runner` exposes both suspensions as unsupported.
+CALLCODE, DELEGATECALL and the CREATE family are not integrated.
 The implemented arithmetic and bitwise instructions are ADD, MUL, SUB, DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD, EXP, LT, GT, SLT, SGT, EQ, ISZERO, AND, OR, XOR, NOT, SHL, SHR, SAR, BYTE and SIGNEXTEND.
 The arithmetic, comparison and bitwise instructions have independent success, underflow and out-of-gas rules.
 Operand checks precede charging gas.
@@ -904,6 +906,8 @@ A caller that charged a new account must perform that refund separately; this tr
 CREATE additionally validates and deposits code and clears return data on success, which this transition does not implement.
 The standalone settlement foundation does not itself decode CALL or CREATE, enter children, transfer value or copy output memory.
 The separate `NestedRunner` executes a partial CALL path, including value transfer, child settlement and the RIPEMD-160 precompile at address 3.
-Other precompiles and delegation remain tooling boundaries, and CALLCODE, DELEGATECALL and STATICCALL are not integrated.
-The legacy `Runner` reports a CALL suspension as unsupported instead of executing a child.
+It executes STATICCALL through the same settlement and precompile path.
+STATICCALL preparation follows Amsterdam `vm/instructions/system.py` `staticcall`: it charges no transfer cost, makes no new-account charge and reads no sender balance, so the only preflight rejection is the depth limit.
+Other precompiles and delegation remain tooling boundaries, and CALLCODE and DELEGATECALL are not integrated.
+The legacy `Runner` reports a CALL or STATICCALL suspension as unsupported instead of executing a child.
 CREATE, accounts scheduled for deletion and transaction settlement remain outside this scope.

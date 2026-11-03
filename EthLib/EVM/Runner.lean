@@ -49,5 +49,6 @@ def run : Nat → Frame.State → Result
     | .exception input reason => .exception input reason
     | .unsupported input op => .unsupported input op
     | .callRequest input _ => .unsupported input .call
+    | .staticCallRequest input _ => .unsupported input .staticcall
 
 end EthLib.EVM.Runner

@@ -2337,6 +2337,45 @@ theorem extCodeBytes_eq (s : State) (a : World.Address) :
   · simp [TransactionAccount.getCode, ExtCodeBytes, World.getCode, BalanceRead, empty]
     cases s.tracker.writes.codeWrites.lookup (BalanceAccount s a).codeHash <;> simp
 
+/-- STATICCALL dispatches to its entry helper. -/
+theorem step_staticcall (s : State) (at_ : At s (some .staticcall)) : step s = staticCallEntry s := by
+  obtain ⟨bounds, decoded⟩ := at_
+  simp only [step, bounds, decoded, ↓reduceDIte]
+
+/-- Six source-order operands suspend with the zero-value request. -/
+theorem staticCallEntry_items (s : State) (stack : Stack)
+    (gas address inputOffset inputSize outputOffset outputSize : Word)
+    (items : s.stack.val = gas :: address :: inputOffset :: inputSize :: outputOffset :: outputSize :: stack.val) :
+    staticCallEntry s = .staticCallRequest { s with stack }
+      ⟨gas, address, 0, inputOffset, inputSize, outputOffset, outputSize⟩ := by
+  unfold staticCallEntry
+  split
+  · simp_all
+  · rename_i impossible
+    exact False.elim (impossible gas address inputOffset inputSize outputOffset outputSize stack.val items)
+
+/-- Fewer than six operands underflow after the available stack is consumed. -/
+theorem staticCallEntry_short (s : State) (short : s.stack.val.length < 6) :
+    staticCallEntry s = .exception { s with stack := Stack.empty } .stackUnderflow := by
+  cases h : s.stack.val with
+  | nil => simp [staticCallEntry, h, failStack]
+  | cons a xs =>
+    cases xs with
+    | nil => simp [staticCallEntry, h, failStack]
+    | cons b xs =>
+      cases xs with
+      | nil => simp [staticCallEntry, h, failStack]
+      | cons c xs =>
+        cases xs with
+        | nil => simp [staticCallEntry, h, failStack]
+        | cons d xs =>
+          cases xs with
+          | nil => simp [staticCallEntry, h, failStack]
+          | cons e xs =>
+            cases xs with
+            | nil => simp [staticCallEntry, h, failStack]
+            | cons f xs => simp [h] at short; omega
+
 theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out := by
   cases h with
   | endCode end_ => exact step_end _ end_
@@ -2389,6 +2428,12 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
       · simp_all
       · rename_i impossible
         exact False.elim (impossible gas address value inputOffset inputSize outputOffset outputSize stack.val items)
+  | staticCallUnderflow at_ short =>
+    rw [step_staticcall _ at_]
+    exact staticCallEntry_short _ short
+  | staticCallSuspend stack gas address inputOffset inputSize outputOffset outputSize at_ items =>
+    rw [step_staticcall _ at_]
+    exact staticCallEntry_items _ stack gas address inputOffset inputSize outputOffset outputSize items
 
   | finishEmpty kind at_ empty =>
     obtain ⟨bounds, decoded⟩ := at_
@@ -4044,6 +4089,14 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
                   exact ⟨_, .returnDataCopy s t x y z rest at_ items gas bounds (by simp [AdvancesMemory, t, stack])⟩
                 · exact ⟨_, .returnDataCopyBounds s x y z rest at_ items gas (Nat.lt_of_not_ge bounds)⟩
               · exact ⟨_, .returnDataCopyGas s x y z rest at_ items (Nat.lt_of_not_ge gas)⟩
+      | staticcall =>
+        by_cases short : s.stack.val.length < 6
+        · exact ⟨_, .staticCallUnderflow s at_ short⟩
+        · match items : s.stack.val with
+          | gas :: address :: inputOffset :: inputSize :: outputOffset :: outputSize :: rest =>
+            let stack : Stack := ⟨rest, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+            exact ⟨_, .staticCallSuspend s stack gas address inputOffset inputSize outputOffset outputSize at_ items⟩
+          | [] | [_] | [_, _] | [_, _, _] | [_, _, _, _] | [_, _, _, _, _] => simp [items] at short
       | call =>
         cases items : s.stack.val with
         | nil => exact ⟨_, .callUnderflow s at_ (by simp_all)⟩
