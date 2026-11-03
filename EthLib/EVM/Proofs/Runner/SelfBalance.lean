@@ -16,6 +16,14 @@ def NoSstoreRun : Nat → Frame.State → Prop
       | .continue t => NoSstoreRun fuel t
       | _ => True
 
+/-- Every instruction in this bounded trace is different from TSTORE. -/
+def NoTstoreRun : Nat → Frame.State → Prop
+  | 0, _ => True
+  | fuel + 1, s => ¬ Frame.At s (some .tstore) ∧
+      match Frame.step s with
+      | .continue t => NoTstoreRun fuel t
+      | _ => True
+
 end EthLib.EVM.Runner
 
 namespace EthLib.EVM.Runner.SelfBalanceProgram
@@ -55,8 +63,8 @@ theorem run (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
   have result := Runner.run_of_terminates trace 0
   exact ⟨s3, by simpa [s] using result, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-/-- Every bounded outcome without SSTORE preserves the tracker parent, writes, created accounts and snapshots. -/
-theorem run_tracker_retained (fuel : Nat) (s : Frame.State) (trace : Runner.NoSstoreRun fuel s) :
+/-- Every bounded outcome without SSTORE or TSTORE preserves the tracker parent, writes, created accounts and snapshots. -/
+theorem run_tracker_retained (fuel : Nat) (s : Frame.State) (trace : Runner.NoSstoreRun fuel s) (noTransient : Runner.NoTstoreRun fuel s) :
     (Runner.run fuel s).frame.tracker.parent = s.tracker.parent ∧
     (Runner.run fuel s).frame.tracker.writes = s.tracker.writes ∧
     (Runner.run fuel s).frame.tracker.createdAccounts = s.tracker.createdAccounts ∧
@@ -67,22 +75,53 @@ theorem run_tracker_retained (fuel : Nat) (s : Frame.State) (trace : Runner.NoSs
     have current := trace.1
     cases hs : Frame.step s with
     | «continue» next =>
-      have same := Frame.outcome_tracker_retained current ((Frame.step_iff_rule _ _).mp hs)
+      have same := Frame.outcome_tracker_retained current noTransient.1 ((Frame.step_iff_rule _ _).mp hs)
+      have rest := ih next (by simpa [Runner.NoSstoreRun, hs] using trace.2)
+        (by simpa [Runner.NoTstoreRun, hs] using noTransient.2)
+      simp only [Frame.Outcome.frame] at same
+      simp only [Runner.run, hs]
+      exact ⟨rest.1.trans same.1, rest.2.1.trans same.2.1,
+        rest.2.2.1.trans same.2.2.1, rest.2.2.2.trans same.2.2.2⟩
+    | stop next =>
+      have same := Frame.outcome_tracker_retained current noTransient.1 ((Frame.step_iff_rule _ _).mp hs)
+      simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
+
+    | revert input gas output => exact False.elim (Frame.step_not_revert s input gas output hs)
+    | exception input e =>
+      have same := Frame.outcome_tracker_retained current noTransient.1 ((Frame.step_iff_rule _ _).mp hs)
+      simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
+    | unsupported input op =>
+      have same := Frame.outcome_tracker_retained current noTransient.1 ((Frame.step_iff_rule _ _).mp hs)
+      simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
+
+/-- Every bounded outcome without SSTORE retains the persistent write components. -/
+theorem run_persistent_writes_unchanged_of_no_sstore (fuel : Nat) (s : Frame.State)
+    (trace : Runner.NoSstoreRun fuel s) :
+    (Runner.run fuel s).frame.tracker.writes.accountWrites = s.tracker.writes.accountWrites ∧
+    (Runner.run fuel s).frame.tracker.writes.storageWrites = s.tracker.writes.storageWrites ∧
+    (Runner.run fuel s).frame.tracker.writes.codeWrites = s.tracker.writes.codeWrites ∧
+    (Runner.run fuel s).frame.tracker.writes.storageClears = s.tracker.writes.storageClears := by
+  induction fuel generalizing s with
+  | zero => simp [Runner.run, Result.frame]
+  | succ fuel ih =>
+    have current := trace.1
+    cases hs : Frame.step s with
+    | «continue» next =>
+      have same := Frame.outcome_persistent_writes_unchanged_of_not_sstore current ((Frame.step_iff_rule _ _).mp hs)
       have rest := ih next (by simpa [Runner.NoSstoreRun, hs] using trace.2)
       simp only [Frame.Outcome.frame] at same
       simp only [Runner.run, hs]
       exact ⟨rest.1.trans same.1, rest.2.1.trans same.2.1,
         rest.2.2.1.trans same.2.2.1, rest.2.2.2.trans same.2.2.2⟩
     | stop next =>
-      have same := Frame.outcome_tracker_retained current ((Frame.step_iff_rule _ _).mp hs)
+      have same := Frame.outcome_persistent_writes_unchanged_of_not_sstore current ((Frame.step_iff_rule _ _).mp hs)
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
-
     | revert input gas output => exact False.elim (Frame.step_not_revert s input gas output hs)
     | exception input e =>
-      have same := Frame.outcome_tracker_retained current ((Frame.step_iff_rule _ _).mp hs)
+      have same := Frame.outcome_persistent_writes_unchanged_of_not_sstore current ((Frame.step_iff_rule _ _).mp hs)
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
     | unsupported input op =>
-      have same := Frame.outcome_tracker_retained current ((Frame.step_iff_rule _ _).mp hs)
+      have same := Frame.outcome_persistent_writes_unchanged_of_not_sstore current ((Frame.step_iff_rule _ _).mp hs)
       simpa [Runner.run, hs, Result.frame, Frame.Outcome.frame] using same
 
 /-- Every bounded outcome retains the transaction parent, created markers, and snapshots. -/

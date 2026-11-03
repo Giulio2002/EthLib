@@ -62,9 +62,9 @@ theorem unsupported_result (fuel : Nat) (s t : Frame.State) (op : Opcode) (trace
 
 -- These applications use opcode exclusions, not an assumed output equality.
 theorem writes_step (s : Frame.State) (out : Frame.Outcome)
-    (notSstore : ¬ Frame.At s (some .sstore)) (rule : Frame.Rule s out) :
+    (notSstore : ¬ Frame.At s (some .sstore)) (notTstore : ¬ Frame.At s (some .tstore)) (rule : Frame.Rule s out) :
     out.frame.tracker.writes = s.tracker.writes :=
-  (Frame.outcome_tracker_retained notSstore rule).2.1
+  (Frame.outcome_tracker_retained notSstore notTstore rule).2.1
 
 theorem warm_slots_step (s : Frame.State) (out : Frame.Outcome)
     (notSload : ¬ Frame.At s (some .sload)) (notSstore : ¬ Frame.At s (some .sstore))
@@ -82,42 +82,42 @@ theorem state_gas_actual_step (s : Frame.State) (notSstore : ¬ Frame.At s (some
 
 theorem tracker_actual_step (s : Frame.State) (notSelf : ¬ Frame.At s (some .selfbalance))
     (notBalance : ¬ Frame.At s (some .balance)) (notSload : ¬ Frame.At s (some .sload))
-    (notSstore : ¬ Frame.At s (some .sstore)) : (Frame.step s).frame.tracker = s.tracker :=
-  Frame.outcome_tracker_unchanged_of_not_selfBalance notSelf notBalance notSload notSstore
+    (notSstore : ¬ Frame.At s (some .sstore)) (notTstore : ¬ Frame.At s (some .tstore)) : (Frame.step s).frame.tracker = s.tracker :=
+  Frame.outcome_tracker_unchanged_of_not_selfBalance notSelf notBalance notSload notSstore notTstore
     ((Frame.step_iff_rule s _).mp rfl)
 
 theorem account_read_balance (s : Frame.State) (at_ : Frame.At s (some .balance)) :
     (Frame.step s).frame.tracker = s.tracker ∨
     (∃ a, (Frame.step s).frame.tracker = Frame.BalanceRead s a) ∨
     ∃ key, (Frame.step s).frame.tracker = Frame.SloadRead s key :=
-  Frame.outcome_tracker_read (notAtOfAt at_ (by decide)) ((Frame.step_iff_rule s _).mp rfl)
+  Frame.outcome_tracker_read (notAtOfAt at_ (by decide)) (notAtOfAt at_ (by decide)) ((Frame.step_iff_rule s _).mp rfl)
 
 theorem account_read_selfbalance (s : Frame.State) (at_ : Frame.At s (some .selfbalance)) :
     (Frame.step s).frame.tracker = s.tracker ∨
     (∃ a, (Frame.step s).frame.tracker = Frame.BalanceRead s a) ∨
     ∃ key, (Frame.step s).frame.tracker = Frame.SloadRead s key :=
-  Frame.outcome_tracker_read (notAtOfAt at_ (by decide)) ((Frame.step_iff_rule s _).mp rfl)
+  Frame.outcome_tracker_read (notAtOfAt at_ (by decide)) (notAtOfAt at_ (by decide)) ((Frame.step_iff_rule s _).mp rfl)
 
-theorem writes_exhausted (fuel : Nat) (s t : Frame.State) (trace : Runner.NoSstoreRun fuel s)
+theorem writes_exhausted (fuel : Nat) (s t : Frame.State) (trace : Runner.NoSstoreRun fuel s) (noTransient : Runner.NoTstoreRun fuel s)
     (run : Runner.run fuel s = .exhausted t) : t.tracker.writes = s.tracker.writes := by
-  have result := (Runner.SelfBalanceProgram.run_tracker_retained fuel s trace).2.1
+  have result := (Runner.SelfBalanceProgram.run_tracker_retained fuel s trace noTransient).2.1
   simpa [run, Runner.Result.frame] using result
 
-theorem writes_stopped (fuel : Nat) (s t : Frame.State) (trace : Runner.NoSstoreRun fuel s)
+theorem writes_stopped (fuel : Nat) (s t : Frame.State) (trace : Runner.NoSstoreRun fuel s) (noTransient : Runner.NoTstoreRun fuel s)
     (run : Runner.run fuel s = .stopped t) : t.tracker.writes = s.tracker.writes := by
-  have result := (Runner.SelfBalanceProgram.run_tracker_retained fuel s trace).2.1
+  have result := (Runner.SelfBalanceProgram.run_tracker_retained fuel s trace noTransient).2.1
   simpa [run, Runner.Result.frame] using result
 
 theorem writes_exception (fuel : Nat) (s t : Frame.State) (reason : Frame.Exception)
-    (trace : Runner.NoSstoreRun fuel s) (run : Runner.run fuel s = .exception t reason) :
+    (trace : Runner.NoSstoreRun fuel s) (noTransient : Runner.NoTstoreRun fuel s) (run : Runner.run fuel s = .exception t reason) :
     t.tracker.writes = s.tracker.writes := by
-  have result := (Runner.SelfBalanceProgram.run_tracker_retained fuel s trace).2.1
+  have result := (Runner.SelfBalanceProgram.run_tracker_retained fuel s trace noTransient).2.1
   simpa [run, Runner.Result.frame] using result
 
 theorem writes_unsupported (fuel : Nat) (s t : Frame.State) (op : Opcode)
-    (trace : Runner.NoSstoreRun fuel s) (run : Runner.run fuel s = .unsupported t op) :
+    (trace : Runner.NoSstoreRun fuel s) (noTransient : Runner.NoTstoreRun fuel s) (run : Runner.run fuel s = .unsupported t op) :
     t.tracker.writes = s.tracker.writes := by
-  have result := (Runner.SelfBalanceProgram.run_tracker_retained fuel s trace).2.1
+  have result := (Runner.SelfBalanceProgram.run_tracker_retained fuel s trace noTransient).2.1
   simpa [run, Runner.Result.frame] using result
 
 theorem static_retained (fuel : Nat) (s : Frame.State) :

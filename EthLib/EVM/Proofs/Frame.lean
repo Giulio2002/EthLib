@@ -2307,12 +2307,77 @@ theorem blockHashValue_iff (history : List Word) (current index value : Word) :
     · intro h
       exact Or.inr ⟨outside.elim Or.inl (fun h => Or.inr (Or.inl h)), h⟩
 
+/-- The representation-level transient rule fixes the tracker exactly. -/
+theorem transient_write_fields_unique (s t : TransactionState.State) (a : World.Address) (key value : Word)
+    (fields : TransientWriteFields s t a key value) :
+    t = TransactionTracker.setTransientStorage s a key value := by
+  rcases fields with ⟨parent, reads, storageReads, created, snapshots, accounts, storage, code, clears, transient⟩
+  cases s with
+  | mk sp sw sr ss sc sn =>
+    cases t with
+    | mk tp tw tr ts tc tn =>
+      cases sw
+      cases tw
+      by_cases zero : value = 0 <;> simp_all [TransactionTracker.setTransientStorage]
+
+/-- The executable write satisfies every representation-level field constraint. -/
+theorem transient_write_fields (s : TransactionState.State) (a : World.Address) (key value : Word) :
+    TransientWriteFields s (TransactionTracker.setTransientStorage s a key value) a key value := by
+  by_cases zero : value = 0#256 <;> simp [TransientWriteFields, TransactionTracker.setTransientStorage, zero]
+
 theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out := by
   cases h with
   | endCode end_ => exact step_end _ end_
   | stop at_ => exact step_stop _ at_
   | invalid at_ => rcases at_ with h | h; exact step_unassigned _ h; exact step_invalid _ h
   | unsupported op at_ unsupported => exact step_unsupported _ op at_ unsupported
+  | tloadUnderflow at_ empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    simp [step, bounds, decoded, tload, pop, failStack]
+  | tloadGas rest key at_ items gas =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    simp [step, bounds, decoded, tload, pop, charge, Gas.charge, Nat.not_le.mpr gas]
+  | tload t rest key at_ items gas fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have room : rest.val.length < 1024 := by have b := s.stack.property; rw [items] at b; simp at b; omega
+    let stack : Stack := ⟨TransientValueRule s key :: rest.val, by simp; omega⟩
+    have push : rest.push (TransientValueRule s key) = .ok stack :=
+      (Proofs.Stack.push_ok_iff _ _ _).mpr ⟨room, rfl⟩
+    have eq := advances_eq s t (s.pc + 1) (s.gas - 100) stack fields
+    subst t
+    have value : TransactionTracker.getTransientStorage s.tracker s.context.environment.currentTarget key =
+        TransientValueRule s key := rfl
+    simp [step, bounds, decoded, tload, pop, charge, Gas.charge, gas, value, push]
+  | tstoreStatic at_ static =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp [step, bounds, decoded, tstore, static]
+  | tstoreUnderflow at_ static empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    simp [step, bounds, decoded, tstore, static, pop, failStack]
+  | tstoreSecondUnderflow rest key at_ static items empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have pop' := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    simp [step, bounds, decoded, tstore, static, pop, pop', failStack]
+  | tstoreGas first rest key value at_ static items items' gas =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have pop' := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    simp [step, bounds, decoded, tstore, static, pop, pop', charge, Gas.charge, Nat.not_le.mpr gas]
+  | tstore t first rest key value tracker at_ static items items' gas written fields =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have pop' := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    have eqTracker := transient_write_fields_unique s.tracker tracker s.context.environment.currentTarget key value written
+    subst tracker
+    have eq := advances_eq { s with tracker := TransactionTracker.setTransientStorage s.tracker s.context.environment.currentTarget key value }
+      t (s.pc + 1) (s.gas - 100) rest fields
+    subst t
+    simp [step, bounds, decoded, tstore, static, pop, pop', charge, Gas.charge, gas]
   | sstoreStatic at_ static =>
     obtain ⟨bounds, decoded⟩ := at_
     simp [step, bounds, decoded, sstore, static]
@@ -2704,6 +2769,38 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
       cases op with
       | stop => exact ⟨_, .stop s at_⟩
       | invalid => exact ⟨_, .invalid s (Or.inr at_)⟩
+      | tload =>
+        cases items : s.stack.val with
+        | nil => exact ⟨_, .tloadUnderflow s at_ items⟩
+        | cons key xs =>
+          let rest : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+          have items' : s.stack.val = key :: rest.val := items
+          by_cases gas : 100 ≤ s.gas
+          · let stack : Stack := ⟨TransientValueRule s key :: xs, by
+              have b := s.stack.property; rw [items] at b; simp at b; simp; omega⟩
+            let t := { s with stack, pc := s.pc + 1, gas := s.gas - 100 }
+            exact ⟨_, .tload s t rest key at_ items' gas (by simp [Advances, t, stack, rest])⟩
+          · exact ⟨_, .tloadGas s rest key at_ items' (Nat.lt_of_not_ge gas)⟩
+      | tstore =>
+        by_cases static : s.isStatic = true
+        · exact ⟨_, .tstoreStatic s at_ static⟩
+        · have dynamic : s.isStatic = false := by cases h : s.isStatic <;> simp_all
+          cases items : s.stack.val with
+          | nil => exact ⟨_, .tstoreUnderflow s at_ dynamic items⟩
+          | cons key xs =>
+            let first : Stack := ⟨xs, by have b := s.stack.property; rw [items] at b; simp at b; omega⟩
+            have items' : s.stack.val = key :: first.val := items
+            cases second : first.val with
+            | nil => exact ⟨_, .tstoreSecondUnderflow s first key at_ dynamic items' second⟩
+            | cons value ys =>
+              let rest : Stack := ⟨ys, by have b := first.property; rw [second] at b; simp at b; omega⟩
+              have second' : first.val = value :: rest.val := second
+              by_cases gas : 100 ≤ s.gas
+              · let tracker := TransactionTracker.setTransientStorage s.tracker s.context.environment.currentTarget key value
+                let t := { s with tracker, stack := rest, pc := s.pc + 1, gas := s.gas - 100 }
+                exact ⟨_, .tstore s t first rest key value tracker at_ dynamic items' second' gas
+                  (transient_write_fields _ _ _ _) (by simp [Advances, t])⟩
+              · exact ⟨_, .tstoreGas s first rest key value at_ dynamic items' second' (Nat.lt_of_not_ge gas)⟩
       | sstore =>
         by_cases static : s.isStatic = true
         · exact ⟨_, .sstoreStatic s at_ static⟩

@@ -175,6 +175,38 @@ def sload (s : State) : Outcome :=
       | .error e => failStack { input with tracker := result.2, gas } e
       | .ok stack => .continue { input with stack, gas, pc := s.pc + 1, tracker := result.2 }
 
+/-- Amsterdam `storage.py`, `tload`, at revision
+`fd9298410ec7218838c8348f69c1eb633f1797dc`.
+The key is popped before the fixed gas charge. -/
+def tload (s : State) : Outcome :=
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (key, stack) =>
+    let input := { s with stack }
+    charge input 100 fun gas =>
+      let value := TransactionTracker.getTransientStorage s.tracker
+        s.context.environment.currentTarget key
+      match Stack.push stack value with
+      | .error e => failStack { input with gas } e
+      | .ok stack => .continue { input with stack, gas, pc := s.pc + 1 }
+
+/-- Amsterdam `storage.py`, `tstore`, at revision
+`fd9298410ec7218838c8348f69c1eb633f1797dc`.
+Static protection precedes both pops and the fixed gas charge. -/
+def tstore (s : State) : Outcome :=
+  if s.isStatic then .exception s .writeInStaticContext else
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (key, first) =>
+    match Stack.pop first with
+    | .error e => failStack { s with stack := first } e
+    | .ok (value, stack) =>
+      let input := { s with stack }
+      charge input 100 fun gas =>
+        let tracker := TransactionTracker.setTransientStorage s.tracker
+          s.context.environment.currentTarget key value
+        .continue { input with gas, tracker, pc := s.pc + 1 }
+
 /-- Form the source meter using the frame's current execution-gas field. -/
 def stateMeter (s : State) : Gas.StateMeter.Meter :=
   ⟨s.gas, s.stateGas.reservoir, s.stateGas.baseline, s.stateGas.refundCounter,
@@ -397,6 +429,8 @@ def step (s : State) : Outcome :=
     -- Cancun `environment.py`: charge before pushing supplied metadata.
     | some .sload => sload s
     | some .sstore => sstore s
+    | some .tload => tload s
+    | some .tstore => tstore s
     | some .balance => balance s
     | some .selfbalance => selfBalance s
     | some .address => observe s (fun _ => s.context.environment.currentTarget.val)

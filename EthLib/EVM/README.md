@@ -447,7 +447,7 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The augmented 256-byte dispatch regression covers 134 supported instructions and 19 assigned but unsupported instructions.
+The augmented 256-byte dispatch regression covers 136 supported instructions and 17 assigned but unsupported instructions.
 It also covers 102 unassigned bytes and INVALID.
 The historical Cancun subset has 125 supported instructions and 107 unassigned bytes.
 The Cancun-plus-CLZ subset has 126 supported instructions and 106 unassigned bytes.
@@ -717,8 +717,8 @@ The transaction tracker records the account read only after the charge succeeds.
 The list represents a set by membership and may contain duplicates.
 Frame constructors and quantified runner theorems must supply this new argument.
 `Advances` and `AdvancesMemory` now include warm-list equality.
-`outcome_tracker_read` allows one account or storage read when SSTORE is excluded.
-`outcome_tracker_unchanged_of_not_selfBalance` also excludes BALANCE, SLOAD and SSTORE.
+`outcome_tracker_read` allows one account or storage read when SSTORE and TSTORE are excluded.
+`outcome_tracker_unchanged_of_not_selfBalance` also excludes BALANCE, SLOAD, SSTORE and TSTORE.
 The tracker account-read list is separate and survives tracker snapshot rollback.
 The source copies warm sets for child frames and merges them only after successful child execution; this instruction subset does not execute calls or implement that merge.
 No transaction initialization or full Amsterdam execution is claimed.
@@ -743,7 +743,7 @@ Transaction-original storage remains a separate tracker observation.
 `Frame.State` requires an explicit `warmSlots` list; callers supply the initial slot access state.
 The list is a set by membership and may contain duplicates; it is separate from warm addresses and retained tracker storage reads.
 Frame constructors and quantified runner theorems take this additional argument, and `Advances` and `AdvancesMemory` include warm-slot equality.
-`outcome_tracker_read`, `outcome_tracker_retained` and `run_tracker_retained` require SSTORE to be excluded.
+`outcome_tracker_read`, `outcome_tracker_retained` and `run_tracker_retained` require SSTORE and TSTORE to be excluded.
 The runner theorem takes an explicit `NoSstoreRun` trace.
 The source initializes the set from transaction access-list storage keys, copies it into child frames and merges a child's set only on success.
 This instruction subset leaves initialization, child calls and that merge to the caller.
@@ -787,3 +787,21 @@ Execution gas is charged before state gas, and a missing effective account is re
 Transaction initialization, refund settlement and cap, child calls and child rollback are not implemented here.
 The pinned `vm/gas.py` SHA-256 is `67973191c49234387186ad17316c556adab73723f782e95104dd3a949132367c`.
 The pinned `vm/instructions/storage.py` SHA-256 is `c55f677ab99d2c9147d807d0b57bd616d5401d13c8fa92db0afa3f64d7376615`.
+
+## Transient storage opcodes
+
+Amsterdam `storage.py` defines TLOAD at `0x5c` and TSTORE at `0x5d`.
+Both charge 100 execution gas and use the current target and a full 256-bit key.
+TLOAD pops its key before charging and reads the transaction tracker without recording a persistent storage read.
+TSTORE checks the static flag first, pops key and value, charges, then updates transient storage.
+A zero write removes all matching entries from the list representation.
+The tracker retains the original parent, persistent writes, read lists, created accounts and snapshots.
+These operations do not initialize transaction state or implement child calls and their rollback.
+
+`Frame.TransientWriteFields` constrains each tracker field and the exact transient list representation.
+`Frame.tstore_success_observation` connects a successful write to the independent map and set reference.
+`Frame.tstore_iff_local` states source-order cases for every helper input.
+`Runner.NoTstoreRun` excludes TSTORE on every executed step and is required alongside `NoSstoreRun` by `run_tracker_retained`.
+Callers that only need persistent writes can instead use `Frame.outcome_persistent_writes_unchanged_of_not_sstore` or `Frame.step_persistent_writes_unchanged_of_not_sstore`.
+These retain account writes, storage writes, code writes and storage clears while allowing TSTORE.
+For bounded runs, `Runner.SelfBalanceProgram.run_persistent_writes_unchanged_of_no_sstore` needs only `NoSstoreRun` and covers every result.

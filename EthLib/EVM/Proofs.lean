@@ -47,11 +47,13 @@ public import EthLib.EVM.Proofs.KeccakBits
 public import EthLib.EVM.Proofs.FrameArithmetic
 public import EthLib.EVM.Proofs.FrameComparison
 public import EthLib.EVM.Proofs.Frame.Reference
+public import EthLib.EVM.Proofs.Frame.TransientInitial
 public import EthLib.EVM.Proofs.Frame.Memory
 public import EthLib.EVM.Proofs.Runner
 public import EthLib.EVM.Proofs.Runner.StraightLine
 public import EthLib.EVM.Proofs.Runner.Sload
 public import EthLib.EVM.Proofs.Runner.Sstore
+public import EthLib.EVM.Proofs.Runner.Transient
 public import EthLib.EVM.Proofs.Runner.Balance
 public import EthLib.EVM.Proofs.Runner.SelfBalance
 public import EthLib.EVM.Proofs.Runner.Mixed

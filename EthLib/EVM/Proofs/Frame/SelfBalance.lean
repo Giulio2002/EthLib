@@ -108,7 +108,7 @@ theorem outcome_tracker_metadata_retained {s : State} {out : Outcome} (rule : Ru
     out.frame.tracker.snapshots = s.tracker.snapshots := by
   cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SelfBalanceRead, BalanceRead, SloadRead,
     SstoreReady, SstoreReadFields, SstoreCreditFields, SstoreExecutionFields, SstoreChargeFields,
-    SstoreMeterRetained, SstoreWriteFields] <;> aesop
+    SstoreMeterRetained, SstoreWriteFields, TransientWriteFields] <;> aesop
 
 /-- Every rule retains the static-context flag. -/
 theorem outcome_static_retained {s : State} {out : Outcome} (rule : Rule s out) :
@@ -122,25 +122,44 @@ theorem outcome_stateGas_unchanged_of_not_sstore {s : State} {out : Outcome}
     out.frame.stateGas = s.stateGas := by
   cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory]
 
-/-- Every non-SSTORE rule preserves the tracker parent, writes, created accounts and snapshots. -/
-theorem outcome_tracker_retained {s : State} {out : Outcome}
+/-- Every rule except SSTORE retains all persistent write components. -/
+theorem outcome_persistent_writes_unchanged_of_not_sstore {s : State} {out : Outcome}
     (notSstore : ¬ At s (some .sstore)) (rule : Rule s out) :
+    out.frame.tracker.writes.accountWrites = s.tracker.writes.accountWrites ∧
+    out.frame.tracker.writes.storageWrites = s.tracker.writes.storageWrites ∧
+    out.frame.tracker.writes.codeWrites = s.tracker.writes.codeWrites ∧
+    out.frame.tracker.writes.storageClears = s.tracker.writes.storageClears := by
+  cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SelfBalanceRead,
+    BalanceRead, SloadRead, TransientWriteFields]
+
+/-- Every step except SSTORE retains all persistent write components. -/
+theorem step_persistent_writes_unchanged_of_not_sstore (s : State)
+    (notSstore : ¬ At s (some .sstore)) :
+    (step s).frame.tracker.writes.accountWrites = s.tracker.writes.accountWrites ∧
+    (step s).frame.tracker.writes.storageWrites = s.tracker.writes.storageWrites ∧
+    (step s).frame.tracker.writes.codeWrites = s.tracker.writes.codeWrites ∧
+    (step s).frame.tracker.writes.storageClears = s.tracker.writes.storageClears :=
+  outcome_persistent_writes_unchanged_of_not_sstore notSstore ((step_iff_rule s _).mp rfl)
+
+/-- Rules other than SSTORE and TSTORE preserve the tracker parent, writes, created accounts and snapshots. -/
+theorem outcome_tracker_retained {s : State} {out : Outcome}
+    (notSstore : ¬ At s (some .sstore)) (notTstore : ¬ At s (some .tstore)) (rule : Rule s out) :
     out.frame.tracker.parent = s.tracker.parent ∧
     out.frame.tracker.writes = s.tracker.writes ∧
     out.frame.tracker.createdAccounts = s.tracker.createdAccounts ∧
     out.frame.tracker.snapshots = s.tracker.snapshots := by
   cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SelfBalanceRead, BalanceRead, SloadRead]
 
-/-- Each non-SSTORE rule preserves the tracker or records one account or storage read. -/
+/-- Rules other than SSTORE and TSTORE preserve the tracker or record one account or storage read. -/
 theorem outcome_tracker_read {s : State} {out : Outcome}
-    (notSstore : ¬ At s (some .sstore)) (rule : Rule s out) :
+    (notSstore : ¬ At s (some .sstore)) (notTstore : ¬ At s (some .tstore)) (rule : Rule s out) :
     out.frame.tracker = s.tracker ∨ (∃ a, out.frame.tracker = BalanceRead s a) ∨ ∃ key, out.frame.tracker = SloadRead s key := by
   cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SelfBalanceRead, BalanceRead, SloadRead]
 
 /-- A rule at any other instruction preserves the whole transaction tracker. -/
 theorem outcome_tracker_unchanged_of_not_selfBalance {s : State} {out : Outcome}
     (notSelf : ¬ At s (some .selfbalance)) (notBalance : ¬ At s (some .balance)) (notSload : ¬ At s (some .sload))
-    (notSstore : ¬ At s (some .sstore)) (rule : Rule s out) :
+    (notSstore : ¬ At s (some .sstore)) (notTstore : ¬ At s (some .tstore)) (rule : Rule s out) :
     out.frame.tracker = s.tracker := by
   cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory]
 
@@ -148,7 +167,7 @@ theorem outcome_tracker_unchanged_of_not_selfBalance {s : State} {out : Outcome}
 theorem outcome_storageReads_unchanged_of_not_sload {s : State} {out : Outcome}
     (notSload : ¬ At s (some .sload)) (notSstore : ¬ At s (some .sstore)) (rule : Rule s out) :
     out.frame.tracker.storageReads = s.tracker.storageReads := by
-  cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SelfBalanceRead, BalanceRead]
+  cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SelfBalanceRead, BalanceRead, TransientWriteFields]
 
 /-- Every step other than SLOAD and SSTORE preserves the storage-read list. -/
 theorem step_storageReads_unchanged_of_not_sload (s : State)

@@ -25,7 +25,7 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .sstore | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .tload | .tstore | .sstore | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
@@ -339,11 +339,49 @@ inductive SstoreLocal : State → Outcome → Prop where
       SstoreLocal s (.continue result)
 
 /-- Source-oriented rules for one frame transition. -/
+def TransientValueRule (s : State) (key : Word) : Word :=
+  (s.tracker.writes.transientStorage.lookup (s.context.environment.currentTarget, key)).getD 0
+
+/-- Exact transient-write representation and all retained tracker fields. -/
+def TransientWriteFields (s t : TransactionState.State) (a : World.Address) (key value : Word) : Prop :=
+  t.parent = s.parent ∧ t.accountReads = s.accountReads ∧ t.storageReads = s.storageReads ∧
+  t.createdAccounts = s.createdAccounts ∧ t.snapshots = s.snapshots ∧
+  t.writes.accountWrites = s.writes.accountWrites ∧ t.writes.storageWrites = s.writes.storageWrites ∧
+  t.writes.codeWrites = s.writes.codeWrites ∧ t.writes.storageClears = s.writes.storageClears ∧
+  t.writes.transientStorage =
+    (if value = 0 then [] else [((a, key), value)]) ++
+      s.writes.transientStorage.filter (fun entry => entry.1 != (a, key))
+
 inductive Rule : State → Outcome → Prop where
   | endCode (s) : s.code.size ≤ s.pc → Rule s (.stop s)
   | stop (s) : At s (some .stop) → Rule s (.stop { s with pc := s.pc + 1 })
   | invalid (s) : At s none ∨ At s (some .invalid) → Rule s (.exception s .invalidOpcode)
   | unsupported (s op) : At s (some op) → Unsupported op → Rule s (.unsupported s op)
+  | tloadUnderflow (s) : At s (some .tload) → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | tloadGas (s : State) (rest : Stack) (key : Word) :
+      At s (some .tload) → s.stack.val = key :: rest.val → s.gas < 100 →
+      Rule s (.exception { s with stack := rest } .outOfGas)
+  | tload (s t : State) (rest : Stack) (key : Word) :
+      At s (some .tload) → s.stack.val = key :: rest.val → 100 ≤ s.gas →
+      Advances s t (s.pc + 1) (s.gas - 100) (TransientValueRule s key :: rest.val) →
+      Rule s (.continue t)
+  | tstoreStatic (s) : At s (some .tstore) → s.isStatic = true →
+      Rule s (.exception s .writeInStaticContext)
+  | tstoreUnderflow (s) : At s (some .tstore) → s.isStatic = false → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | tstoreSecondUnderflow (s : State) (rest : Stack) (key : Word) :
+      At s (some .tstore) → s.isStatic = false → s.stack.val = key :: rest.val → rest.val = [] →
+      Rule s (.exception { s with stack := rest } .stackUnderflow)
+  | tstoreGas (s : State) (first rest : Stack) (key value : Word) :
+      At s (some .tstore) → s.isStatic = false → s.stack.val = key :: first.val →
+      first.val = value :: rest.val → s.gas < 100 →
+      Rule s (.exception { s with stack := rest } .outOfGas)
+  | tstore (s t : State) (first rest : Stack) (key value : Word) (tracker : TransactionState.State) :
+      At s (some .tstore) → s.isStatic = false → s.stack.val = key :: first.val →
+      first.val = value :: rest.val → 100 ≤ s.gas →
+      TransientWriteFields s.tracker tracker s.context.environment.currentTarget key value →
+      Advances { s with tracker } t (s.pc + 1) (s.gas - 100) rest.val → Rule s (.continue t)
   | sstoreStatic (s) : At s (some .sstore) → s.isStatic = true →
       Rule s (.exception s .writeInStaticContext)
   | sstoreUnderflow (s) : At s (some .sstore) → s.isStatic = false → s.stack.val = [] →
