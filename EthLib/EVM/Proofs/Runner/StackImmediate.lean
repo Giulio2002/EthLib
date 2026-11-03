@@ -13,16 +13,16 @@ def program : ByteArray := ⟨#[0xe6, 0x80, 0xe7, 0x80, 0xe8, 0x9d, 0x00]⟩
 /-- The program preserves the supplied context, memory, return data, and tail. -/
 theorem run (a b c z : Word) (xs : List Word) (room : xs.length ≤ 1006)
     (g : Nat) (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
-    (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) :
+    (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) :
     ∃ t, Runner.run 4 ⟨program, 0,
       ⟨a :: b :: c :: List.replicate 14 z ++ xs, by simp; omega⟩,
-      9 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots⟩ = .stopped t ∧
+      9 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩ = .stopped t ∧
       t.pc = 7 ∧ t.gas = g ∧ t.code = program ∧ t.memory = mem ∧
       t.context = context ∧ t.returnData = returnData ∧
       t.stack.val = z :: a :: c :: b :: List.replicate 14 z ++ xs := by
   let s : Frame.State := ⟨program, 0,
     ⟨a :: b :: c :: List.replicate 14 z ++ xs, by simp; omega⟩,
-    9 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots⟩
+    9 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩
   let s1 : Frame.State := { s with pc := 2, gas := 6 + g, stack := ⟨z :: a :: b :: c :: List.replicate 14 z ++ xs, by simp; omega⟩ }
   let s2 : Frame.State := { s1 with pc := 4, gas := 3 + g }
   let s3 : Frame.State := { s2 with pc := 6, gas := g, stack := ⟨z :: a :: c :: b :: List.replicate 14 z ++ xs, by simp; omega⟩ }

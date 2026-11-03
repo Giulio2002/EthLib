@@ -18,7 +18,7 @@ namespace EthLib.EVM.Runner.CopyKeccak
 def program : ByteArray := ⟨#[0x37, 0x20]⟩
 
 /-- The bounded program hashes the copied source bytes and preserves its context. -/
-theorem run_copy_keccak (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word))
+theorem run_copy_keccak (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas)
     (source : Word) (xs : List Word) (room : xs.length ≤ 1019)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem) (g : Nat) :
     let bytes := CallData.readRange context.data source.toNat 32
@@ -26,7 +26,7 @@ theorem run_copy_keccak (context : CallData.Context) (returnData : ByteArray) (t
     let c1 := Gas.inputCopyCost mem.words 0 32
     let c2 := Gas.keccakCost m.words 0 32
     ∃ t, run 2 ⟨program, 0, ⟨[0, source, 32, 0, 32] ++ xs, by simp; omega⟩,
-        c1 + c2 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots⟩ = .exhausted t ∧
+        c1 + c2 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩ = .exhausted t ∧
       t.stack.val = Frame.digestWord (EthLib.Cryptography.Hash.Keccak.keccak256 ⟨bytes.toArray⟩) :: xs ∧
       t.pc = 2 ∧ t.gas = g ∧ t.memory.store = m.store ∧ t.context = context ∧
       t.returnData = returnData ∧ Memory.readRange t.memory.store 0 32 = bytes := by
@@ -35,7 +35,7 @@ theorem run_copy_keccak (context : CallData.Context) (returnData : ByteArray) (t
   let m := Memory.Allocation.write mem 0 bytes
   let c1 := Gas.inputCopyCost mem.words 0 32
   let c2 := Gas.keccakCost m.words 0 32
-  let s : Frame.State := ⟨program, 0, ⟨[0, source, 32, 0, 32] ++ xs, by simp; omega⟩, c1+c2+g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots⟩
+  let s : Frame.State := ⟨program, 0, ⟨[0, source, 32, 0, 32] ++ xs, by simp; omega⟩, c1+c2+g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩
   let s1 : Frame.State := { s with pc := 1, gas := c2+g, stack := ⟨[0, 32] ++ xs, by simp; omega⟩, memory := m, memoryValid := Memory.Allocation.write_valid_for_frame _ _ _ valid }
   let digest := Frame.digestWord (EthLib.Cryptography.Hash.Keccak.keccak256 ⟨bytes.toArray⟩)
   let s2 : Frame.State := { s1 with pc := 2, gas := g, stack := ⟨digest :: xs, by simp; omega⟩, memory := Memory.Allocation.expand m 0 32, memoryValid := Memory.Allocation.expand_valid_for_frame _ _ _ s1.memoryValid }

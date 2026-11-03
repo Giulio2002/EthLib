@@ -1,6 +1,7 @@
 module
 
 public import EthLib.EVM.Proofs.Frame.Balance
+import Aesop
 
 /-! Amsterdam `vm/instructions/storage.py`, `sload`, warms before charging. -/
 
@@ -139,16 +140,18 @@ theorem sload_cost_cases (s : State) (key : Word) :
     ((s.context.environment.currentTarget, key) ∉ s.warmSlots → SloadCost s key = 2100) := by
   simp [SloadCost]
 
-/-- Every other instruction preserves the whole warm-slot list. -/
+/-- Every instruction other than SLOAD and SSTORE preserves the warm-slot list. -/
 theorem outcome_slots_unchanged_of_not_sload {s : State} {out : Outcome}
-    (notSload : ¬ At s (some .sload)) (rule : Rule s out) :
+    (notSload : ¬ At s (some .sload)) (notSstore : ¬ At s (some .sstore)) (rule : Rule s out) :
     out.frame.warmSlots = s.warmSlots := by
   cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory]
 
 /-- Every rule retains all previously warm slots. -/
 theorem outcome_slots_monotone {s : State} {out : Outcome} (rule : Rule s out)
     (slot : World.Address × Word) (warm : slot ∈ s.warmSlots) : slot ∈ out.frame.warmSlots := by
-  cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SloadWarm] <;> split <;> simp_all
+  cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SloadWarm, SstoreReady, SstoreReadFields,
+    SstoreCreditFields, SstoreExecutionFields, SstoreChargeFields, SstoreMeterRetained, SstoreWriteFields] <;>
+    (try split) <;> (try simp_all) <;> aesop
 
 /-- Effective storage follows the independent tracker map and set reference. -/
 theorem sload_storage_value (s : State) (key : Word) :

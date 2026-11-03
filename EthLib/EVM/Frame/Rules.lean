@@ -25,17 +25,17 @@ def At (s : State) (op : Option Opcode) : Prop :=
 
 /-- Assigned opcodes for which this subset has no execution rule. -/
 def Unsupported : Opcode → Prop
-  | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
+  | .sstore | .sload | .balance | .selfbalance | .dupn | .swapn | .exchange | .blockhash | .blobhash | .blobbasefee | .coinbase | .timestamp | .number | .slotnum | .prevrandao | .gaslimit | .chainid | .basefee | .address | .origin | .caller | .callvalue | .gasprice | .keccak | .returndatacopy | .returndatasize | .calldatacopy | .codecopy | .calldataload | .calldatasize | .codesize | .mcopy | .mload | .mstore | .mstore8 | .pc | .msize | .gas | .jump | .jumpi | .jumpdest | .addmod | .mulmod | .exp | .shl | .shr | .sar | .byte | .signextend | .lt | .gt | .slt | .sgt | .eq | .iszero | .clz | .and | .or | .xor | .not | .stop | .invalid | .add | .mul | .sub | .div | .mod | .sdiv | .smod | .pop | .push _ | .dup _ | .swap _ => False
   | _ => True
 
 /-- Exact fields of a continuing frame, including fields untouched by this slice. -/
 def Advances (s t : State) (pc gas : Nat) (xs : List Word) : Prop :=
-  t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧ t.warmAddresses = s.warmAddresses ∧ t.warmSlots = s.warmSlots
+  t.code = s.code ∧ t.memory = s.memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧ t.warmAddresses = s.warmAddresses ∧ t.warmSlots = s.warmSlots ∧ t.isStatic = s.isStatic ∧ t.stateGas = s.stateGas
 
 /-- Exact fields after a memory instruction. -/
 def AdvancesMemory (s t : State) (memory : Memory.Allocation.State)
     (pc gas : Nat) (xs : List Word) : Prop :=
-  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧ t.warmAddresses = s.warmAddresses ∧ t.warmSlots = s.warmSlots
+  t.code = s.code ∧ t.memory = memory ∧ t.pc = pc ∧ t.gas = gas ∧ t.stack.val = xs ∧ t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧ t.warmAddresses = s.warmAddresses ∧ t.warmSlots = s.warmSlots ∧ t.isStatic = s.isStatic ∧ t.stateGas = s.stateGas
 
 /-- A successful MCOPY with observed pops determines the resulting frame. -/
 theorem mcopy_actual_fields (s t : State) (destination source length : Word)
@@ -52,7 +52,7 @@ theorem mcopy_actual_fields (s t : State) (destination source length : Word)
   · simp only [step, dite_eq_left bounds, decoded, p1, p2, p3, charge, Gas.charge,
       ite_eq_left gas] at run
     cases run
-    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   · simp [step, bounds, decoded, p1, p2, p3, charge, Gas.charge, gas] at run
 
 /-- Cancun `runtime.py`: the source byte length at an instruction boundary. -/
@@ -198,12 +198,188 @@ def SloadValue (s : State) (key : Word) : Word :=
 def SloadRead (s : State) (key : Word) : TransactionState.State :=
   { s.tracker with storageReads := (s.context.environment.currentTarget, key) :: s.tracker.storageReads }
 
+/-- Amsterdam `storage.py`, `sstore`: independent conditions for state-dependent pricing.
+
+The four refund terms are stated as implications so that each source condition
+can be checked independently for arbitrary original, current, and new values. -/
+def SstorePricing (original current value : Word) (writeCost stateCost : Nat)
+    (clearRefund reverseRefund restoreRefund : Int) (credit : Bool) : Prop :=
+  (original = current ∧ current ≠ value → writeCost = 10000) ∧
+  (¬ (original = current ∧ current ≠ value) → writeCost = 0) ∧
+  (original = current ∧ current ≠ value ∧ original = 0 → stateCost = 97920) ∧
+  (¬ (original = current ∧ current ≠ value ∧ original = 0) → stateCost = 0) ∧
+  (current ≠ value ∧ original ≠ 0 ∧ current ≠ 0 ∧ value = 0 → clearRefund = 11616) ∧
+  (¬ (current ≠ value ∧ original ≠ 0 ∧ current ≠ 0 ∧ value = 0) → clearRefund = 0) ∧
+  (current ≠ value ∧ original ≠ 0 ∧ current = 0 → reverseRefund = 11616) ∧
+  (¬ (current ≠ value ∧ original ≠ 0 ∧ current = 0) → reverseRefund = 0) ∧
+  (current ≠ value ∧ original = value → restoreRefund = 10000) ∧
+  (¬ (current ≠ value ∧ original = value) → restoreRefund = 0) ∧
+  (credit = true ↔ current ≠ value ∧ original = value ∧ original = 0)
+
+/-- The successful post-sentry read leaves all unrelated fields unchanged. -/
+def SstoreReadFields (s t : State) (rest : Stack) (key : Word) : Prop :=
+  t.code = s.code ∧ t.pc = s.pc ∧ t.stack = rest ∧ t.gas = s.gas ∧
+  t.memory = s.memory ∧ t.context = s.context ∧ t.returnData = s.returnData ∧
+  t.warmAddresses = s.warmAddresses ∧ t.warmSlots = SloadWarm s key ∧
+  t.isStatic = s.isStatic ∧ t.stateGas = s.stateGas ∧
+  t.tracker.parent = s.tracker.parent ∧ t.tracker.writes = s.tracker.writes ∧
+  t.tracker.accountReads = s.tracker.accountReads ∧
+  t.tracker.storageReads = (s.context.environment.currentTarget, key) :: s.tracker.storageReads ∧
+  t.tracker.createdAccounts = s.tracker.createdAccounts ∧
+  t.tracker.snapshots = s.tracker.snapshots
+
+/-- Fields unaffected by state-gas accounting. -/
+def SstoreMeterRetained (s t : State) : Prop :=
+  t.code = s.code ∧ t.pc = s.pc ∧ t.stack = s.stack ∧ t.memory = s.memory ∧
+  t.context = s.context ∧ t.returnData = s.returnData ∧ t.tracker = s.tracker ∧
+  t.warmAddresses = s.warmAddresses ∧ t.warmSlots = s.warmSlots ∧ t.isStatic = s.isStatic ∧
+  t.stateGas.baseline = s.stateGas.baseline ∧ t.stateGas.committedSpill = s.stateGas.committedSpill
+
+/-- The independent refund adjustment and optional state-gas credit. -/
+def SstoreCreditFields (s t : State) (delta : Int) (credit : Bool) : Prop :=
+  SstoreMeterRetained s t ∧ t.stateGas.refundCounter = s.stateGas.refundCounter + delta ∧
+  ((credit = false ∧ t.gas = s.gas ∧ t.stateGas.reservoir = s.stateGas.reservoir ∧
+      t.stateGas.spilled = s.stateGas.spilled) ∨
+    (credit = true ∧
+      ((97920 ≤ s.stateGas.spilled ∧ t.gas = s.gas + 97920 ∧
+          t.stateGas.spilled + 97920 = s.stateGas.spilled ∧ t.stateGas.reservoir = s.stateGas.reservoir) ∨
+       (s.stateGas.spilled < 97920 ∧ t.gas = s.gas + s.stateGas.spilled ∧
+          t.stateGas.spilled = 0 ∧ t.stateGas.reservoir = s.stateGas.reservoir + (97920 - s.stateGas.spilled)))))
+
+/-- State-gas charging draws from the reservoir before execution gas. -/
+def SstoreChargeFields (s t : State) (amount : Nat) : Prop :=
+  SstoreMeterRetained s t ∧ t.stateGas.refundCounter = s.stateGas.refundCounter ∧
+  ((amount ≤ s.stateGas.reservoir ∧ t.stateGas.reservoir + amount = s.stateGas.reservoir ∧
+      t.gas = s.gas ∧ t.stateGas.spilled = s.stateGas.spilled) ∨
+    (s.stateGas.reservoir < amount ∧ amount ≤ s.stateGas.reservoir + s.gas ∧
+      t.stateGas.reservoir = 0 ∧ t.gas + (amount - s.stateGas.reservoir) = s.gas ∧
+      t.stateGas.spilled = s.stateGas.spilled + (amount - s.stateGas.reservoir)))
+
+/-- Original storage observes the immutable parent unless the account was created. -/
+def SstoreOriginal (s : State) (key : Word) : Word :=
+  if s.context.environment.currentTarget ∈ s.tracker.createdAccounts then 0
+  else World.getStorage s.tracker.parent s.context.environment.currentTarget key
+
+/-- State-dependent pricing and its refund/credit effects after the sentry. -/
+def SstoreReady (s ready : State) (rest : Stack) (key value : Word)
+    (executionCost stateCost : Nat) : Prop :=
+  ∃ read : State, ∃ writeCost : Nat, ∃ clear reverse restore : Int, ∃ credit : Bool,
+    SstoreReadFields s read rest key ∧
+    SstorePricing (SstoreOriginal s key) (SloadValue s key) value
+      writeCost stateCost clear reverse restore credit ∧
+    SstoreCreditFields read ready (clear - reverse + restore) credit ∧
+    executionCost = SloadCost s key + writeCost
+
+/-- The execution-gas charge changes only execution gas. -/
+def SstoreExecutionFields (s t : State) (cost : Nat) : Prop :=
+  SstoreMeterRetained s t ∧ t.stateGas = s.stateGas ∧ t.gas + cost = s.gas
+
+/-- Account lookup observes overlay tombstones before the immutable parent. -/
+def SstoreAccount (s : State) : Option World.Account :=
+  let address := s.context.environment.currentTarget
+  match s.tracker.writes.accountWrites.lookup address with
+  | some account => account
+  | none => World.getAccountOptional s.tracker.parent address
+
+/-- A storage-write attempt records the account read and keeps other fields. -/
+def SstoreWriteFields (s t : State) (key value : Word) (success : Bool) : Prop :=
+  t.code = s.code ∧ t.pc = (if success then s.pc + 1 else s.pc) ∧
+  t.stack = s.stack ∧ t.gas = s.gas ∧ t.memory = s.memory ∧ t.context = s.context ∧
+  t.returnData = s.returnData ∧ t.warmAddresses = s.warmAddresses ∧
+  t.warmSlots = s.warmSlots ∧ t.isStatic = s.isStatic ∧ t.stateGas = s.stateGas ∧
+  t.tracker.parent = s.tracker.parent ∧
+  t.tracker.writes.accountWrites = s.tracker.writes.accountWrites ∧
+  t.tracker.writes.storageWrites =
+    (if success then ((s.context.environment.currentTarget, key), value) :: s.tracker.writes.storageWrites
+     else s.tracker.writes.storageWrites) ∧
+  t.tracker.writes.codeWrites = s.tracker.writes.codeWrites ∧
+  t.tracker.writes.storageClears = s.tracker.writes.storageClears ∧
+  t.tracker.writes.transientStorage = s.tracker.writes.transientStorage ∧
+  t.tracker.accountReads = s.context.environment.currentTarget :: s.tracker.accountReads ∧
+  t.tracker.storageReads = s.tracker.storageReads ∧
+  t.tracker.createdAccounts = s.tracker.createdAccounts ∧ t.tracker.snapshots = s.tracker.snapshots
+
+/-- Independent source cases for the SSTORE helper at any code and program counter. -/
+inductive SstoreLocal : State → Outcome → Prop where
+  | sstoreStatic (s) : s.isStatic = true →
+      SstoreLocal s (.exception s .writeInStaticContext)
+  | sstoreUnderflow (s) : s.isStatic = false → s.stack.val = [] →
+      SstoreLocal s (.exception s .stackUnderflow)
+  | sstoreSecondUnderflow (s : State) (rest : Stack) (key : Word) :
+      s.isStatic = false → s.stack.val = key :: rest.val → rest.val = [] →
+      SstoreLocal s (.exception { s with stack := rest } .stackUnderflow)
+  | sstoreSentry (s : State) (first rest : Stack) (key value : Word) :
+      s.isStatic = false → s.stack.val = key :: first.val →
+      first.val = value :: rest.val → s.gas < 2301 →
+      SstoreLocal s (.exception { s with stack := rest } .outOfGas)
+  | sstoreExecutionGas (s ready : State) (first rest : Stack) (key value : Word) (cost stateCost : Nat) :
+      s.isStatic = false → s.stack.val = key :: first.val →
+      first.val = value :: rest.val → 2301 ≤ s.gas →
+      SstoreReady s ready rest key value cost stateCost → ready.gas < cost →
+      SstoreLocal s (.exception ready .outOfGas)
+  | sstoreStateGas (s ready charged : State) (first rest : Stack) (key value : Word) (cost stateCost : Nat) :
+      s.isStatic = false → s.stack.val = key :: first.val →
+      first.val = value :: rest.val → 2301 ≤ s.gas →
+      SstoreReady s ready rest key value cost stateCost → cost ≤ ready.gas →
+      SstoreExecutionFields ready charged cost → charged.stateGas.reservoir + charged.gas < stateCost →
+      SstoreLocal s (.exception charged .outOfGas)
+  | sstoreMissing (s ready charged paid result : State) (first rest : Stack) (key value : Word) (cost stateCost : Nat) :
+      s.isStatic = false → s.stack.val = key :: first.val →
+      first.val = value :: rest.val → 2301 ≤ s.gas →
+      SstoreReady s ready rest key value cost stateCost → cost ≤ ready.gas →
+      SstoreExecutionFields ready charged cost → SstoreChargeFields charged paid stateCost →
+      SstoreAccount paid = none → SstoreWriteFields paid result key value false →
+      SstoreLocal s (.exception result .missingStorageAccount)
+  | sstoreSuccess (s ready charged paid result : State) (first rest : Stack) (key value : Word) (cost stateCost : Nat) :
+      s.isStatic = false → s.stack.val = key :: first.val →
+      first.val = value :: rest.val → 2301 ≤ s.gas →
+      SstoreReady s ready rest key value cost stateCost → cost ≤ ready.gas →
+      SstoreExecutionFields ready charged cost → SstoreChargeFields charged paid stateCost →
+      SstoreAccount paid ≠ none → SstoreWriteFields paid result key value true →
+      SstoreLocal s (.continue result)
+
 /-- Source-oriented rules for one frame transition. -/
 inductive Rule : State → Outcome → Prop where
   | endCode (s) : s.code.size ≤ s.pc → Rule s (.stop s)
   | stop (s) : At s (some .stop) → Rule s (.stop { s with pc := s.pc + 1 })
   | invalid (s) : At s none ∨ At s (some .invalid) → Rule s (.exception s .invalidOpcode)
   | unsupported (s op) : At s (some op) → Unsupported op → Rule s (.unsupported s op)
+  | sstoreStatic (s) : At s (some .sstore) → s.isStatic = true →
+      Rule s (.exception s .writeInStaticContext)
+  | sstoreUnderflow (s) : At s (some .sstore) → s.isStatic = false → s.stack.val = [] →
+      Rule s (.exception s .stackUnderflow)
+  | sstoreSecondUnderflow (s : State) (rest : Stack) (key : Word) :
+      At s (some .sstore) → s.isStatic = false → s.stack.val = key :: rest.val → rest.val = [] →
+      Rule s (.exception { s with stack := rest } .stackUnderflow)
+  | sstoreSentry (s : State) (first rest : Stack) (key value : Word) :
+      At s (some .sstore) → s.isStatic = false → s.stack.val = key :: first.val →
+      first.val = value :: rest.val → s.gas < 2301 →
+      Rule s (.exception { s with stack := rest } .outOfGas)
+  | sstoreExecutionGas (s ready : State) (first rest : Stack) (key value : Word) (cost stateCost : Nat) :
+      At s (some .sstore) → s.isStatic = false → s.stack.val = key :: first.val →
+      first.val = value :: rest.val → 2301 ≤ s.gas →
+      SstoreReady s ready rest key value cost stateCost → ready.gas < cost →
+      Rule s (.exception ready .outOfGas)
+  | sstoreStateGas (s ready charged : State) (first rest : Stack) (key value : Word) (cost stateCost : Nat) :
+      At s (some .sstore) → s.isStatic = false → s.stack.val = key :: first.val →
+      first.val = value :: rest.val → 2301 ≤ s.gas →
+      SstoreReady s ready rest key value cost stateCost → cost ≤ ready.gas →
+      SstoreExecutionFields ready charged cost → charged.stateGas.reservoir + charged.gas < stateCost →
+      Rule s (.exception charged .outOfGas)
+  | sstoreMissing (s ready charged paid result : State) (first rest : Stack) (key value : Word) (cost stateCost : Nat) :
+      At s (some .sstore) → s.isStatic = false → s.stack.val = key :: first.val →
+      first.val = value :: rest.val → 2301 ≤ s.gas →
+      SstoreReady s ready rest key value cost stateCost → cost ≤ ready.gas →
+      SstoreExecutionFields ready charged cost → SstoreChargeFields charged paid stateCost →
+      SstoreAccount paid = none → SstoreWriteFields paid result key value false →
+      Rule s (.exception result .missingStorageAccount)
+  | sstoreSuccess (s ready charged paid result : State) (first rest : Stack) (key value : Word) (cost stateCost : Nat) :
+      At s (some .sstore) → s.isStatic = false → s.stack.val = key :: first.val →
+      first.val = value :: rest.val → 2301 ≤ s.gas →
+      SstoreReady s ready rest key value cost stateCost → cost ≤ ready.gas →
+      SstoreExecutionFields ready charged cost → SstoreChargeFields charged paid stateCost →
+      SstoreAccount paid ≠ none → SstoreWriteFields paid result key value true →
+      Rule s (.continue result)
   | sloadUnderflow (s) : At s (some .sload) → s.stack.val = [] →
       Rule s (.exception s .stackUnderflow)
   | sloadGas (s : State) (rest : Stack) (key : Word) : At s (some .sload) → s.stack.val = key :: rest.val →

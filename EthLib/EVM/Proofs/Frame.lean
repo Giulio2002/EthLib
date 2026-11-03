@@ -4,6 +4,8 @@ public import EthLib.EVM.Frame.Rules
 public import EthLib.EVM.Proofs.Stack
 public import EthLib.EVM.Proofs.JumpDest
 public import EthLib.EVM.Proofs.Frame.StackImmediate
+public import EthLib.EVM.Proofs.Frame.SstorePricing
+import Aesop
 
 /-!
 # Frame invariants
@@ -129,7 +131,7 @@ theorem step_swap_empty (s : State) (i : Fin 16) (h : At s (some (.swap i)))
 theorem advances_eq (s t : State) (pc gas : Nat) (stack : Stack)
     (h : Advances s t pc gas stack.val) :
     t = { s with pc, gas, stack } := by
-  rcases h with ⟨code, memory, pcEq, gasEq, stackEq, contextEq, returnDataEq, trackerEq, warmEq, slotEq⟩
+  rcases h with ⟨code, memory, pcEq, gasEq, stackEq, contextEq, returnDataEq, trackerEq, warmEq, slotEq, staticEq, stateGasEq⟩
   have stackEq' : t.stack = stack := Subtype.ext stackEq
   cases s
   cases t
@@ -2133,7 +2135,7 @@ theorem returnDataCopy_helper_actual (s t : State) (x y z : Word) (xs : List Wor
   · by_cases bounds : y.toNat + z.toNat ≤ s.returnData.size
     · simp only [ite_eq_left gas, ite_eq_left bounds] at run
       cases run
-      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
     · simp [gas, bounds] at run
   · simp [gas] at run
 
@@ -2273,7 +2275,7 @@ theorem keccak_helper_actual (s t : State) (x y : Word) (xs : List Word)
   by_cases gas : Gas.keccakCost s.memory.words x.toNat y.toNat ≤ s.gas
   · simp only [ite_eq_left gas, Outcome.continue.injEq] at run
     subst t
-    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    exact ⟨gas, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   · simp [gas] at run
 
 /-- Expansion performed by a successful hash preserves every raw store byte. -/
@@ -2311,6 +2313,69 @@ theorem rule_sound {s : State} {out : Outcome} (h : Rule s out) : step s = out :
   | stop at_ => exact step_stop _ at_
   | invalid at_ => rcases at_ with h | h; exact step_unassigned _ h; exact step_invalid _ h
   | unsupported op at_ unsupported => exact step_unsupported _ op at_ unsupported
+  | sstoreStatic at_ static =>
+    obtain ⟨bounds, decoded⟩ := at_
+    simp [step, bounds, decoded, sstore, static]
+  | sstoreUnderflow at_ static empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    simp [step, bounds, decoded, sstore, static, pop, failStack]
+  | sstoreSecondUnderflow rest key at_ static items empty =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop : s.stack.pop = .ok (key, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have pop' : rest.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr empty
+    simp [step, bounds, decoded, sstore, static, pop, pop', failStack]
+  | sstoreSentry first rest key value at_ static items items' gas =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pop : s.stack.pop = .ok (key, first) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items
+    have pop' : first.pop = .ok (value, rest) := (Proofs.Stack.pop_ok_iff _ _ _).mpr items'
+    by_cases warm : (s.context.environment.currentTarget, key) ∈ s.warmSlots <;>
+      simp [step, bounds, decoded, sstore, static, pop, pop', warm, gas]
+  | sstoreExecutionGas ready first rest key value cost stateCost at_ static items items' gas fields insufficient =>
+    obtain ⟨bounds, decoded⟩ := at_
+    rcases sstore_ready_unique s ready rest key value cost stateCost fields with ⟨rfl, rfl, rfl⟩
+    simp [step, bounds, decoded, sstore_after_sentry s first rest key value static items items' gas, insufficient]
+  | sstoreStateGas ready charged first rest key value cost stateCost at_ static items items' gas fields enough execution insufficient =>
+    obtain ⟨bounds, decoded⟩ := at_
+    rcases sstore_ready_unique s ready rest key value cost stateCost fields with ⟨rfl, rfl, rfl⟩
+    have chargedEq := sstore_execution_unique _ charged _ execution
+    subst charged
+    have fail : Gas.StateMeter.chargeState
+        (stateMeter { (sstoreReadyWitness s rest key value) with gas :=
+          (sstoreReadyWitness s rest key value).gas -
+            (SloadCost s key + sstoreWriteCost (SstoreOriginal s key) (SloadValue s key) value) })
+        (sstoreStateCost (SstoreOriginal s key) (SloadValue s key) value) = .error .outOfGas :=
+      (Gas.StateMeter.chargeState_error_iff _ _).mpr (by simpa [stateMeter] using insufficient)
+    simp [step, bounds, decoded, sstore_after_sentry s first rest key value static items items' gas,
+      Nat.not_lt.mpr enough, fail]
+  | sstoreMissing ready charged paid result first rest key value cost stateCost at_ static items items' gas fields enough execution charge absent written =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pcEq := sstore_paid_pc s ready charged paid rest key value cost stateCost fields execution charge
+    have contextEq := sstore_paid_context s ready charged paid rest key value cost stateCost fields execution charge
+    have ⟨meter, meterRun, paidEq⟩ := sstore_charge_converse charged paid stateCost charge
+    have resultEq := sstore_write_unique paid result key value false written
+    have writeRun := sstore_write_witness_missing paid key value absent
+    rcases sstore_ready_unique s ready rest key value cost stateCost fields with ⟨rfl, rfl, rfl⟩
+    have chargedEq := sstore_execution_unique _ charged _ execution
+    subst charged
+    rw [step, dite_eq_left bounds, decoded, sstore_after_sentry s first rest key value static items items' gas]
+    simp only [Nat.not_lt.mpr enough, ↓reduceIte, meterRun]
+    rw [← paidEq, ← contextEq, writeRun]
+    simp [resultEq, sstoreWriteWitness, pcEq]
+  | sstoreSuccess ready charged paid result first rest key value cost stateCost at_ static items items' gas fields enough execution charge present written =>
+    obtain ⟨bounds, decoded⟩ := at_
+    have pcEq := sstore_paid_pc s ready charged paid rest key value cost stateCost fields execution charge
+    have contextEq := sstore_paid_context s ready charged paid rest key value cost stateCost fields execution charge
+    have ⟨meter, meterRun, paidEq⟩ := sstore_charge_converse charged paid stateCost charge
+    have resultEq := sstore_write_unique paid result key value true written
+    have writeRun := sstore_write_witness_success paid key value present
+    rcases sstore_ready_unique s ready rest key value cost stateCost fields with ⟨rfl, rfl, rfl⟩
+    have chargedEq := sstore_execution_unique _ charged _ execution
+    subst charged
+    rw [step, dite_eq_left bounds, decoded, sstore_after_sentry s first rest key value static items items' gas]
+    simp only [Nat.not_lt.mpr enough, ↓reduceIte, meterRun]
+    rw [← paidEq, ← contextEq, writeRun]
+    simp [resultEq, sstoreWriteWitness, pcEq]
   | sloadUnderflow at_ empty =>
     obtain ⟨bounds, decoded⟩ := at_
     have pop : s.stack.pop = .error .underflow := (Proofs.Stack.pop_underflow_iff _).mpr empty
@@ -2639,6 +2704,59 @@ theorem rule_total (s : State) : ∃ out, Rule s out := by
       cases op with
       | stop => exact ⟨_, .stop s at_⟩
       | invalid => exact ⟨_, .invalid s (Or.inr at_)⟩
+      | sstore =>
+        by_cases static : s.isStatic = true
+        · exact ⟨_, .sstoreStatic s at_ static⟩
+        · have dynamic : s.isStatic = false := by cases h : s.isStatic <;> simp_all
+          cases items : s.stack.val with
+          | nil => exact ⟨_, .sstoreUnderflow s at_ dynamic items⟩
+          | cons key xs =>
+            let first : Stack := ⟨xs, by have bound := s.stack.property; rw [items] at bound; simp at bound; omega⟩
+            have items' : s.stack.val = key :: first.val := items
+            cases second : first.val with
+            | nil => exact ⟨_, .sstoreSecondUnderflow s first key at_ dynamic items' second⟩
+            | cons value ys =>
+              let rest : Stack := ⟨ys, by have bound := first.property; rw [second] at bound; simp at bound; omega⟩
+              have second' : first.val = value :: rest.val := second
+              by_cases gas : 2301 ≤ s.gas
+              · let ready := sstoreReadyWitness s rest key value
+                let cost := SloadCost s key + sstoreWriteCost (SstoreOriginal s key) (SloadValue s key) value
+                let stateCost := sstoreStateCost (SstoreOriginal s key) (SloadValue s key) value
+                have fields : SstoreReady s ready rest key value cost stateCost := sstore_ready_fields s rest key value
+                by_cases enough : cost ≤ ready.gas
+                · let charged := { ready with gas := ready.gas - cost }
+                  have execution : SstoreExecutionFields ready charged cost := sstore_execution_fields ready cost enough
+                  cases metered : Gas.StateMeter.chargeState (stateMeter charged) stateCost with
+                  | error e =>
+                    cases e
+                    have insufficient : charged.stateGas.reservoir + charged.gas < stateCost := by
+                      exact (Gas.StateMeter.chargeState_error_iff _ _).mp metered
+                    exact ⟨_, .sstoreStateGas s ready charged first rest key value cost stateCost
+                      at_ dynamic items' second' gas fields enough execution insufficient⟩
+                  | ok meter =>
+                    let paid := withStateMeter charged meter
+                    have charge : SstoreChargeFields charged paid stateCost := sstore_charge_fields charged stateCost meter metered
+                    cases account : SstoreAccount paid with
+                    | none =>
+                      let result := sstoreWriteWitness paid key value false
+                      have write := sstore_write_witness_missing paid key value account
+                      have writeFields : SstoreWriteFields paid result key value false := by
+                        simpa [result, sstoreWriteWitness] using
+                          sstore_write_error_fields paid key value result.tracker write
+                      exact ⟨_, .sstoreMissing s ready charged paid result first rest key value cost stateCost
+                        at_ dynamic items' second' gas fields enough execution charge account writeFields⟩
+                    | some accountValue =>
+                      let result := sstoreWriteWitness paid key value true
+                      have present : SstoreAccount paid ≠ none := by simp [account]
+                      have write := sstore_write_witness_success paid key value present
+                      have writeFields : SstoreWriteFields paid result key value true := by
+                        simpa [result, sstoreWriteWitness] using
+                          sstore_write_success_fields paid key value result.tracker write
+                      exact ⟨_, .sstoreSuccess s ready charged paid result first rest key value cost stateCost
+                        at_ dynamic items' second' gas fields enough execution charge present writeFields⟩
+                · exact ⟨_, .sstoreExecutionGas s ready first rest key value cost stateCost
+                    at_ dynamic items' second' gas fields (Nat.lt_of_not_ge enough)⟩
+              · exact ⟨_, .sstoreSentry s first rest key value at_ dynamic items' second' (Nat.lt_of_not_ge gas)⟩
       | sload =>
         cases items : s.stack.val with
         | nil => exact ⟨_, .sloadUnderflow s at_ items⟩
@@ -3483,17 +3601,18 @@ theorem step_not_revert (s input : State) (gas : Nat) (output : ByteArray) :
 theorem continue_code_unchanged {s t : State} (h : step s = .continue t) :
     t.code = s.code := by
   have rule := (step_iff_rule s _).mp h
-  cases rule <;> simp_all [Advances, AdvancesMemory]
+  cases rule <;> simp_all [Advances, AdvancesMemory, SstoreReady, SstoreReadFields, SstoreCreditFields, SstoreExecutionFields, SstoreChargeFields, SstoreMeterRetained, SstoreWriteFields]
+  all_goals aesop
 
 /-- Every outcome preserves the input code. -/
 theorem outcome_code_unchanged {s : State} {out : Outcome} (h : Rule s out) :
     out.frame.code = s.code := by
-  cases h <;> simp_all [Outcome.frame, Advances, AdvancesMemory]
+  cases h <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SstoreReady, SstoreReadFields, SstoreCreditFields, SstoreExecutionFields, SstoreChargeFields, SstoreMeterRetained, SstoreWriteFields] <;> aesop
 
 /-- Every independent outcome retains the immutable message context. -/
 theorem outcome_context_unchanged {s : State} {out : Outcome} (h : Rule s out) :
     out.frame.context = s.context := by
-  cases h <;> simp_all [Outcome.frame, Advances, AdvancesMemory]
+  cases h <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SstoreReady, SstoreReadFields, SstoreCreditFields, SstoreExecutionFields, SstoreChargeFields, SstoreMeterRetained, SstoreWriteFields] <;> aesop
 
 /-- Every continuing step retains the immutable message context. -/
 theorem continue_context_unchanged {s t : State} (h : step s = .continue t) :
@@ -3503,7 +3622,7 @@ theorem continue_context_unchanged {s t : State} (h : step s = .continue t) :
 /-- Every outcome retains the frame's return-data buffer. -/
 theorem outcome_returnData_unchanged {s : State} {out : Outcome} (h : Rule s out) :
     out.frame.returnData = s.returnData := by
-  cases h <;> simp_all [Outcome.frame, Advances, AdvancesMemory]
+  cases h <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SstoreReady, SstoreReadFields, SstoreCreditFields, SstoreExecutionFields, SstoreChargeFields, SstoreMeterRetained, SstoreWriteFields] <;> aesop
 
 /-- Every continuing step retains the return-data buffer. -/
 theorem continue_returnData_unchanged {s t : State} (h : step s = .continue t) :
@@ -3524,7 +3643,7 @@ theorem returnDataCopy_actual (s t : State) (x y z : Word) (xs : List Word)
   · by_cases bounds : y.toNat + z.toNat ≤ s.returnData.size
     · simp only [ite_eq_left gas, ite_eq_left bounds] at run
       cases run
-      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+      exact ⟨gas, bounds, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
     · simp [gas, bounds] at run
   · simp [gas] at run
 
@@ -3587,7 +3706,7 @@ theorem outcome_memory_unchanged_of_pure {s : State} {out : Outcome}
     (pure : PureMemoryStep s) (h : Rule s out) : out.frame.memory = s.memory := by
   have excluded (source : InputSource) : ¬ At s (some source.opcode) := by
     cases source <;> simp_all [PureMemoryStep, InputSource.opcode]
-  cases h <;> simp_all [PureMemoryStep, Outcome.frame, Advances]
+  cases h <;> simp_all [PureMemoryStep, Outcome.frame, Advances, SstoreReady, SstoreReadFields, SstoreCreditFields, SstoreExecutionFields, SstoreChargeFields, SstoreMeterRetained, SstoreWriteFields] <;> aesop
 
 
 /-- A continuing pure instruction preserves memory. -/

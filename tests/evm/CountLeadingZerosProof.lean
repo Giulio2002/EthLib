@@ -14,12 +14,12 @@ example (s t : Frame.State) (run : Frame.clz s = .continue t) :
 
 example (x y : Word) (xs : List Word) (room : xs.length ≤ 1022)
     (g : Nat) (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
-    (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) :
+    (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) :
     ∃ t, Runner.run 4 ⟨Runner.CountLeadingZeros.program, 0,
-        ⟨x :: y :: xs, by simp; omega⟩, 10 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots⟩ = .stopped t ∧
+        ⟨x :: y :: xs, by simp; omega⟩, 10 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩ = .stopped t ∧
       t.stack.val = 2 :: Word.countLeadingZeros (Word.add x y) :: xs := by
   obtain ⟨t, run, _, _, _, _, _, _, stack⟩ :=
-    Runner.CountLeadingZeros.run x y xs room g mem valid context returnData tracker warmAddresses warmSlots
+    Runner.CountLeadingZeros.run x y xs room g mem valid context returnData tracker warmAddresses warmSlots static stateGas
   exact ⟨t, run, stack⟩
 
 example (s : Frame.State) (out : Frame.Outcome) (at_ : Frame.At s (some .clz)) :

@@ -4,6 +4,7 @@ public import EthLib.EVM.Proofs.Frame
 public import EthLib.EVM.Proofs.Memory.WordAccess
 public import EthLib.EVM.Proofs.CallData
 public import EthLib.EVM.Proofs.ReturnData
+import Aesop
 
 /-!
 # Memory instruction output contracts
@@ -562,6 +563,9 @@ theorem continue_memory_invariants {s t : State} (run : step s = .continue t) :
   have rule := (step_iff_rule s _).mp run
   cases rule <;> simp_all [Advances, AdvancesMemory, Memory.Allocation.loadWord,
     Memory.Allocation.read, Memory.Allocation.storeWord, Memory.Allocation.storeByte,
-    Memory.Allocation.write, Memory.Allocation.expand, Memory.Allocation.copy]
+    Memory.Allocation.write, Memory.Allocation.expand, Memory.Allocation.copy,
+    SstoreReady, SstoreReadFields, SstoreCreditFields, SstoreExecutionFields,
+    SstoreChargeFields, SstoreMeterRetained, SstoreWriteFields]
+  all_goals aesop
 
 end EthLib.EVM.Frame

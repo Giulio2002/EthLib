@@ -12,14 +12,14 @@ namespace EthLib.EVM.Runner.BlockEnvironmentProgram
 def program : ByteArray := ⟨#[0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x48, 0x00]⟩
 
 /-- The program observes arbitrary accepted metadata and preserves the frame. -/
-theorem run (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (xs : List Word)
+theorem run (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (xs : List Word)
     (room : xs.length ≤ 1017) (g : Nat) (mem : Memory.Allocation.State)
     (valid : Memory.Allocation.Valid mem) :
-    ∃ t, Runner.run 8 ⟨program, 0, ⟨xs, by omega⟩, 14 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots⟩ = .stopped t ∧
+    ∃ t, Runner.run 8 ⟨program, 0, ⟨xs, by omega⟩, 14 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩ = .stopped t ∧
       t.pc = 8 ∧ t.gas = g ∧ t.code = program ∧ t.memory = mem ∧
       t.context = context ∧ t.returnData = returnData ∧
       t.stack.val = context.environment.baseFee :: BitVec.ofNat 256 context.environment.chainId.val :: context.environment.gasLimit :: context.environment.prevRandao :: context.environment.number :: context.environment.timestamp :: Environment.addressWord context.environment.coinbase :: xs := by
-  let s : Frame.State := ⟨program, 0, ⟨xs, by omega⟩, 14 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots⟩
+  let s : Frame.State := ⟨program, 0, ⟨xs, by omega⟩, 14 + g, mem, valid, context, returnData, tracker, warmAddresses, warmSlots, static, stateGas⟩
   let s1 : Frame.State := { s with pc := 1, gas := 12 + g, stack := ⟨Environment.addressWord context.environment.coinbase :: xs, by simp; omega⟩ }
   let s2 : Frame.State := { s with pc := 2, gas := 10 + g, stack := ⟨context.environment.timestamp :: Environment.addressWord context.environment.coinbase :: xs, by simp; omega⟩ }
   let s3 : Frame.State := { s with pc := 3, gas := 8 + g, stack := ⟨context.environment.number :: context.environment.timestamp :: Environment.addressWord context.environment.coinbase :: xs, by simp; omega⟩ }

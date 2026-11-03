@@ -1,6 +1,7 @@
 module
 
 public import EthLib.EVM.Proofs.Frame.SelfBalance
+import Aesop
 
 /-!
 # BALANCE
@@ -148,12 +149,15 @@ theorem balance_cost_cases (s : State) (a : World.Address) :
 theorem outcome_warm_unchanged_of_not_balance {s : State} {out : Outcome}
     (notBalance : ¬ At s (some .balance)) (rule : Rule s out) :
     out.frame.warmAddresses = s.warmAddresses := by
-  cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory]
+  cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, SstoreReady, SstoreReadFields,
+    SstoreCreditFields, SstoreExecutionFields, SstoreChargeFields, SstoreMeterRetained, SstoreWriteFields] <;> aesop
 
 /-- Every rule retains all addresses that were already warm. -/
 theorem outcome_warm_monotone {s : State} {out : Outcome} (rule : Rule s out)
     (a : World.Address) (warm : a ∈ s.warmAddresses) : a ∈ out.frame.warmAddresses := by
-  cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, BalanceWarm] <;> split <;> simp_all
+  cases rule <;> simp_all [Outcome.frame, Advances, AdvancesMemory, BalanceWarm, SstoreReady, SstoreReadFields,
+    SstoreCreditFields, SstoreExecutionFields, SstoreChargeFields, SstoreMeterRetained, SstoreWriteFields] <;>
+    (try split) <;> (try simp_all) <;> aesop
 
 /-- The account selection refines the independent tracker maps. -/
 theorem balance_account_value (s : State) (a : World.Address) :

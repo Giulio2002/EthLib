@@ -7,7 +7,7 @@ private def env : Environment.Context :=
 
 private def state (stack : Stack) (gas : Nat) : Frame.State :=
   ⟨⟨#[0x1e]⟩, 0, stack, gas, Memory.Allocation.empty,
-    (by intro a _; rfl), ⟨ByteArray.empty, env⟩, ByteArray.empty, { parent := {} }, [], []⟩
+    (by intro a _; rfl), ⟨ByteArray.empty, env⟩, ByteArray.empty, { parent := {} }, [], [], false, {}⟩
 
 -- These inputs select zero, one, the highest bit, and every bit set.
 /-- info: (true, true, true, true) -/

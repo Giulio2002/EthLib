@@ -8,6 +8,7 @@ public import EthLib.EVM.PushImmediate
 public import EthLib.EVM.StackImmediate
 public import EthLib.EVM.JumpDest
 public import EthLib.EVM.Gas
+public import EthLib.EVM.Gas.StateMeter
 public import EthLib.EVM.Memory.Invariant
 public import EthLib.EVM.Word.AddMulMod
 public import EthLib.EVM.Word.Exp
@@ -37,6 +38,15 @@ Unsupported instructions are a tooling result and do not execute.
 @[expose] public section
 namespace EthLib.EVM.Frame
 
+/-- State-gas fields supplied at frame entry; execution gas is held in `State.gas`. -/
+structure StateGas where
+  reservoir : Nat := 0
+  baseline : Nat := 0
+  refundCounter : Int := 0
+  spilled : Nat := 0
+  committedSpill : Nat := 0
+  deriving DecidableEq, Repr
+
 /-- The fields used by this instruction subset. -/
 structure State where
   code : ByteArray
@@ -50,10 +60,13 @@ structure State where
   tracker : TransactionState.State
   warmAddresses : List World.Address
   warmSlots : List (World.Address × Word)
+  isStatic : Bool := false
+  stateGas : StateGas := {}
 
 /-- Exceptional halts distinguished by their first failing check. -/
 inductive Exception where
   | invalidOpcode | invalidJumpDestination | outOfGas | stackUnderflow | stackOverflow | outOfBoundsRead | invalidParameter
+  | writeInStaticContext | missingStorageAccount
   deriving DecidableEq, Repr
 
 /-- Frame outcomes include a typed revert for future semantics.
@@ -161,6 +174,59 @@ def sload (s : State) : Outcome :=
       match Stack.push stack result.1 with
       | .error e => failStack { input with tracker := result.2, gas } e
       | .ok stack => .continue { input with stack, gas, pc := s.pc + 1, tracker := result.2 }
+
+/-- Form the source meter using the frame's current execution-gas field. -/
+def stateMeter (s : State) : Gas.StateMeter.Meter :=
+  ⟨s.gas, s.stateGas.reservoir, s.stateGas.baseline, s.stateGas.refundCounter,
+    s.stateGas.spilled, s.stateGas.committedSpill⟩
+
+/-- Store all meter fields after a source meter operation. -/
+def withStateMeter (s : State) (m : Gas.StateMeter.Meter) : State :=
+  { s with gas := m.executionGas, stateGas :=
+    ⟨m.stateGas, m.baseline, m.refundCounter, m.spilled, m.committedSpill⟩ }
+
+/-- Amsterdam `storage.py`, `sstore`, at revision
+`fd9298410ec7218838c8348f69c1eb633f1797dc`.
+The carried exception frame records operations that precede failure. -/
+def sstore (s : State) : Outcome :=
+  if s.isStatic then .exception s .writeInStaticContext else
+  match Stack.pop s.stack with
+  | .error e => failStack s e
+  | .ok (key, first) =>
+    match Stack.pop first with
+    | .error e => failStack { s with stack := first } e
+    | .ok (value, stack) =>
+      let input := { s with stack }
+      let address := s.context.environment.currentTarget
+      let slot := (address, key)
+      let warm := s.warmSlots.contains slot
+      let access := if warm then 100 else 2100
+      if s.gas < max access 2301 then .exception input .outOfGas else
+      let touched := if warm then s.warmSlots else slot :: s.warmSlots
+      let original := TransactionState.getStorageOriginal s.tracker address key
+      let currentResult := TransactionTracker.getStorage s.tracker address key
+      let current := currentResult.1
+      let changed := current != value
+      let writeCost := if original == current && changed then 10000 else 0
+      let clearRefund : Int := if changed && original != 0 && current != 0 && value == 0 then 11616 else 0
+      let reverseRefund : Int := if changed && original != 0 && current == 0 then 11616 else 0
+      let restoreRefund : Int := if changed && original == value then 10000 else 0
+      let base := { input with warmSlots := touched, tracker := currentResult.2 }
+      let adjusted := Gas.StateMeter.adjustRefund (stateMeter base) (clearRefund - reverseRefund + restoreRefund)
+      let credited := if changed && original == value && original == 0 then
+        Gas.StateMeter.creditState adjusted 97920 else adjusted
+      let ready := withStateMeter base credited
+      let cost := access + writeCost
+      if ready.gas < cost then .exception ready .outOfGas else
+      let charged := { ready with gas := ready.gas - cost }
+      let stateCost := if original == current && changed && original == 0 then 97920 else 0
+      match Gas.StateMeter.chargeState (stateMeter charged) stateCost with
+      | .error _ => .exception charged .outOfGas
+      | .ok meter =>
+        let charged := withStateMeter charged meter
+        match TransactionTracker.setStorage charged.tracker address key value with
+        | .error (_, tracker) => .exception { charged with tracker } .missingStorageAccount
+        | .ok tracker => .continue { charged with tracker, pc := s.pc + 1 }
 
 /-- Amsterdam `environment.py`, `blob_base_fee`, charges before computing and pushing. -/
 def blobBaseFee (s : State) : Outcome :=
@@ -330,6 +396,7 @@ def step (s : State) : Outcome :=
     -- Cancun `environment.py`, `calldatasize` and `codesize`: charge before push.
     -- Cancun `environment.py`: charge before pushing supplied metadata.
     | some .sload => sload s
+    | some .sstore => sstore s
     | some .balance => balance s
     | some .selfbalance => selfBalance s
     | some .address => observe s (fun _ => s.context.environment.currentTarget.val)

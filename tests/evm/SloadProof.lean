@@ -49,23 +49,23 @@ example (s : Frame.State) (key : Word) :
   Frame.sload_cost_cases s key
 
 example (s : Frame.State) (out : Frame.Outcome)
-    (notSload : ¬ Frame.At s (some .sload)) (rule : Frame.Rule s out) :
+    (notSload : ¬ Frame.At s (some .sload)) (notSstore : ¬ Frame.At s (some .sstore)) (rule : Frame.Rule s out) :
     out.frame.warmSlots = s.warmSlots :=
-  Frame.outcome_slots_unchanged_of_not_sload notSload rule
+  Frame.outcome_slots_unchanged_of_not_sload notSload notSstore rule
 
 example (key : Word) (xs : List Word) (room : xs.length ≤ 1022) (g : Nat)
     (mem : Memory.Allocation.State) (valid : Memory.Allocation.Valid mem)
     (context : CallData.Context) (returnData : ByteArray) (tracker : TransactionState.State)
-    (warm : List World.Address) (slots : List (World.Address × Word))
+    (warm : List World.Address) (slots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas)
     (cold : (context.environment.currentTarget, key) ∉ slots) :
     let s : Frame.State := ⟨Runner.SloadProgram.program, 0, ⟨key :: key :: xs, by simp; omega⟩,
-      2203 + g, mem, valid, context, returnData, tracker, warm, slots⟩
+      2203 + g, mem, valid, context, returnData, tracker, warm, slots, static, stateGas⟩
     ∃ t, Runner.run 4 s = .stopped t ∧ t.pc = 4 ∧ t.gas = g ∧
       t.stack.val = Frame.SloadValue s key :: Frame.SloadValue s key :: xs ∧
       t.warmSlots = (context.environment.currentTarget, key) :: slots ∧ t.warmAddresses = warm ∧
       t.tracker = { tracker with storageReads := (context.environment.currentTarget, key) :: (context.environment.currentTarget, key) :: tracker.storageReads } ∧
       t.code = Runner.SloadProgram.program ∧ t.memory = mem ∧ t.context = context ∧ t.returnData = returnData :=
-  Runner.SloadProgram.run key xs room g mem valid context returnData tracker warm slots cold
+  Runner.SloadProgram.run key xs room g mem valid context returnData tracker warm slots static stateGas cold
 
 example (fuel : Nat) (s : Frame.State) (slot : World.Address × Word) (warm : slot ∈ s.warmSlots) :
     slot ∈ (Runner.run fuel s).frame.warmSlots :=
@@ -81,7 +81,7 @@ example (s t : Frame.State) (run : Frame.sload s = .continue t) :
       t.tracker.accountReads = s.tracker.accountReads ∧
       t.tracker.storageReads = (s.context.environment.currentTarget, key) :: s.tracker.storageReads ∧
       t.tracker.createdAccounts = s.tracker.createdAccounts ∧ t.tracker.snapshots = s.tracker.snapshots := by
-  obtain ⟨rest, key, items, gas, code, mem, pc, left, stack, context, ret, tracker, warm, slots⟩ :=
+  obtain ⟨rest, key, items, gas, code, mem, pc, left, stack, context, ret, tracker, warm, slots, static, stateGas⟩ :=
     (Frame.sload_success_iff s t).mp run
   refine ⟨rest, key, items, gas, pc, left, stack, code, mem, context, ret, warm, slots, ?_, ?_, ?_, ?_, ?_, ?_⟩
   all_goals rw [tracker]; rfl

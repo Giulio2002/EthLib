@@ -3,7 +3,7 @@ import EthLib.EVM.Proofs.Runner.MixedCopy
 open EthLib.EVM
 
 -- A downstream proof consumes the concrete bounded run and its source-word facts.
-example (ctx : CallData.Context) (ret : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (co ro : Word) (xs : List Word)
+example (ctx : CallData.Context) (ret : ByteArray) (tracker : TransactionState.State) (warmAddresses : List World.Address) (warmSlots : List (World.Address × Word)) (static : Bool) (stateGas : Frame.StateGas) (co ro : Word) (xs : List Word)
     (room : xs.length ≤ 1016) (mem : Memory.Allocation.State)
     (valid : Memory.Allocation.Valid mem) (bounds : ro.toNat + 32 ≤ ret.size) (g : Nat) :
     let a := CallData.readRange ctx.data co.toNat 32
@@ -17,9 +17,9 @@ example (ctx : CallData.Context) (ret : ByteArray) (tracker : TransactionState.S
     let c4 := 3 + Gas.rangeCost m3.words 32 32
     ∃ t, Runner.run 5 ⟨Runner.MixedCopy.program, 0,
         ⟨[0, co, 32, 32, ro, 32, 0, 32] ++ xs, by simp; omega⟩,
-        c1 + c2 + c3 + 3 + c4 + g, mem, valid, ctx, ret, tracker, warmAddresses, warmSlots⟩ = .exhausted t ∧
+        c1 + c2 + c3 + 3 + c4 + g, mem, valid, ctx, ret, tracker, warmAddresses, warmSlots, static, stateGas⟩ = .exhausted t ∧
       t.pc = 5 ∧ t.gas = g ∧ t.context = ctx ∧ t.returnData = ret ∧
       Memory.readRange t.memory.store 0 32 = a ∧ Memory.readRange t.memory.store 32 32 = b := by
   obtain ⟨t, run, _, pc, gas, _, _, _, context, returnData, _, _, a, b, _⟩ :=
-    Runner.MixedCopy.run_mixed ctx ret tracker warmAddresses warmSlots co ro xs room mem valid bounds g
+    Runner.MixedCopy.run_mixed ctx ret tracker warmAddresses warmSlots static stateGas co ro xs room mem valid bounds g
   exact ⟨t, run, pc, gas, context, returnData, a, b⟩

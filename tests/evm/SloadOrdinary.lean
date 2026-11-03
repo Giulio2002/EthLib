@@ -32,21 +32,22 @@ private theorem memoryValid : Memory.Allocation.Valid initialMemory :=
 
 private def frame : Frame.State :=
   ⟨⟨#[0xfe]⟩, 99, ⟨[3, 11], by decide⟩, 2100, initialMemory, memoryValid,
-    ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, tracker, [41, 42], [(7, 4), (8, 3)]⟩
+    ⟨⟨#[4]⟩, env⟩, ⟨#[6]⟩, tracker, [41, 42], [(7, 4), (8, 3)], false, {}⟩
 
 private def expected (code : ByteArray) (pc : Nat) (stack : Stack) (gas : Nat)
     (tx : TransactionState.State) (slots : List (World.Address × Word)) : Frame.State :=
   ⟨code, pc, stack, gas, ⟨[(2, 0xa1), (3, 0xb2)], 1⟩,
     (by change Memory.Allocation.Valid initialMemory; exact memoryValid),
     ⟨⟨#[4]⟩, ⟨7, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-      [25, 26], [27, 28], ⟨⟨11684671, by decide⟩⟩⟩⟩, ⟨#[6]⟩, tx, [41, 42], slots⟩
+      [25, 26], [27, 28], ⟨⟨11684671, by decide⟩⟩⟩⟩, ⟨#[6]⟩, tx, [41, 42], slots, false, {}⟩
 
 private def sameFrame (actual expected : Frame.State) : Bool :=
   decide (actual.code = expected.code ∧ actual.pc = expected.pc ∧
     actual.stack.val = expected.stack.val ∧ actual.gas = expected.gas ∧
     actual.memory = expected.memory ∧ actual.context = expected.context ∧
     actual.returnData = expected.returnData ∧ actual.tracker = expected.tracker ∧
-    actual.warmAddresses = expected.warmAddresses ∧ actual.warmSlots = expected.warmSlots)
+    actual.warmAddresses = expected.warmAddresses ∧ actual.warmSlots = expected.warmSlots ∧
+    actual.isStatic = expected.isStatic ∧ actual.stateGas = expected.stateGas)
 
 private def check (ok : Bool) : IO Unit :=
   if ok then pure () else throw (IO.userError "SLOAD full-frame assertion failed")

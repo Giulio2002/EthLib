@@ -447,7 +447,7 @@ It also proves that bytes at offsets 64 and above are unchanged.
 
 The versioned `Milestone09cIntegrationOrdinary` regression imports the ordinary root.
 `Milestone09cIntegrationProof` consumes the mixed theorem through the proof library.
-The augmented 256-byte dispatch regression covers 133 supported instructions and 20 assigned but unsupported instructions.
+The augmented 256-byte dispatch regression covers 134 supported instructions and 19 assigned but unsupported instructions.
 It also covers 102 unassigned bytes and INVALID.
 The historical Cancun subset has 125 supported instructions and 107 unassigned bytes.
 The Cancun-plus-CLZ subset has 126 supported instructions and 106 unassigned bytes.
@@ -717,7 +717,8 @@ The transaction tracker records the account read only after the charge succeeds.
 The list represents a set by membership and may contain duplicates.
 Frame constructors and quantified runner theorems must supply this new argument.
 `Advances` and `AdvancesMemory` now include warm-list equality.
-`outcome_tracker_read` allows one account or storage read, and `outcome_tracker_unchanged_of_not_selfBalance` excludes BALANCE and SLOAD as well.
+`outcome_tracker_read` allows one account or storage read when SSTORE is excluded.
+`outcome_tracker_unchanged_of_not_selfBalance` also excludes BALANCE, SLOAD and SSTORE.
 The tracker account-read list is separate and survives tracker snapshot rollback.
 The source copies warm sets for child frames and merges them only after successful child execution; this instruction subset does not execute calls or implement that merge.
 No transaction initialization or full Amsterdam execution is claimed.
@@ -742,10 +743,11 @@ Transaction-original storage remains a separate tracker observation.
 `Frame.State` requires an explicit `warmSlots` list; callers supply the initial slot access state.
 The list is a set by membership and may contain duplicates; it is separate from warm addresses and retained tracker storage reads.
 Frame constructors and quantified runner theorems take this additional argument, and `Advances` and `AdvancesMemory` include warm-slot equality.
-`outcome_tracker_read` includes storage reads, `outcome_tracker_retained` and `run_tracker_retained` no longer claim storage reads remain unchanged, and `outcome_tracker_unchanged_of_not_selfBalance` additionally excludes SLOAD.
+`outcome_tracker_read`, `outcome_tracker_retained` and `run_tracker_retained` require SSTORE to be excluded.
+The runner theorem takes an explicit `NoSstoreRun` trace.
 The source initializes the set from transaction access-list storage keys, copies it into child frames and merges a child's set only on success.
 This instruction subset leaves initialization, child calls and that merge to the caller.
-SSTORE and refunds are outside this subset.
+SSTORE uses this slot set and has separate state-gas and refund effects.
 
 The source files `instructions/storage.py`, `vm/gas.py`, `state_tracker.py`, `vm/interpreter.py`, and `vm/__init__.py` have SHA-256 values respectively
 `c55f677ab99d2c9147d807d0b57bd616d5401d13c8fa92db0afa3f64d7376615`,
@@ -754,10 +756,11 @@ The source files `instructions/storage.py`, `vm/gas.py`, `state_tracker.py`, `vm
 `8dd244e747b1b1516ba90de947f9f0d5db84bab4dc51256af0db8dd7a051fd7c`, and
 `72bc02de1fc03a5a7ec70725cc8b8dd18241eb1a4b6e598f059505399cbefdab`.
 
-Storage reads remain unchanged when execution does not reach SLOAD.
-`Frame.step_storageReads_unchanged_of_not_sload` covers every step outcome, including BALANCE and SELFBALANCE.
+Storage reads remain unchanged when execution reaches neither SLOAD nor SSTORE.
+`Frame.step_storageReads_unchanged_of_not_sload` requires both opcode exclusions and covers every step outcome, including BALANCE and SELFBALANCE.
 `Runner.NoSloadRun` excludes SLOAD at each instruction actually executed within the fuel bound.
-`Runner.run_storageReads_unchanged_of_no_sload` preserves the full storage-read list for exhausted, stopped, exceptional and unsupported results.
+`Runner.NoSstoreRun` excludes SSTORE at each executed instruction.
+`Runner.run_storageReads_unchanged_of_no_sload` takes both trace predicates and preserves the full storage-read list for exhausted, stopped, exceptional and unsupported results.
 The restricted runner cannot return a revert.
 A successful SLOAD records its target and key, so the unconditional tracker-retention claims cannot include storage-read equality.
 
@@ -771,7 +774,16 @@ A credit pays outstanding spill first and then restores the state reservoir.
 The operations accept arbitrary natural-number meter fields and a signed refund counter; no frame or transaction invariant is assumed.
 `ChargeEffect`, `CreditEffect` and `RefundEffect` state their fieldwise arithmetic contracts in the proof library.
 
-This is a standalone foundation for SSTORE; it is not integrated into `Frame.State` or opcode dispatch.
-SSTORE, its static-context check, pricing and state updates, refund settlement and cap, transaction initialization, and child rollback are not implemented by this foundation.
+`Frame.State` carries an explicit `isStatic` flag and `StateGas` fields; `gas` remains the execution-gas pool.
+All positional frame constructors and quantified runner theorems supply both new arguments.
+`Advances` and `AdvancesMemory` require both fields to be preserved for instructions without these effects.
+
+SSTORE at opcode `0x55` checks the static flag before popping the key and value, then applies the 2301-gas sentry before warming or reading storage.
+Its state-dependent pricing uses original, current and new values; refund changes are signed.
+Execution gas is charged before state gas, and a missing effective account is represented by `missingStorageAccount` after its tracker read.
+`SstoreLocal` states independent fieldwise cases, and `sstore_iff_local` relates them to the helper for arbitrary code and program counter.
+`step_iff_rule` covers actual opcode dispatch.
+`outcome_tracker_metadata_retained` and `run_tracker_metadata_retained` preserve the immutable parent, created markers and snapshots for every outcome.
+Transaction initialization, refund settlement and cap, child calls and child rollback are not implemented here.
 The pinned `vm/gas.py` SHA-256 is `67973191c49234387186ad17316c556adab73723f782e95104dd3a949132367c`.
 The pinned `vm/instructions/storage.py` SHA-256 is `c55f677ab99d2c9147d807d0b57bd616d5401d13c8fa92db0afa3f64d7376615`.
