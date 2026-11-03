@@ -7,7 +7,7 @@ example (s t : Frame.State) (x : Word) (xs : List Word)
     (at_ : Frame.At s (some .mload)) (items : s.stack.val = x :: xs)
     (run : Frame.step s = .continue t) :
     ∃ w, t.stack.val = w :: xs ∧ w.toNat =
-      EthLib.Precompiles.Modexp.bytesToNat (Memory.readRange s.memory.store x.toNat 32) := by
+      EthLib.Execution.Precompiles.Modexp.bytesToNat (Memory.readRange s.memory.store x.toNat 32) := by
   obtain ⟨_, _, _, _, stack, _, _, numeric⟩ := Frame.mload_success_output s t x xs at_ items run
   exact ⟨_, stack, numeric⟩
 

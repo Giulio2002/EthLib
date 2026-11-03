@@ -6,7 +6,7 @@ public import EthLib.EVM.Word.ByteSignExtend
 # BYTE and SIGNEXTEND result contracts
 
 The equations use natural arithmetic on unsigned word observations.
-The correspondence with the cited sources is a human reading.
+The correspondence with the cited sources is a reading.
 -/
 
 @[expose] public section

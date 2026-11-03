@@ -119,7 +119,7 @@ def incrementNonce (s : State) (a : Address) : State :=
 
 /-- Decode the Keccak-256 digest as the source's big-endian hash word. -/
 def codeHash (code : ByteArray) : Word :=
-  BitVec.ofNat 256 (EthLib.Precompiles.Modexp.bytesToNat
+  BitVec.ofNat 256 (EthLib.Execution.Precompiles.Modexp.bytesToNat
     (EthLib.Cryptography.Hash.Keccak.keccak256 code).toArray.toList)
 
 /-- Amsterdam `state_tracker.set_code` at the pinned revision.

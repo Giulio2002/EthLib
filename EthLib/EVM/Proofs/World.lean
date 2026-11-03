@@ -420,7 +420,7 @@ theorem incrementNonce_spec (s : State) (a : Address) :
 
 /-- The code hash uses the independently refined whole sponge. -/
 theorem codeHash_refinement (code : ByteArray) :
-    codeHash code = BitVec.ofNat 256 (EthLib.Precompiles.Modexp.bytesToNat
+    codeHash code = BitVec.ofNat 256 (EthLib.Execution.Precompiles.Modexp.bytesToNat
       (EthLib.Cryptography.Hash.KeccakBits.keccak256 code).toArray.toList) := by
   unfold codeHash
   rw [EthLib.Cryptography.Hash.KeccakBits.keccak256_eq]
@@ -486,7 +486,7 @@ theorem setCode_getCode_written_iff (s : State) (a : Address) (code : ByteArray)
 
 /-- The digest word has the exact big-endian numeric value of all 32 bytes. -/
 theorem codeHash_value (code : ByteArray) :
-    (codeHash code).toNat = EthLib.Precompiles.Modexp.bytesToNat
+    (codeHash code).toNat = EthLib.Execution.Precompiles.Modexp.bytesToNat
       (EthLib.Cryptography.Hash.Keccak.keccak256 code).toArray.toList := by
   exact ((EthLib.EVM.Proofs.Word.ofBytesBE_ok_iff _ _).mp (codeHash_bytes code).1).2
 

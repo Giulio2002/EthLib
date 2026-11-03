@@ -6,7 +6,7 @@ public import EthLib.EVM.Word.Comparisons
 # Comparison result contracts
 
 The equations refine each word result to a natural or integer predicate.
-Correspondence with the cited sources is a human interpretation.
+Correspondence with the cited sources is an interpretation.
 -/
 
 @[expose] public section

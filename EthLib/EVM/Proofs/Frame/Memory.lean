@@ -30,7 +30,7 @@ theorem mload_output (s t : State) (x : Word) (xs : List Word)
       t.memory.store = s.memory.store ∧
       t.memory.words = max s.memory.words (Memory.Allocation.requiredWords x.toNat 32) ∧
       (Memory.Allocation.loadWord s.memory x.toNat).1.toNat =
-        EthLib.Precompiles.Modexp.bytesToNat (readRange s.memory.store x.toNat 32) := by
+        EthLib.Execution.Precompiles.Modexp.bytesToNat (readRange s.memory.store x.toNat 32) := by
   refine ⟨step_mload s t x xs at_ items gas fields, ?_⟩
   rcases fields with ⟨code, mem, pc, remaining, stack, context⟩
   refine ⟨code, pc, remaining, stack, ?_, ?_, Memory.Allocation.loadWord_numeric _ _⟩
@@ -166,7 +166,7 @@ theorem mload_success_output (s t : State) (x : Word) (xs : List Word)
       t.memory.store = s.memory.store ∧
       t.memory.words = max s.memory.words (Memory.Allocation.requiredWords x.toNat 32) ∧
       (Memory.Allocation.loadWord s.memory x.toNat).1.toNat =
-        EthLib.Precompiles.Modexp.bytesToNat (readRange s.memory.store x.toNat 32) := by
+        EthLib.Execution.Precompiles.Modexp.bytesToNat (readRange s.memory.store x.toNat 32) := by
   obtain ⟨gas, fields⟩ := mload_success_fields s t x xs at_ items run
   exact mload_output s t x xs at_ items gas fields
 
@@ -348,7 +348,7 @@ theorem inputCopy_then_mload_actual (s t u : State) (source : InputSource)
     (copyRun : step s = .continue t) (loadAt : At t (some .mload))
     (loadRun : step t = .continue u) :
     ∃ w, u.stack.val = w :: xs ∧
-      w.toNat = EthLib.Precompiles.Modexp.bytesToNat
+      w.toNat = EthLib.Execution.Precompiles.Modexp.bytesToNat
         (CallData.readRange (source.bytes s) y.toNat 32) := by
   have copied := inputCopy_success_output s t source x y (32 : Word) (x :: xs)
     copyAt items copyRun
@@ -375,7 +375,7 @@ theorem inputCopy_then_mload_program (s : State) (source : InputSource)
       (3 + Gas.rangeCost (max s.memory.words (Memory.Allocation.requiredWords x.toNat 32))
         x.toNat 32) ≤ s.gas) :
     ∃ t u w, step s = .continue t ∧ step t = .continue u ∧ u.stack.val = w :: xs ∧
-      w.toNat = EthLib.Precompiles.Modexp.bytesToNat
+      w.toNat = EthLib.Execution.Precompiles.Modexp.bytesToNat
         (CallData.readRange (source.bytes s) y.toNat 32) := by
   let stack : Stack := ⟨x :: xs, by
     have bound := s.stack.property
@@ -417,7 +417,7 @@ theorem returnDataCopy_then_mload_actual (s t u : State) (x y : Word) (xs : List
     (items : s.stack.val = x :: y :: (32 : Word) :: x :: xs)
     (copyRun : step s = .continue t) (loadAt : At t (some .mload))
     (loadRun : step t = .continue u) :
-    ∃ w, u.stack.val = w :: xs ∧ w.toNat = EthLib.Precompiles.Modexp.bytesToNat
+    ∃ w, u.stack.val = w :: xs ∧ w.toNat = EthLib.Execution.Precompiles.Modexp.bytesToNat
       ((s.returnData.data.toList.drop y.toNat).take 32) := by
   obtain ⟨_, bound, _, mem, _, _, stack, _, _⟩ :=
     returnDataCopy_actual s t x y 32 (x :: xs) copyAt items copyRun
@@ -444,7 +444,7 @@ theorem returnDataCopy_then_mload_program (s : State) (x y : Word) (xs : List Wo
     (gas : Gas.inputCopyCost s.memory.words x.toNat 32 +
       (3 + Gas.rangeCost (max s.memory.words (Memory.Allocation.requiredWords x.toNat 32)) x.toNat 32) ≤ s.gas) :
     ∃ t u w, step s = .continue t ∧ step t = .continue u ∧ u.stack.val = w :: xs ∧
-      w.toNat = EthLib.Precompiles.Modexp.bytesToNat ((s.returnData.data.toList.drop y.toNat).take 32) := by
+      w.toNat = EthLib.Execution.Precompiles.Modexp.bytesToNat ((s.returnData.data.toList.drop y.toNat).take 32) := by
   let stack : Stack := ⟨x :: xs, by have b := s.stack.property; rw [items] at b; simp at b ⊢; omega⟩
   let bytes := (s.returnData.data.toList.drop y.toNat).take 32
   have read : ReturnData.read s.returnData y.toNat 32 = .ok bytes := by simp [ReturnData.read, bytes, bound]

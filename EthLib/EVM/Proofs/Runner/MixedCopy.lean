@@ -23,17 +23,17 @@ theorem copied_words (mem : Memory.Allocation.State) (a b : List UInt8)
     let m1 := Memory.Allocation.write mem 0 a
     let m2 := Memory.Allocation.write m1 32 b
     let m3 := (Memory.Allocation.loadWord m2 0).2
-    (Memory.Allocation.loadWord m2 0).1.toNat = EthLib.Precompiles.Modexp.bytesToNat a ∧
-    (Memory.Allocation.loadWord m3 32).1.toNat = EthLib.Precompiles.Modexp.bytesToNat b := by
+    (Memory.Allocation.loadWord m2 0).1.toNat = EthLib.Execution.Precompiles.Modexp.bytesToNat a ∧
+    (Memory.Allocation.loadWord m3 32).1.toNat = EthLib.Execution.Precompiles.Modexp.bytesToNat b := by
   dsimp only
   constructor
   · rw [Memory.Allocation.loadWord_numeric]
-    change EthLib.Precompiles.Modexp.bytesToNat (Memory.readRange
+    change EthLib.Execution.Precompiles.Modexp.bytesToNat (Memory.readRange
       (Memory.writeRange (Memory.writeRange mem.store 0 a) 32 b) 0 32) = _
     rw [Memory.readRange_writeRange_disjoint _ 32 0 32 b (by omega)]
     rw [← ha, Memory.readRange_writeRange]
   · rw [Memory.Allocation.loadWord_numeric]
-    change EthLib.Precompiles.Modexp.bytesToNat (Memory.readRange
+    change EthLib.Execution.Precompiles.Modexp.bytesToNat (Memory.readRange
       (Memory.writeRange (Memory.writeRange mem.store 0 a) 32 b) 32 32) = _
     rw [← hb, Memory.readRange_writeRange]
 
@@ -75,8 +75,8 @@ theorem run_mixed (context : CallData.Context) (returnData : ByteArray)
       t.stack.val = (Memory.Allocation.loadWord m3 32).1 :: (Memory.Allocation.loadWord m2 0).1 :: xs ∧
       t.pc = 5 ∧ t.gas = g ∧ t.memory = m4 ∧ t.memory.words = max mem.words 2 ∧ t.code = program ∧
       t.context = context ∧ t.returnData = returnData ∧
-      (Memory.Allocation.loadWord m2 0).1.toNat = EthLib.Precompiles.Modexp.bytesToNat a ∧
-      (Memory.Allocation.loadWord m3 32).1.toNat = EthLib.Precompiles.Modexp.bytesToNat b ∧
+      (Memory.Allocation.loadWord m2 0).1.toNat = EthLib.Execution.Precompiles.Modexp.bytesToNat a ∧
+      (Memory.Allocation.loadWord m3 32).1.toNat = EthLib.Execution.Precompiles.Modexp.bytesToNat b ∧
       Memory.readRange t.memory.store 0 32 = a ∧ Memory.readRange t.memory.store 32 32 = b ∧
       (∀ i, 64 ≤ i → Memory.readByte t.memory.store i = Memory.readByte mem.store i) := by
   dsimp only

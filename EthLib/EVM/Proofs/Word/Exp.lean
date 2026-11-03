@@ -2,7 +2,7 @@ module
 
 public import EthLib.EVM.Word.Exp
 public import EthLib.EVM.Proofs.Word
-public import EthLib.Precompiles.Proofs.Modexp.PowMod
+public import EthLib.Execution.Proofs.Precompiles.Modexp.PowMod
 
 /-!
 # EXP result contracts
@@ -21,7 +21,7 @@ open EthLib.EVM.Word
 /-- EXP agrees with the natural-number result for all word operands. -/
 theorem toNat_exp (base exponent : Word) :
     (exp base exponent).toNat = base.toNat ^ exponent.toNat % modulus := by
-  simp only [exp, BitVec.toNat_ofNat, EthLib.Precompiles.Modexp.powMod_eq, modulus, Nat.mod_mod]
+  simp only [exp, BitVec.toNat_ofNat, EthLib.Execution.Precompiles.Modexp.powMod_eq, modulus, Nat.mod_mod]
 
 namespace Reference
 

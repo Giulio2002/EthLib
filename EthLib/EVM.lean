@@ -1,5 +1,6 @@
 module
 public import EthLib.EVM.World
+public import EthLib.EVM.TransactionState
 public import EthLib.EVM.Memory.WordAccess
 public import EthLib.EVM.Gas
 public import EthLib.EVM.BlobFee

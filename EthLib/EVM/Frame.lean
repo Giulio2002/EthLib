@@ -75,7 +75,7 @@ def charge (s : State) (cost : Nat) (k : Nat → Outcome) : Outcome :=
 
 /-- Interpret the 32 digest bytes as a big-endian word. -/
 def digestWord (digest : Vector UInt8 32) : Word :=
-  BitVec.ofNat 256 (EthLib.Precompiles.Modexp.bytesToNat digest.toArray.toList)
+  BitVec.ofNat 256 (EthLib.Execution.Precompiles.Modexp.bytesToNat digest.toArray.toList)
 
 /-- Cancun `instructions/keccak.py`, `keccak`, at revision
 `fd9298410ec7218838c8348f69c1eb633f1797dc`.

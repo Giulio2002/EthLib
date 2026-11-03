@@ -5,7 +5,7 @@ public import EthLib.EVM.Proofs.Word
 
 /-! # Bitwise result contracts
 
-These equations formalize a human reading of the cited sources.
+These equations formalize a reading of the cited sources.
 The kernel checks refinement to these equations, not that reading itself.
 -/
 

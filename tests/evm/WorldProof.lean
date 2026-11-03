@@ -250,9 +250,9 @@ example (s : State) (a : Address) (code : ByteArray) (h : codeHash code = emptyC
   · simpa [h] using setCode_getCode_written_iff s a code
 
 example (code : ByteArray) :
-    codeHash code = BitVec.ofNat 256 (EthLib.Precompiles.Modexp.bytesToNat
+    codeHash code = BitVec.ofNat 256 (EthLib.Execution.Precompiles.Modexp.bytesToNat
       (EthLib.Cryptography.Hash.KeccakBits.keccak256 code).toArray.toList) ∧
-    (codeHash code).toNat = EthLib.Precompiles.Modexp.bytesToNat
+    (codeHash code).toNat = EthLib.Execution.Precompiles.Modexp.bytesToNat
       (EthLib.Cryptography.Hash.Keccak.keccak256 code).toArray.toList :=
   ⟨codeHash_refinement code, codeHash_value code⟩
 

@@ -11,7 +11,7 @@ The result equations are from Yellow Paper revision
 They also correspond to Cancun `bitwise_and`, `bitwise_or`, `bitwise_xor`,
 and `bitwise_not` in execution-specs revision
 `fd9298410ec7218838c8348f69c1eb633f1797dc`.
-This is a human interpretation of those sources.
+This is an interpretation of those sources.
 The proof module checks refinement of the definitions to stated mathematical equations.
 It does not prove the interpretation of the sources or compiled runtime behavior.
 Stack, gas, opcode execution and the interpreter are outside this module.
