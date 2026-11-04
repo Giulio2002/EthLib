@@ -22,7 +22,7 @@ open EthLib.EVM
 /-- Read a big-endian word and expand the logical memory. -/
 def loadWord (s : State) (offset : Nat) : Word × State :=
   let result := read s offset 32
-  (BitVec.ofNat 256 (EthLib.Execution.Precompiles.Modexp.bytesToNat result.1), result.2)
+  (BitVec.ofNat 256 (EthLib.Base.bytesToNat result.1), result.2)
 
 /-- Write all 32 big-endian bytes of a word. -/
 def storeWord (s : State) (offset : Nat) (value : Word) : State :=

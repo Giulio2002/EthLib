@@ -85,7 +85,7 @@ example (s : Frame.State) (x y : Word) (xs : List Word)
     (gas : Gas.inputCopyCost s.memory.words x.toNat 32 +
       (3 + Gas.rangeCost (max s.memory.words (Memory.Allocation.requiredWords x.toNat 32)) x.toNat 32) ≤ s.gas) :
     ∃ t u w, Frame.step s = .continue t ∧ Frame.step t = .continue u ∧ u.stack.val = w :: xs ∧
-      w.toNat = EthLib.Execution.Precompiles.Modexp.bytesToNat ((s.returnData.data.toList.drop y.toNat).take 32) :=
+      w.toNat = EthLib.Base.bytesToNat ((s.returnData.data.toList.drop y.toNat).take 32) :=
   Frame.returnDataCopy_then_mload_program s x y xs at_ next items bound gas
 
 -- Size charges before checking stack capacity.

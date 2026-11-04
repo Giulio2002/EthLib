@@ -57,6 +57,7 @@ public import EthLib.EVM.Proofs.Frame.ExtCodeSize
 public import EthLib.EVM.Proofs.Frame.ExtCodeHash
 public import EthLib.EVM.Proofs.Frame.ExtCodeCopy
 public import EthLib.EVM.Proofs.Frame.TransientInitial
+public import EthLib.EVM.Proofs.Frame.SstoreInitial
 public import EthLib.EVM.Proofs.Frame.Memory
 public import EthLib.EVM.Proofs.Runner
 public import EthLib.EVM.Proofs.Runner.StraightLine

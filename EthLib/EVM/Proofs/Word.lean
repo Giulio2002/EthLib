@@ -1,7 +1,9 @@
 module
 
 public import EthLib.EVM.Word
-public import EthLib.Execution.Proofs.Precompiles.Modexp.Bytes
+public import EthLib.Base.Proofs.BigEndian
+public import Mathlib.Tactic.Ring
+public import Mathlib.Tactic.Linarith
 public import Mathlib.Data.List.Induction
 
 /-!
@@ -323,7 +325,7 @@ theorem mul_refines (a b : Word) :
     decode (mul a b) = Reference.mul (decode a) (decode b) := by
   apply Subtype.ext
   exact toNat_mul a b
-open EthLib.Execution.Precompiles.Modexp
+open EthLib.Base
 
 /-- Every byte list survives the big-endian numeric conversion at its own length. -/
 theorem natToBytes_bytesToNat (xs : List UInt8) :

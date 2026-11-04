@@ -99,7 +99,7 @@ example (s t u : Frame.State) (x y : Word) (xs : List Word)
     (copy : Frame.step s = .continue t) (loadAt : Frame.At t (some .mload))
     (load : Frame.step t = .continue u) :
     ∃ w, u.stack.val = w :: xs ∧ w.toNat =
-      EthLib.Execution.Precompiles.Modexp.bytesToNat (CallData.readRange s.context.data y.toNat 32) := by
+      EthLib.Base.bytesToNat (CallData.readRange s.context.data y.toNat 32) := by
   exact Frame.inputCopy_then_mload_actual s t u .calldata x y xs at_ items copy loadAt load
 
 -- The constructive program contract supplies both execution steps.
@@ -112,5 +112,5 @@ example (s : Frame.State) (x y : Word) (xs : List Word)
         x.toNat 32) ≤ s.gas) :
     ∃ t u w, Frame.step s = .continue t ∧ Frame.step t = .continue u ∧
       u.stack.val = w :: xs ∧ w.toNat =
-        EthLib.Execution.Precompiles.Modexp.bytesToNat (CallData.readRange s.context.data y.toNat 32) := by
+        EthLib.Base.bytesToNat (CallData.readRange s.context.data y.toNat 32) := by
   exact Frame.inputCopy_then_mload_program s .calldata x y xs at_ next items gas

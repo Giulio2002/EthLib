@@ -55,7 +55,7 @@ theorem blobHash_decode_iff (context : Context) (index : Word) (bytes : ByteArra
     :
     Word.ofBytesBE bytes = .ok (blobHash context index) ↔
       bytes.size = 32 ∧ (blobHash context index).toNat =
-        EthLib.Execution.Precompiles.Modexp.bytesToNat bytes.data.toList := by
+        EthLib.Base.bytesToNat bytes.data.toList := by
   exact EthLib.EVM.Proofs.Word.ofBytesBE_ok_iff _ _
 
 /-- An available in-window hash is selected by its age from the newest end. -/

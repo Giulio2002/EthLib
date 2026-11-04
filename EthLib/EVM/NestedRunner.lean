@@ -3,7 +3,7 @@ module
 public import EthLib.EVM.Runner
 public import EthLib.EVM.CallPreparation
 public import EthLib.EVM.StaticCall
-public import EthLib.Execution.Precompiles.Ripemd160
+public import EthLib.Execution.Evm.Precompiles.Ripemd160
 
 /-!
 # Fuel-bounded nested CALL execution
@@ -124,7 +124,7 @@ def ripemdCall (c : Continuation) (child : Frame.State) (rest : List Continuatio
   let cost := ripemdGas child.context.data
   if child.gas < cost then resume c child false 0 ByteArray.empty rest
   else resume c child true (child.gas - cost)
-    (EthLib.Execution.Precompiles.Ripemd160.ripemd160 child.context.data) rest
+    (EthLib.Execution.Evm.Precompiles.Ripemd160.ripemd160 child.context.data) rest
 
 /-- An exceptional child rolls back before its parent resumes. -/
 def exceptional (child : Frame.State) (reason : Frame.Exception)

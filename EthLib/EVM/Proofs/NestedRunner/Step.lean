@@ -214,7 +214,7 @@ def RipemdSpec (c : Continuation) (child : Frame.State) (rest : List Continuatio
     ResumeOutcomeSpec c child false 0 ByteArray.empty rest result) ∨
   (600 + 120 * ((child.context.data.size + 31) / 32) ≤ child.gas ∧
     ResumeOutcomeSpec c child true (child.gas - (600 + 120 * ((child.context.data.size + 31) / 32)))
-      (EthLib.Execution.Precompiles.Ripemd160.ripemd160 child.context.data) rest result)
+      (EthLib.Execution.Evm.Precompiles.Ripemd160.ripemd160 child.context.data) rest result)
 
 /-- RIPEMD execution follows the independent gas and settlement cases. -/
 theorem ripemdCall_iff (c : Continuation) (child : Frame.State) (rest : List Continuation) (result : Transition) :

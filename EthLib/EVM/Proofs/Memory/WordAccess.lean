@@ -10,7 +10,7 @@ namespace EthLib.EVM.Memory.Allocation
 
 open EthLib.EVM EthLib.EVM.Memory
 open EthLib.EVM.Proofs.Word
-open EthLib.Execution.Precompiles.Modexp
+open EthLib.Base
 
 /-- Word loads preserve the store and allocate the requested 32 bytes. -/
 theorem loadWord_state (s : State) (offset : Nat) :

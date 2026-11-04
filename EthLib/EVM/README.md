@@ -197,7 +197,7 @@ The separate proofs establish arithmetic refinement and bitwise equations for al
 The proofs establish both round trips, exact length, byte positions and injectivity.
 The length check is a library boundary and does not model EVM memory padding.
 
-The codec reuses byte conversion from MODEXP, and EXP reuses its modular arithmetic.
+The codec reuses byte conversion from `EthLib.Base.BigEndian`; EXP reuses MODEXP modular arithmetic.
 Neither uses the precompile's later-fork gas rules or input size restrictions.
 The current EXP import of `Modexp.Core` does transitively import its gas module; only `powMod` is called.
 The precompile belongs to the Execution domain, and shared cryptography remains separate.
@@ -911,3 +911,7 @@ STATICCALL preparation follows Amsterdam `vm/instructions/system.py` `staticcall
 Other precompiles and delegation remain tooling boundaries, and CALLCODE and DELEGATECALL are not integrated.
 The legacy `Runner` reports a CALL or STATICCALL suspension as unsupported instead of executing a child.
 CREATE, accounts scheduled for deletion and transaction settlement remain outside this scope.
+
+## Upstream compatibility
+
+See [the compatibility note](UPSTREAM-COMPATIBILITY.md) for reused dependencies, historical source pins and the separate EVM namespaces.

@@ -363,17 +363,17 @@ theorem ripemd_success (m : NestedRunner.Machine) (request : Frame.CallRequest)
     ∃ incorporated,
       ChildSettlement.Effect p.parent (NestedRunner.staticChildFrame p) incorporated true
         (p.childGas - RipemdCost p)
-        (EthLib.Execution.Precompiles.Ripemd160.ripemd160 (NestedRunner.staticChildFrame p).context.data) ∧
+        (EthLib.Execution.Evm.Precompiles.Ripemd160.ripemd160 (NestedRunner.staticChildFrame p).context.data) ∧
       out.depth = m.depth ∧ out.callers = m.callers ∧
       out.frame.pc = p.parent.pc + 1 ∧ out.frame.stack.val = 1 :: p.parent.stack.val ∧
       out.frame.gas = incorporated.gas ∧
       out.frame.returnData =
-        EthLib.Execution.Precompiles.Ripemd160.ripemd160 (NestedRunner.staticChildFrame p).context.data ∧
+        EthLib.Execution.Evm.Precompiles.Ripemd160.ripemd160 (NestedRunner.staticChildFrame p).context.data ∧
       out.frame.memory.store = List.zip
         (List.range' request.outputOffset.toNat
-          ((EthLib.Execution.Precompiles.Ripemd160.ripemd160 (NestedRunner.staticChildFrame p).context.data).data.toList.take
+          ((EthLib.Execution.Evm.Precompiles.Ripemd160.ripemd160 (NestedRunner.staticChildFrame p).context.data).data.toList.take
             request.outputSize.toNat).length)
-        ((EthLib.Execution.Precompiles.Ripemd160.ripemd160 (NestedRunner.staticChildFrame p).context.data).data.toList.take
+        ((EthLib.Execution.Evm.Precompiles.Ripemd160.ripemd160 (NestedRunner.staticChildFrame p).context.data).data.toList.take
           request.outputSize.toNat) ++ p.parent.memory.store ∧
       out.frame.isStatic = p.parent.isStatic := by
   rcases (NestedRunner.staticDispatch_iff m request p _).mp h with ⟨hdeep, _⟩ | ⟨_, child, he, hr⟩
@@ -537,7 +537,7 @@ theorem ripemd_success_fields (m : NestedRunner.Machine) (request : Frame.CallRe
     (p : CallPreparation.Prepared) (out : NestedRunner.Machine) (hd : m.depth + 1 ≤ 1024)
     (h3 : p.address.val = 3) (hgas : RipemdCost p ≤ p.childGas)
     (h : NestedRunner.staticDispatch m request p = .next out) :
-    let digest := EthLib.Execution.Precompiles.Ripemd160.ripemd160 (NestedRunner.staticChildFrame p).context.data
+    let digest := EthLib.Execution.Evm.Precompiles.Ripemd160.ripemd160 (NestedRunner.staticChildFrame p).context.data
     let bytes := digest.data.toList.take request.outputSize.toNat
     let repayment := min (p.parent.stateGas.reservoir + p.stateGrant) p.parent.stateGas.spilled
     out.depth = m.depth ∧ out.callers = m.callers ∧
@@ -646,7 +646,7 @@ theorem ripemd_full_fields (m : NestedRunner.Machine) (request : Frame.CallReque
     d.code = p.parent.code ∧ d.pc = p.parent.pc ∧ d.stack = p.parent.stack ∧ d.memory = p.parent.memory ∧
     d.context = p.parent.context ∧
     d.returnData = (if success then
-      EthLib.Execution.Precompiles.Ripemd160.ripemd160 (NestedRunner.staticChildFrame p).context.data
+      EthLib.Execution.Evm.Precompiles.Ripemd160.ripemd160 (NestedRunner.staticChildFrame p).context.data
       else ByteArray.empty) ∧
     d.gas = p.parent.gas + (if success then p.childGas - RipemdCost p else 0) + repayment ∧
     d.tracker = p.parent.tracker ∧ d.logs = p.parent.logs ∧ d.isStatic = p.parent.isStatic ∧

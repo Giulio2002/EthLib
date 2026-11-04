@@ -141,7 +141,7 @@ def revertOp (s : State) : Outcome := finish s true
 
 /-- Interpret the 32 digest bytes as a big-endian word. -/
 def digestWord (digest : Vector UInt8 32) : Word :=
-  BitVec.ofNat 256 (EthLib.Execution.Precompiles.Modexp.bytesToNat digest.toArray.toList)
+  BitVec.ofNat 256 (EthLib.Base.bytesToNat digest.toArray.toList)
 
 /-- Cancun `instructions/keccak.py`, `keccak`, at revision
 `fd9298410ec7218838c8348f69c1eb633f1797dc`.
@@ -329,11 +329,11 @@ def tstore (s : State) : Outcome :=
 /-- Encode a topic in the fixed-width source representation. -/
 def logTopic (word : Word) : { bytes : ByteArray // bytes.size = 32 } :=
   ⟨word.toBytesBE, by
-    change (EthLib.Execution.Precompiles.Modexp.natToBytes 32 word.toNat).toArray.size = 32
-    have size (len n : Nat) : (EthLib.Execution.Precompiles.Modexp.natToBytes len n).length = len := by
+    change (EthLib.Base.natToBytes 32 word.toNat).toArray.size = 32
+    have size (len n : Nat) : (EthLib.Base.natToBytes len n).length = len := by
       induction len generalizing n with
       | zero => rfl
-      | succ len ih => simp [EthLib.Execution.Precompiles.Modexp.natToBytes, ih]
+      | succ len ih => simp [EthLib.Base.natToBytes, ih]
     simpa using size 32 word.toNat⟩
 
 /-- Pop topics in source order and retain the stack at an underflow. -/

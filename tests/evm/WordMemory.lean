@@ -40,5 +40,5 @@ example (s : State) (a b : Nat) (w : Word)
 example (s : State) (a k : Nat) (h : Valid s) (hk : k ≤ 32)
     (outside : byteSize s ≤ a + k) :
     (loadWord s a).1.toNat =
-      EthLib.Execution.Precompiles.Modexp.bytesToNat (readRange s.store a k) * 256 ^ (32 - k) :=
+      EthLib.Base.bytesToNat (readRange s.store a k) * 256 ^ (32 - k) :=
   loadWord_right_zero_padding s a k h hk outside

@@ -477,7 +477,7 @@ theorem ripemd_observed (c : NestedRunner.Continuation) (child : Frame.State)
     (600 + 120 * ((child.context.data.size + 31) / 32) ≤ child.gas ∧
       NestedRunner.ResumeOutcomeSpec c child true
         (child.gas - (600 + 120 * ((child.context.data.size + 31) / 32)))
-        (EthLib.Execution.Precompiles.Ripemd160.ripemd160 child.context.data) rest result) :=
+        (EthLib.Execution.Evm.Precompiles.Ripemd160.ripemd160 child.context.data) rest result) :=
   (NestedRunner.ripemdCall_iff c child rest result).mp h
 
 -- Independent affordable-gas and settlement facts construct the transition.
@@ -486,7 +486,7 @@ theorem ripemd_success_constructed (c : NestedRunner.Continuation) (child : Fram
     (hgas : 600 + 120 * ((child.context.data.size + 31) / 32) ≤ child.gas)
     (hresume : NestedRunner.ResumeOutcomeSpec c child true
       (child.gas - (600 + 120 * ((child.context.data.size + 31) / 32)))
-      (EthLib.Execution.Precompiles.Ripemd160.ripemd160 child.context.data) rest result) :
+      (EthLib.Execution.Evm.Precompiles.Ripemd160.ripemd160 child.context.data) rest result) :
     NestedRunner.ripemdCall c child rest = result :=
   (NestedRunner.ripemdCall_iff c child rest result).mpr (Or.inr ⟨hgas, hresume⟩)
 
@@ -669,7 +669,7 @@ theorem ripemd_success_next_fields (c : NestedRunner.Continuation) (child : Fram
       incorporated.code = c.parent.code ∧ incorporated.pc = c.parent.pc ∧
       incorporated.stack = c.parent.stack ∧ incorporated.memory = c.parent.memory ∧
       incorporated.context = c.parent.context ∧
-      incorporated.returnData = EthLib.Execution.Precompiles.Ripemd160.ripemd160 child.context.data ∧
+      incorporated.returnData = EthLib.Execution.Evm.Precompiles.Ripemd160.ripemd160 child.context.data ∧
       incorporated.isStatic = c.parent.isStatic ∧
       incorporated.tracker.parent = child.tracker.parent ∧ incorporated.tracker.writes = child.tracker.writes ∧
       incorporated.tracker.accountReads = child.tracker.accountReads ∧
@@ -683,11 +683,11 @@ theorem ripemd_success_next_fields (c : NestedRunner.Continuation) (child : Fram
       out.frame.stack.val = 1 :: incorporated.stack.val ∧ out.frame.gas = incorporated.gas ∧
       out.frame.memory.store = List.zip
         (List.range' c.request.outputOffset.toNat
-          ((EthLib.Execution.Precompiles.Ripemd160.ripemd160 child.context.data).data.toList.take c.request.outputSize.toNat).length)
-        ((EthLib.Execution.Precompiles.Ripemd160.ripemd160 child.context.data).data.toList.take c.request.outputSize.toNat) ++ incorporated.memory.store ∧
+          ((EthLib.Execution.Evm.Precompiles.Ripemd160.ripemd160 child.context.data).data.toList.take c.request.outputSize.toNat).length)
+        ((EthLib.Execution.Evm.Precompiles.Ripemd160.ripemd160 child.context.data).data.toList.take c.request.outputSize.toNat) ++ incorporated.memory.store ∧
       out.frame.memory.words = max incorporated.memory.words
         (Memory.Allocation.requiredWords c.request.outputOffset.toNat
-          ((EthLib.Execution.Precompiles.Ripemd160.ripemd160 child.context.data).data.toList.take c.request.outputSize.toNat).length) ∧
+          ((EthLib.Execution.Evm.Precompiles.Ripemd160.ripemd160 child.context.data).data.toList.take c.request.outputSize.toNat).length) ∧
       out.frame.context = incorporated.context ∧ out.frame.returnData = incorporated.returnData ∧
       out.frame.tracker = incorporated.tracker ∧ out.frame.warmAddresses = incorporated.warmAddresses ∧
       out.frame.warmSlots = incorporated.warmSlots ∧ out.frame.isStatic = incorporated.isStatic ∧

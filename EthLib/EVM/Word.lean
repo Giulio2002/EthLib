@@ -1,6 +1,6 @@
 module
 
-public import EthLib.Execution.Precompiles.Modexp.Bytes
+public import EthLib.Base.BigEndian
 
 /-!
 # EVM words
@@ -90,7 +90,7 @@ Yellow Paper section 9.1 fixes the word width at 256 bits.
 Appendix H.2 BYTE numbers bytes from the most significant end.
 -/
 def toBytesBE (w : Word) : ByteArray :=
-  ⟨(EthLib.Execution.Precompiles.Modexp.natToBytes 32 w.toNat).toArray⟩
+  ⟨(EthLib.Base.natToBytes 32 w.toNat).toArray⟩
 
 /-- Decode exactly 32 big-endian bytes, rejecting every other length.
 
@@ -98,7 +98,7 @@ The length check is an API boundary, independent of EVM memory padding.
 -/
 def ofBytesBE (bytes : ByteArray) : Except BytesError Word :=
   if bytes.size = 32 then
-    .ok (BitVec.ofNat 256 (EthLib.Execution.Precompiles.Modexp.bytesToNat bytes.data.toList))
+    .ok (BitVec.ofNat 256 (EthLib.Base.bytesToNat bytes.data.toList))
   else
     .error .invalidLength
 

@@ -1,7 +1,7 @@
 module
 
 public import EthLib.EVM.Word
-public import EthLib.Execution.Precompiles.Modexp.Core
+public import EthLib.Execution.Evm.Precompiles.Modexp.Core
 
 /-!
 # EVM exponentiation result
@@ -19,6 +19,6 @@ namespace EthLib.EVM.Word
 
 /-- EXP's modular result, using square-and-multiply on the full exponent. -/
 def exp (base exponent : Word) : Word :=
-  BitVec.ofNat 256 (EthLib.Execution.Precompiles.Modexp.powMod base.toNat exponent.toNat modulus)
+  BitVec.ofNat 256 (EthLib.Execution.Evm.Precompiles.Modexp.powMod base.toNat exponent.toNat modulus)
 
 end EthLib.EVM.Word
