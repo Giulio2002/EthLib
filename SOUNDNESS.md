@@ -687,6 +687,8 @@ With the runner of the interpreter, the caller then stops with no error and retu
 The contract calls an address that holds its own code, which calls the address of the word 0, which holds no code.
 With the runner of the interpreter, the outer frame stops with no error and returns the word 1, or the run aborts.
 No frame of the chain writes an account, so the result holds even when the called address is the address of the outer frame.
+`CallEcho.runFrame_process` proves a contract that sends a word to a callee that returns its call data, with an output range of 64 bytes.
+With the runner of the interpreter, it returns that word and 32 zero bytes, since the callee returns only 32, or the run aborts.
 No rule covers CREATE, a call with value, DELEGATECALL or STATICCALL.
 
 ### SHA-256 precompile
