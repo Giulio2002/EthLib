@@ -31,6 +31,14 @@ From Pectra to BPO5, a run uses its gas limit minus the gas that its message lea
 The refund is the refund counter of the message, at most a fifth of the gas used before it.
 
 The gas used is never below the call data floor.
+
+The deletions at the end of a transaction keep the balance of every account they do not mark.
+
+Up to BPO5, a transaction that runs pays for its gas on the state that its message leaves.
+
+The sender gets back its unused gas, and a different beneficiary gets the priority fee.
+
+Each payment holds for an account that the message did not mark for deletion.
 -/
 
 @[expose] public section
@@ -258,5 +266,94 @@ theorem processTransaction_gasUsed {env : BlockEnvironment fork} {block : State.
   have hLondon : fork ≥ .london := Nat.le_trans (by decide) hPectra
   simp only [settleGas_gasUsed hSettle, gasUsed, gasRefund, maxRefundQuotient, hLondon, hPectra,
     ↓reduceIte]
+
+/-! ## The payments -/
+
+/-- A fold of steps that each keep the balance of `address` keeps it. -/
+private theorem foldlM_balance {g : State.TransactionState → Address →
+      Except State.StateError State.TransactionState} {address : Address}
+    (step : ∀ state a state', a ≠ address → g state a = .ok state' →
+      (state'.getAccount address).balance = (state.getAccount address).balance) :
+    ∀ {xs : List Address} {state state' : State.TransactionState}, address ∉ xs →
+      xs.foldlM g state = .ok state' →
+        (state'.getAccount address).balance = (state.getAccount address).balance
+  | [], _, _, _, h => by
+    simp only [List.foldlM_nil, pure, Except.pure, Except.ok.injEq] at h
+    rw [h]
+  | a :: rest, state, state', hNot, h => by
+    simp only [List.mem_cons, not_or] at hNot
+    rw [List.foldlM_cons] at h
+    obtain ⟨mid, hMid, h⟩ := Base.bind_ok_iff.mp h
+    rw [foldlM_balance step hNot.2 h, step state a mid (Ne.symm hNot.1) hMid]
+
+/-- The deletions at the end of a transaction keep the balance of an account not marked for them.
+
+The touched accounts that are empty go, but their balance is 0. -/
+theorem deleteAccounts_balance {fork : Fork} {state state' : State.TransactionState}
+    {output : CallOutput} {address : Address} (hNot : address ∉ output.accountsToDelete)
+    (h : deleteAccounts fork state output = .ok state') :
+    (state'.getAccount address).balance = (state.getAccount address).balance := by
+  unfold deleteAccounts at h
+  obtain ⟨mid, hMid, h⟩ := Base.bind_ok_iff.mp h
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  subst h
+  rw [State.TransactionState.destroyTouchedEmptyAccounts_balance]
+  rw [Std.ExtTreeSet.foldlM_eq_foldlM_toList] at hMid
+  refine foldlM_balance ?_ (by simpa using hNot) hMid
+  intro s a s' hne hStep
+  split at hStep
+  · rw [State.TransactionState.getAccount_clearAccountPreservingBalance_of_ne hStep (Ne.symm hne)]
+  · simp only [pure, Except.pure, Except.ok.injEq] at hStep
+    subst hStep
+    rw [State.TransactionState.getAccount_destroyAccount]
+    simp [Ne.symm hne]
+
+/-- Up to BPO5, a transaction that runs pays for its gas on the state that its message leaves.
+
+The sender and the beneficiary must differ.
+
+The sender gets back the gas limit minus the gas used, at the price per gas.
+
+The beneficiary gets the gas used, at the price per gas minus the base fee, by EIP-1559 from London.
+
+Each holds when the message did not mark that account for deletion.
+
+The balances after the payments are read from the block, as the next transaction reads them.
+
+The balances before the payments are those of the state that the message leaves. -/
+theorem processTransaction_payments {env : BlockEnvironment fork} {block : State.BlockState}
+    {included : Included} {out : TransactionOutput} (hlt : fork < .glamsterdam)
+    (hne : included.sender ≠ env.coinbase)
+    (h : processTransaction env block included tx = .ok out) :
+    ∃ target bought message output,
+      messageTarget included.sender
+          ((State.TransactionState.ofBlock block).getAccount included.sender).nonce tx =
+        .ok target ∧
+      buyGas env (State.TransactionState.ofBlock block) included.sender tx = .ok bought ∧
+      transactionMessage env ⟨included.sender, included.gasPrice, fun _ => tx.blobHashes⟩ bought
+          included.sender target (tx.gas.toNat - included.intrinsicGas) tx = .ok message ∧
+      processMessageCall (Meter := Nat) env.chainId.toNat { message with reservoir := 0 } bought
+          (startSubstate fork env.coinbase included.sender target tx) tx.authorizations
+          (paidWrites included.sender target tx) = .ok output ∧
+      (included.sender ∉ output.accountsToDelete →
+        ((State.TransactionState.ofBlock out.block).getAccount included.sender).balance.toNat =
+          (output.state.getAccount included.sender).balance.toNat +
+            (tx.gas.toNat - out.gasUsed) * effectiveGasPrice (baseFeeOf env) tx) ∧
+      (env.coinbase ∉ output.accountsToDelete →
+        ((State.TransactionState.ofBlock out.block).getAccount env.coinbase).balance.toNat =
+          (output.state.getAccount env.coinbase).balance.toNat +
+            out.gasUsed * (effectiveGasPrice (baseFeeOf env) tx - baseFeeOf env)) := by
+  obtain ⟨target, bought, message, output, settled, hTarget, hBought, hMessage, hOutput, hSettle,
+    hDeleted⟩ := processTransaction_eq_ok_of_lt hlt h
+  obtain ⟨hSender, hCoinbase⟩ := settleGas_balance hne hSettle
+  have hBlock : ∀ address, (State.TransactionState.ofBlock out.block).getAccount address =
+      out.state.getAccount address := fun address => by
+    simp only [State.TransactionState.getAccount, TransactionOutput.block]
+    rw [← State.TransactionState.getAccountOptional_incorporateTxIntoBlock out.state address]
+    rfl
+  refine ⟨target, bought, message, output, hTarget, hBought, hMessage, hOutput, fun hNot => ?_,
+    fun hNot => ?_⟩
+  · rw [hBlock, deleteAccounts_balance hNot hDeleted, hSender]
+  · rw [hBlock, deleteAccounts_balance hNot hDeleted, hCoinbase]
 
 end EthLib.Execution.Transactions

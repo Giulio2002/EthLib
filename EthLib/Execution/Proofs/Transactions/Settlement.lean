@@ -43,6 +43,12 @@ Crediting at least `2^256` fails as an overflow of the balance.
 
 Settling the gas reports the gas used that the settlement counts.
 
+A payment of the priority fee adds it to the balance of the beneficiary.
+
+Settling the gas pays the sender its unused gas and the beneficiary the priority fee.
+
+The two payments are separate when the sender is not the beneficiary.
+
 Buying the gas takes exactly the fee from the sender and adds one to its nonce.
 
 It fails if the sender does not hold the fee.
@@ -329,25 +335,80 @@ theorem creditEther_balance {fork : Fork} {state state' : TransactionState}
   · rw [creditEther_of_le (Nat.not_lt.mp hlt)] at h
     cases h
 
+/-- A successful payment adds the priority fee to the balance of the beneficiary, and to no other.
+
+From Spurious Dragon to Paris, a fee of 0 may delete an empty beneficiary, whose balance stays 0. -/
+theorem payBeneficiary_balance {fork : Fork} {state state' : TransactionState}
+    {coinbase : Address} {fee : Nat} (h : payBeneficiary fork state coinbase fee = .ok state')
+    (address : Address) :
+    (state'.getAccount address).balance.toNat =
+      (state.getAccount address).balance.toNat + (if coinbase = address then fee else 0) := by
+  unfold payBeneficiary at h
+  split at h
+  · rename_i hZero
+    have hFee : fee = 0 := by omega
+    subst hFee
+    simp only [ite_self, Nat.add_zero]
+    cases h
+    split
+    · rw [TransactionState.getAccount_destroyAccount]
+      split
+      · rename_i hSame
+        subst hSame
+        show 0 = _
+        omega
+      · rfl
+    · rfl
+  · exact (creditEther_balance h address).2
+
+/-- A successful settlement credits the refund to the sender, then the fee to the beneficiary. -/
+private theorem settleGas_eq_ok {fork : Fork} {env : Evm.BlockEnvironment fork}
+    {state state' : TransactionState} {sender : Address} {tx : Transaction}
+    {gasLeft refundCounter used : Nat}
+    (h : settleGas env state sender tx gasLeft refundCounter = .ok (state', used)) :
+    ∃ mid, creditEther fork state sender
+        (settlement fork (baseFeeOf env) sender tx gasLeft refundCounter).senderRefund = .ok mid ∧
+      payBeneficiary fork mid env.coinbase
+        (settlement fork (baseFeeOf env) sender tx gasLeft refundCounter).priorityFee =
+          .ok state' ∧
+      used = gasUsed fork sender tx gasLeft refundCounter := by
+  unfold settleGas at h
+  obtain ⟨mid, hMid, h⟩ := bind_ok_iff.mp h
+  obtain ⟨final, hFinal, h⟩ := bind_ok_iff.mp h
+  simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+  obtain ⟨rfl, rfl⟩ := h
+  exact ⟨mid, hMid, hFinal, rfl⟩
+
 /-- Settling the gas reports the gas used that the settlement counts. -/
 theorem settleGas_gasUsed {fork : Fork} {env : Evm.BlockEnvironment fork}
     {state state' : TransactionState} {sender : Address} {tx : Transaction}
     {gasLeft refundCounter used : Nat}
     (h : settleGas env state sender tx gasLeft refundCounter = .ok (state', used)) :
-    used = gasUsed fork sender tx gasLeft refundCounter := by
-  unfold settleGas at h
-  cases h₁ : creditEther fork state sender
-      (settlement fork (baseFeeOf env) sender tx gasLeft refundCounter).senderRefund with
-  | error e => simp [h₁, bind, Except.bind] at h
-  | ok mid =>
-    cases h₂ : payBeneficiary fork mid env.coinbase
-        (settlement fork (baseFeeOf env) sender tx gasLeft refundCounter).priorityFee with
-    | error e => simp [h₁, h₂, bind, Except.bind] at h
-    | ok final =>
-      simp only [h₁, h₂, bind, Except.bind, pure, Except.pure, Except.ok.injEq,
-        Prod.mk.injEq] at h
-      rw [← h.2]
-      rfl
+    used = gasUsed fork sender tx gasLeft refundCounter :=
+  (settleGas_eq_ok h).choose_spec.2.2
+
+/-- A successful settlement pays the sender and the beneficiary, which must differ.
+
+The sender gets the gas limit minus the gas used, at the price per gas.
+
+The beneficiary gets the gas used, at the price per gas minus the base fee.
+
+From London, the base fee is that of EIP-1559, and before London it is 0. -/
+theorem settleGas_balance {fork : Fork} {env : Evm.BlockEnvironment fork}
+    {state state' : TransactionState} {sender : Address} {tx : Transaction}
+    {gasLeft refundCounter used : Nat} (hne : sender ≠ env.coinbase)
+    (h : settleGas env state sender tx gasLeft refundCounter = .ok (state', used)) :
+    (state'.getAccount sender).balance.toNat = (state.getAccount sender).balance.toNat +
+        (tx.gas.toNat - used) * effectiveGasPrice (baseFeeOf env) tx ∧
+      (state'.getAccount env.coinbase).balance.toNat =
+        (state.getAccount env.coinbase).balance.toNat +
+          used * (effectiveGasPrice (baseFeeOf env) tx - baseFeeOf env) := by
+  obtain ⟨mid, hMid, hFinal, rfl⟩ := settleGas_eq_ok h
+  have hSender := (creditEther_balance hMid sender).2
+  have hCoinbase := (creditEther_balance hMid env.coinbase).2
+  rw [payBeneficiary_balance hFinal, hSender]
+  rw [payBeneficiary_balance hFinal, hCoinbase]
+  simp [settlement, hne, Ne.symm hne]
 
 /-- Buying the gas adds one to the nonce of the sender and takes exactly the fee from its balance.
 

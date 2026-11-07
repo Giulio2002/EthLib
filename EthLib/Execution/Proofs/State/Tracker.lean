@@ -29,6 +29,8 @@ Each new transaction starts with an empty transient storage.
 
 The end of a transaction keeps every read of the transaction.
 
+The deletion of the touched empty accounts keeps every balance.
+
 A record of a read changes no read, and a rollback keeps the record.
 
 A wipe of the storage records the keys it drops as reads.
@@ -1280,6 +1282,31 @@ theorem reads_destroyTouchedEmptyAccounts (fork : Fork) (tx : TransactionState)
       obtain ⟨hacc, hother, hmem⟩ := ih tx
       exact ⟨hacc, fun other hn => hother other (fun hm => hn (List.mem_cons_of_mem _ hm)),
         hmem⟩
+
+/-- The deletion of the touched empty accounts keeps every balance.
+
+An empty account has balance 0, and a deleted account reads as one. -/
+theorem destroyTouchedEmptyAccounts_balance (fork : Fork) (tx : TransactionState)
+    (touched : List Address) (address : Address) :
+    ((tx.destroyTouchedEmptyAccounts fork touched).getAccount address).balance =
+      (tx.getAccount address).balance := by
+  unfold destroyTouchedEmptyAccounts
+  split
+  · rfl
+  induction touched generalizing tx with
+  | nil => rfl
+  | cons a rest ih =>
+    simp only [List.foldl_cons]
+    rw [ih]
+    split
+    · rename_i hEmpty
+      rw [getAccount_destroyAccount]
+      split
+      · rename_i hSame
+        subst hSame
+        rw [eq_empty_of_accountExistsAndIsEmpty hEmpty]
+      · rfl
+    · rfl
 
 /-- The next transaction starts with no account read and no storage read. -/
 theorem reads_incorporateTxIntoBlock (tx : TransactionState) :

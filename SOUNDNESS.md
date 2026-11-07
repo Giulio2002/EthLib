@@ -943,6 +943,14 @@ No theorem relates the module to the execution-specs code it follows.
 It is the gas limit minus the gas that the message leaves and the capped refund, or the call data floor when that is larger.
 Before Pectra and from Glamsterdam, no theorem states the gas used of a run.
 
+`payBeneficiary_balance` (`Execution/Proofs/Transactions/Settlement.lean`) proves that a payment adds the priority fee to the beneficiary alone.
+`settleGas_balance` proves that a settlement pays the sender its unused gas and a different beneficiary the priority fee.
+`destroyTouchedEmptyAccounts_balance` (`Execution/Proofs/State/Tracker.lean`) proves that deleting the touched empty accounts keeps every balance.
+`deleteAccounts_balance` (`Execution/Proofs/Transactions/Process.lean`) proves that the deletions of a transaction keep the balance of an account they do not mark.
+`processTransaction_payments` carries the two payments over to a run up to BPO5, on the state that its message leaves.
+It needs a sender that is not the beneficiary, and holds only for an account that the message did not mark for deletion.
+From Glamsterdam, no theorem states the payments of a run.
+
 ### Merkle Patricia Trie
 
 The trie commits to a map from byte keys to byte values under one 32-byte root.
