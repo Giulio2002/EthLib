@@ -835,9 +835,6 @@ With at least `45 + 55 n` gas, it returns `n (n + 1) / 2` modulo `2^256`.
 `Triple.loop_gas` proves a loop whose invariant carries the gas, with a price for each run that may depend on the runs left.
 The loop then needs the sum of those prices and the price of its exit.
 `Logic.holds_empty` proves that memory holds no bytes from an offset within it.
-`Indices.store` proves a subroutine that writes the word `w` at offset `32 w` modulo `2^256`, for every size of memory.
-`Indices.runFrame_spec` proves a contract that writes the words 0 to `n - 1` from offset 0 in a loop that calls that subroutine, and returns them.
-It needs `n` below `2^251`, and `44 + 69 n` gas with the price of `32 n` bytes of memory.
 `StepBy` (`Logic/Message.lean`) adds the steps that send a message, which a runner of messages ends with a frame.
 `runFrame_eq_of_reaches` proves that `runFrame` runs a frame as it runs each frame that it reaches.
 It holds for every relation whose steps `runFrame` runs alike at both ends, as `Step` and `StepBy` do.
