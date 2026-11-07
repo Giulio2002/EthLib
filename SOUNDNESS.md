@@ -835,6 +835,15 @@ With at least `45 + 55 n` gas, it returns `n (n + 1) / 2` modulo `2^256`.
 `Triple.loop_gas` proves a loop whose invariant carries the gas, with a price for each run that may depend on the runs left.
 The loop then needs the sum of those prices and the price of its exit.
 `Logic.holds_empty` proves that memory holds no bytes from an offset within it.
+`Logic.Stored` is a running frame that knows ranges of memory, the facts of some slots of its account, and the refund counter.
+A fact of a slot gives its key, its word before the transaction, its word now, and whether it is warm.
+Every other slot of every account, and every account, reads as in a base state.
+`Logic.Stored.of_known` proves that a rule that keeps the state and the substate keeps every fact.
+`Logic.sload_stored` proves that from Berlin, SLOAD of the key of a fact pushes its word now and makes the slot warm.
+`Logic.sstore_stored` proves that from Berlin to before Glamsterdam, SSTORE to the key of a fact writes it and makes it warm.
+It pays the price of EIP-2200 with the prices of EIP-2929 from the facts of the slot, and adds the refund of the write.
+`Logic.stop_stored` proves that STOP keeps every fact.
+These frames say nothing of the logs, the accessed addresses and the other fields of the substate.
 `StepBy` (`Logic/Message.lean`) adds the steps that send a message, which a runner of messages ends with a frame.
 `runFrame_eq_of_reaches` proves that `runFrame` runs a frame as it runs each frame that it reaches.
 It holds for every relation whose steps `runFrame` runs alike at both ends, as `Step` and `StepBy` do.
