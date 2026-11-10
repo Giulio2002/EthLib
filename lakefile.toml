@@ -1,0 +1,5 @@
+name = "ethlibspec"
+defaultTargets=["EthLib"]
+[[lean_lib]]
+name = "EthLib"
+globs = ["EthLib.+"]
